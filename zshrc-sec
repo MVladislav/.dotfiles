@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+alias vm_nm='mkdir -p nmap && sudo nmap -vv -sC -sV -oA nmap/scan'
+
+LISTS_SECLISTS=~'/opt/sec/SecLists'
+LISTS_WORDLISTS=~'/opt/sec/wordlists'
+
+alias vm_sec_gobust="gobuster dir --wordlist ${LISTS_WORDLISTS}/diccnoext.txt --wildcard --url"
+alias vm_sec_fuzz="ffuf -w ${LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
+alias vm_sec_massdns="massdns -r ${LISTS_WORDLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
+alias vm_sec_server='python -m http.server 4445'
+alias vm_sec_tunnel='ngrok http 4445'
+
+vm_sec_ip_country() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <IP>"
+    return 1
+  fi
+
+  curl -s "https://ip-api.com//json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
+}
+
+vm_sec_ip_country_batch() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <FILE> :: FILE: contains IP per line"
+    return 1
+  fi
+
+  curl https://ip-api.com//batch \
+    --data "[$1]" |
+    jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
+    sort -h
+}
+
+vm_sec_apt() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <[name|tool|location|raw|save]> <NAME>"
+    return 1
+  fi
+
+  VM_S_TYPE="$1"
+  VM_APT_S="$2"
+  VM_APT_JSON_LIST="https://raw.githubusercontent.com/andreacristaldi/APTmap/master/apt.json"
+
+  case $VM_S_TYPE in
+  "name")
+    curl -s "$VM_APT_JSON_LIST" |
+      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+      | select( \
+      (.name | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase)) \
+      or \
+      (.[\"other-names\"][] | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase)) \
+      )]"
+    ;;
+  "tool")
+    curl -s "$VM_APT_JSON_LIST" |
+      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets, \
+      tools: (.tools[] | select(.value | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase))) \
+      }]"
+    ;;
+  "location")
+    curl -s "$VM_APT_JSON_LIST" |
+      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+      | select( \
+      ((.location | ascii_downcase) | contains(\"$VM_APT_S\" | ascii_downcase)) and (.location | length > 0) \
+      )]"
+    ;;
+  "raw")
+    curl -s "$VM_APT_JSON_LIST"
+    ;;
+  "save")
+    curl -O "$VM_APT_JSON_LIST"
+    ;;
+  *)
+    echo "Type to search is not known"
+    echo "Usage: $0 <[name|tool|location|raw|save]> <NAME>"
+    ;;
+  esac
+}

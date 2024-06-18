@@ -6,8 +6,15 @@
 !.gitignore
 !.gitmodules
 
+!.pre-commit-config.yaml
+!.yamllint
+
+
 !README.md
 !setup.sh
+
+!zshrc-append
+!zshrc-sec
 
 !bin/
 !bin/*

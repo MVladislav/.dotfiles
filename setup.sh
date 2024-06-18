@@ -10,6 +10,9 @@ LN_TMUX_ORIG_SCRIPT=~/.local/bin
 
 LN_NVIM_ORIG_BASE=~/.config/nvim
 
+LN_ADDS_01=~/.zshrc-append
+LN_ADDS_02=~/.zshrc-sec
+
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 echo "TMUX :: Create symlink as from './tmux' '$LN_TMUX_ORIG_BASE'"
 rm -f "${LN_TMUX_ORIG_BASE}"
@@ -30,6 +33,15 @@ echo "NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
 rm -f "${LN_NVIM_ORIG_BASE}"
 ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
 echo "NVIM :: All symlinks created."
+
+# ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+echo "ADDS :: Create symlink from './zshrc-append' as '$LN_ADDS_01'"
+rm -f "${LN_ADDS_01}"
+ln -sf "${PWD}/zshrc-append" "${LN_ADDS_01}"
+echo "ADDS :: Create symlink from './zshrc-sec' as '$LN_ADDS_02'"
+rm -f "${LN_ADDS_02}"
+ln -sf "${PWD}/zshrc-sec" "${LN_ADDS_02}"
+echo "ADDS :: All symlinks created."
 
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 echo "FONTS :: Download some nerd fonts"
@@ -55,4 +67,3 @@ for url in "${FONTS_URLS[@]}"; do
 done
 
 echo "FONTS :: All fonts are downloaded and extracted"
-
