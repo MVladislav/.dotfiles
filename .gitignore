@@ -1,0 +1,28 @@
+# Ignore .hidden files
+.*
+# Ignore everything
+*
+
+!.gitignore
+
+!README.md
+!setup.sh
+
+!bin/
+!bin/*
+
+!nvim/
+nvim/**
+!nvim/*.lua
+!nvim/lua/
+!nvim/lua/vm/
+!nvim/lua/vm/*.lua
+!nvim/lua/vm/lazy/
+!nvim/lua/vm/lazy/*.lua
+
+!tmux/
+tmux/**
+!tmux/*.conf
+!tmux/plugins/
+!tmux/plugins/tpm
+!tmux.conf
