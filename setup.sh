@@ -13,6 +13,32 @@ LN_NVIM_ORIG_BASE=~/.config/nvim
 LN_ADDS_01=~/.zshrc-append
 LN_ADDS_02=~/.zshrc-sec
 
+# DEPS :: install dependiencies -------------------------------------------------------------------------------------------------
+echo "DEPS :: install some base services"
+sudo apt install rsync eza bat ripgrep fd-find
+
+echo "DEPS :: disable rsync systemd service"
+sudo systemctl disable rsync.service
+sudo systemctl mask rsync.service
+
+echo "DEPS :: install build dependincies"
+#sudo apt install ninja-build gettext cmake unzip curl build-essential \
+#automake pkg-config libevent-dev libncurses5-dev bison
+
+echo "DEPS :: install tmux for user only"
+#git clone https://github.com/tmux/tmux.git $HOME/Downloads/tmux && cd $HOME/Downloads/tmux
+#sh autogen.sh
+#./configure --prefix=$HOME/.local/ && make
+#make install
+
+echo "DEPS :: install nvim for user only"
+#git clone https://github.com/neovim/neovim $HOME/Downloads/nvim && cd $HOME/Downloads/nvim
+#make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX=$HOME/.local/
+#make install
+
+echo "DEPS :: remove some build dependincies"
+sudo apt remove cmake automake
+
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 echo "TMUX :: Create symlink as from './tmux' '$LN_TMUX_ORIG_BASE'"
 rm -f "${LN_TMUX_ORIG_BASE}"

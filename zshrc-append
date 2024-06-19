@@ -42,8 +42,8 @@ if [ -d /etc/zsh/profile.d ]; then
   fi
 fi
 
-### LS as EXA ###
-alias ls='exa --color=always --git'
+### LS as EZA ###
+alias ls='eza --color=always --git'
 alias l='ls -a1'
 alias ll='ls -aalhg'
 alias lg='ll --grid'

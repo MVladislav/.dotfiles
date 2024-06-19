@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-alias vm_nm='mkdir -p nmap && sudo nmap -vv -sC -sV -oA nmap/scan'
+alias vm_sec_nm='mkdir -p nmap && sudo nmap -vv -sC -sV -oA nmap/scan'
 
 LISTS_SECLISTS=~'/opt/sec/SecLists'
 LISTS_WORDLISTS=~'/opt/sec/wordlists'
