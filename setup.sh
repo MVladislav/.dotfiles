@@ -13,6 +13,9 @@ LN_NVIM_ORIG_BASE=~/.config/nvim
 LN_ADDS_01=~/.zshrc-append
 LN_ADDS_02=~/.zshrc-sec
 
+# GIT :: init recursives --------------------------------------------------------------------------------------------------------
+git submodule update --init --recursive --remote
+
 # DEPS :: install dependiencies -------------------------------------------------------------------------------------------------
 echo "DEPS :: install some base services"
 sudo apt install rsync eza bat ripgrep fd-find

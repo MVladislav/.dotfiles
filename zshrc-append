@@ -512,36 +512,22 @@ vm_pve_spice() {
     return 1
   }
 
-  # PARSING JSON RESPONSE ######################################################
-  PVE_ATTENTION=$(echo "$RESPONSE" | jq -r '.data."secure-attention"')
-  PVE_DELETE=$(echo "$RESPONSE" | jq -r '.data."delete-this-file"')
-  PVE_PROXY=$(echo "$RESPONSE" | jq -r '.data.proxy')
-  PVE_TYPE=$(echo "$RESPONSE" | jq -r '.data.type')
-  PVE_CA=$(echo "$RESPONSE" | jq -r '.data.ca')
-  PVE_FULLSCREEN=$(echo "$RESPONSE" | jq -r '.data."toggle-fullscreen"')
-  PVE_TITLE=$(echo "$RESPONSE" | jq -r '.data.title')
-  PVE_HOST=$(echo "$RESPONSE" | jq -r '.data.host')
-  PVE_TOKEN=$(echo "$RESPONSE" | jq -r '.data.password')
-  PVE_SUBJECT=$(echo "$RESPONSE" | jq -r '.data."host-subject"')
-  PVE_CURSOR=$(echo "$RESPONSE" | jq -r '.data."release-cursor"')
-  PVE_PORT=$(echo "$RESPONSE" | jq -r '.data."tls-port"')
-
   # GENERATING REMOTE-VIEWER CONNECTION FILE ###################################
   PVE_TMP=$(mktemp)
   {
     echo "[virt-viewer]"
-    echo "secure-attention=${PVE_ATTENTION}"
-    echo "delete-this-file=${PVE_DELETE}"
-    echo "proxy=${PVE_PROXY}"
-    echo "type=${PVE_TYPE}"
-    echo "ca=$(echo "${PVE_CA}" | sed ':a;N;$!ba;s/\n/\\\\n/g')"
-    echo "toggle-fullscreen=${PVE_FULLSCREEN}"
-    echo "title=${PVE_TITLE}"
-    echo "host=${PVE_HOST}"
-    echo "password=${PVE_TOKEN}"
-    echo "host-subject=${PVE_SUBJECT}"
-    echo "release-cursor=${PVE_CURSOR}"
-    echo "tls-port=${PVE_PORT}"
+    echo "secure-attention=$(echo "$RESPONSE" | jq -r '.data."secure-attention"')"
+    echo "delete-this-file=$(echo "$RESPONSE" | jq -r '.data."delete-this-file"')"
+    echo "proxy=$(echo "$RESPONSE" | jq -r '.data.proxy')"
+    echo "type=$(echo "$RESPONSE" | jq -r '.data.type')"
+    echo "ca=$(echo "$RESPONSE" | jq -r '.data.ca' | sed ':a;N;$!ba;s/\n/\\\\n/g')"
+    echo "toggle-fullscreen=$(echo "$RESPONSE" | jq -r '.data."toggle-fullscreen"')"
+    echo "title=$(echo "$RESPONSE" | jq -r '.data.title')"
+    echo "host=$(echo "$RESPONSE" | jq -r '.data.host')"
+    echo "password=$(echo "$RESPONSE" | jq -r '.data.password')"
+    echo "host-subject=$(echo "$RESPONSE" | jq -r '.data."host-subject"')"
+    echo "release-cursor=$(echo "$RESPONSE" | jq -r '.data."release-cursor"')"
+    echo "tls-port=$(echo "$RESPONSE" | jq -r '.data."tls-port"')"
   } >"$PVE_TMP"
 
   # STARTING REMOTE-VIEWER #####################################################
