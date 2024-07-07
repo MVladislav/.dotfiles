@@ -1,0 +1,637 @@
+{
+  "extensions.ignoreRecommendations": true,
+  "extensions.autoCheckUpdates": true,
+  "search.followSymlinks": false,
+  "window.titleBarStyle": "custom",
+  "window.title": "${activeEditorLong}",
+  "window.customTitleBarVisibility": "auto",
+  "window.commandCenter": true,
+  "workbench.activityBar.location": "top",
+  "workbench.colorTheme": "Hack The Box",
+  "workbench.startupEditor": "none",
+  "workbench.editor.tabSizing": "fit",
+  "workbench.editor.pinnedTabSizing": "compact",
+  "workbench.iconTheme": "material-icon-theme",
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editorAssociations": {
+    "*.hex": "hexEditor.hexedit",
+    "*.ini": "default",
+    "*.rom": "hexEditor.hexedit",
+    "*.ipynb": "jupyter-notebook",
+    "*.pdf": "latex-workshop-pdf-hook"
+  },
+  "breadcrumbs.enabled": true,
+  "debug.toolBarLocation": "docked",
+  "explorer.autoReveal": true,
+  "notebook.diff.enablePreview": true,
+  "terminal.integrated.allowChords": false,
+  "terminal.integrated.fontSize": 15,
+  "diffEditor.experimental.showMoves": true,
+  "diffEditor.ignoreTrimWhitespace": false,
+  "diffEditor.renderSideBySide": true,
+  "diffEditor.maxComputationTime": 0,
+  "editor.acceptSuggestionOnCommitCharacter": true,
+  "editor.acceptSuggestionOnEnter": "smart",
+  "editor.autoClosingBrackets": "languageDefined",
+  "editor.autoIndent": "none",
+  "editor.bracketPairColorization.enabled": true,
+  "editor.bracketPairColorization.independentColorPoolPerBracketType": true,
+  "editor.cursorBlinking": "smooth",
+  "editor.cursorStyle": "line",
+  "editor.cursorWidth": 2,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.detectIndentation": false,
+  "editor.find.cursorMoveOnType": false,
+  "editor.foldingMaximumRegions": 65000,
+  "editor.fontFamily": "Hack Nerd Font Mono, ProggyCleanTTSZ Nerd Font Mono, TerminessTTF Nerd Font Mono, JetBrains Mono, Fira Code, Consolas, 'Courier New', monospace",
+  "editor.fontLigatures": true,
+  "editor.fontSize": 12,
+  "editor.fontWeight": "400",
+  "editor.formatOnPaste": true,
+  "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
+  "editor.formatOnType": false,
+  "editor.guides.bracketPairs": true,
+  "editor.inlineSuggest.enabled": true,
+  "editor.largeFileOptimizations": false,
+  "editor.letterSpacing": 0.5,
+  "editor.lineHeight": 20,
+  "editor.linkedEditing": true,
+  "editor.maxTokenizationLineLength": 9000,
+  "editor.minimap.maxColumn": 160,
+  "editor.minimap.renderCharacters": false,
+  "editor.minimap.scale": 1,
+  "editor.minimap.showSlider": "mouseover",
+  "editor.minimap.size": "proportional",
+  "editor.mouseWheelZoom": true,
+  "editor.multiCursorLimit": 99000,
+  "editor.rulers": [80, 130],
+  "editor.semanticHighlighting.enabled": true,
+  "editor.multiDocumentOccurrencesHighlight": true,
+  "editor.suggestSelection": "first",
+  "editor.tabSize": 2,
+  "editor.wordWrap": "on",
+  "editor.wordWrapColumn": 130,
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit",
+    "source.fixAll": "never",
+    "source.fixAll.tslint": "never",
+    "source.fixAll.eslint": "never",
+    "eslint.autoFixOnSave": "never",
+    "source.organizeImports.rome": "explicit"
+  },
+  "files.autoSave": "off",
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimFinalNewlines": true,
+  "files.trimTrailingWhitespace": true,
+  "files.watcherExclude": {
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/node_modules/*/**": true
+  },
+  "files.associations": {
+    "**/defaults/**/*": "ansible",
+    "**/tasks/**/*.yml": "ansible",
+    "**/handler/*.yml": "ansible",
+    "**/*_vars/**/*.yml": "ansible",
+    "**/roles/**/*.yml": "ansible",
+    "**/playbooks/**/*.yml": "ansible",
+    "**/*ansible*/**/*.yml": "ansible",
+    "**/vars/**/*.yml": "ansible",
+    "**/inventory/*/*": "ansible",
+    "*.ts": "typescript",
+    "optional": "c",
+    "istream": "c",
+    "ostream": "c",
+    "system_error": "c",
+    "array": "c",
+    "functional": "c",
+    "tuple": "c",
+    "type_traits": "c",
+    "utility": "c",
+    "random": "c",
+    ".env": "dotenv",
+    ".gitignore": "ignore",
+    ".dockerignore": "ignore",
+    "*.yaml": "yaml",
+    "Dockerfile": "dockerfile"
+  },
+  "files.exclude": {
+    "**/.git": false,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/_site": true,
+    "**/tmp": true,
+    "**/*.pyc": true,
+    "**/*.asset-cache": true,
+    "**/*.cache": true,
+    "**/*.jekyll-cache": true,
+    "**/*.tweet-cache": true,
+    "**/__pycache__": true,
+    "**/.pytest_cache": true,
+    "**/*.egg-info": true,
+    "**/*.coverage": true,
+    "**/celerybeat-schedule": true,
+    "**/bower_components": true,
+    "**/.classpath": true,
+    "**/.project": true,
+    "**/.settings": true,
+    "**/.factorypath": true
+  },
+  "vsintellicode.modify.editor.suggestSelection": "automaticallyOverrodeDefaultValue",
+  "path-intellisense.extensionOnImport": true,
+  "path-intellisense.showHiddenFiles": true,
+  // "remote.SSH.configFile": "df",
+  "remote.SSH.useLocalServer": true,
+  "remote.SSH.connectTimeout": 30,
+  // "thunder-client.saveToWorkspace": true,
+  // "thunder-client.customLocation": "thunder",
+  "snyk.advanced.advancedMode": true,
+  "snyk.features.codeQuality": false,
+  "snyk.features.codeSecurity": false,
+  "snyk.yesCrashReport": false,
+  "snyk.yesTelemetry": false,
+  "snyk.yesWelcomeNotification": false,
+  "codesnap.backgroundColor": "#abb8c3",
+  "codesnap.boxShadow": "rgba(0, 0, 0, 0.55) 0px 20px 68px",
+  "codesnap.containerPadding": "1em",
+  "codesnap.shutterAction": "copy",
+  "git.autofetch": true,
+  "git.autoRepositoryDetection": "openEditors",
+  "git.confirmSync": false,
+  "git.detectSubmodules": false,
+  "git.enableSmartCommit": true,
+  "git.ignoreRebaseWarning": true,
+  "git.openRepositoryInParentFolders": "never",
+  "gitlens.menus": {
+    "scmRepositoryInline": {
+      "graph": false
+    }
+  },
+  "gitlens.codeLens.scopes": ["document", "containers", "blocks"],
+  "gitlens.graph.minimap.additionalTypes": ["localBranches", "stashes", "tags"],
+  "gitlens.advanced.repositorySearchDepth": 3,
+  "gitlens.ai.experimental.generateCommitMessage.enabled": false,
+  "gitlens.blame.heatmap.enabled": true,
+  "gitlens.blame.heatmap.location": "right",
+  "gitlens.blame.highlight.enabled": false,
+  "gitlens.cloudPatches.enabled": false,
+  "gitlens.codeLens.enabled": false,
+  "gitlens.currentLine.enabled": false,
+  "gitlens.currentLine.pullRequests.enabled": true,
+  "gitlens.currentLine.scrollable": true,
+  "gitlens.defaultTimeFormat": "hh:mm",
+  "gitlens.graph.minimap.enabled": false,
+  "gitlens.hovers.currentLine.over": "line",
+  "gitlens.hovers.enabled": false,
+  "gitlens.launchpad.indicator.enabled": false,
+  "gitlens.launchpad.indicator.polling.enabled": false,
+  "gitlens.liveshare.enabled": false,
+  "gitlens.plusFeatures.enabled": false,
+  "gitlens.statusBar.reduceFlicker": true,
+  "gitlens.telemetry.enabled": false,
+  "gitlens.views.commits.showBranchComparison": "working",
+  "gitlens.views.contributors.pullRequests.enabled": false,
+  "gitlens.views.repositories.includeWorkingTree": false,
+  // "scm.experimental.showSyncView": true,
+  "prettier.printWidth": 130,
+  "prettier.semi": true,
+  "prettier.useEditorConfig": false,
+  "prettier.useTabs": false,
+  // "prettier.configPath": ".prettierrc.yml",
+  "todohighlight.isEnable": true,
+  "todohighlight.isCaseSensitive": true,
+  "todohighlight.keywords": [
+    {
+      "text": "FIXME:",
+      "fontWeight": "700",
+      "color": "#fff",
+      "backgroundColor": "rgb(248, 65, 126)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "REVIEW:",
+      "fontWeight": "700",
+      "color": "rgb(26, 168, 235)",
+      "backgroundColor": "rgb(253, 255, 116)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "DEBUG:",
+      "fontWeight": "700",
+      "color": "rgb(26, 168, 235)",
+      "backgroundColor": "rgb(253, 255, 116)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "NOTE:",
+      "fontWeight": "700",
+      "color": "rgb(79, 10, 238)",
+      "backgroundColor": "rgb(253, 255, 116)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "HACK:",
+      "fontWeight": "700",
+      "color": "#fff",
+      "backgroundColor": "rgba(6, 245, 205,.4)",
+      "border": "1px solid rgb(0, 194, 162)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "TODO:",
+      "fontWeight": "700",
+      "color": "rgb(230, 42, 73)",
+      "backgroundColor": "rgba(0,0,0,.2)",
+      "border": "1px solid rgb(230, 42, 73)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "TEST:",
+      "fontWeight": "700",
+      "color": "rgb(17, 230, 123)",
+      "backgroundColor": "rgba(0,0,0,.2)",
+      "border": "1px solid rgb(17, 230, 123)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "KONS:",
+      "fontWeight": "700",
+      "color": "rgb(253, 255, 116)",
+      "backgroundColor": "rgba(0,0,0,.2)",
+      "border": "1px solid rgb(253, 255, 116)",
+      "borderRadius": "2px"
+    },
+    {
+      "text": "PROD:",
+      "fontWeight": "700",
+      "color": "rgb(230, 42, 73)",
+      "backgroundColor": "rgba(0,0,0,.2)",
+      "border": "1px solid rgb(230, 42, 73)",
+      "borderRadius": "2px"
+    }
+  ],
+  "todohighlight.include": [
+    "**/*.c",
+    "**/*.cpp",
+    "**/*.css",
+    "**/*.h",
+    "**/*.hpp",
+    "**/*.html",
+    "**/*.js",
+    "**/*.jsx",
+    "**/*.md",
+    "**/*.php",
+    "**/*.scss",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "color-highlight.markerType": "dot-before",
+  "better-comments.tags": [
+    {
+      "tag": "!",
+      "color": "rgb(230, 42, 73)",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    {
+      "tag": "?",
+      "color": "#3498DB",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    {
+      "tag": "//",
+      "color": "#474747",
+      "strikethrough": true,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    {
+      "tag": "*",
+      "color": "rgb(17, 230, 123)",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    }
+  ],
+  "[ansible]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[ansible-jinja]": {
+    "editor.defaultFormatter": "redhat.ansible"
+  },
+  "ansible.python.interpreterPath": "/usr/bin/python3",
+  "ansibleServer.trace.server": "off",
+  "ansible.lightspeed.enabled": false,
+  "ansible.lightspeed.suggestions.enabled": false,
+  "ansible.executionEnvironment.enabled": false,
+  "shellformat.effectLanguages": [
+    "shellscript",
+    // "dockerfile",
+    "dotenv",
+    "hosts",
+    "jvmoptions",
+    "ignore",
+    "gitignore",
+    "properties",
+    "spring-boot-properties",
+    "azcli",
+    "bats"
+  ],
+  "[properties]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "[ignore]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[dockerfile]": {
+    "editor.formatOnSave": false,
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  "[dockercompose]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.autoIndent": "none"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[jsonc]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "[xml]": {
+    "editor.defaultFormatter": "redhat.vscode-xml"
+  },
+  "[dotenv]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
+  // "xmlTools.splitXmlnsOnFormat": false,
+  "xmlTools.removeCommentsOnMinify": false,
+  "xml.symbols.maxItemsComputed": 99000,
+  "xml.server.vmargs": "-Xmx2G",
+  "[markdown]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "files.trimTrailingWhitespace": false,
+    "editor.formatOnPaste": true,
+    "editor.formatOnType": true
+  },
+  "markdown-preview-github-styles.colorTheme": "light",
+  "markdown.preview.scrollEditorWithPreview": true,
+  "markdown.preview.scrollPreviewWithEditor": true,
+  "markdown-pdf.orientation": "portrait",
+  "markdown-pdf.format": "A4",
+  "markdown-pdf.quality": 100,
+  "markdown-pdf.scale": 0.85,
+  "markdown-pdf.breaks": false,
+  "markdown-pdf.highlight": true,
+  "markdown-pdf.highlightStyle": "github.css",
+  "markdown-pdf.emoji": true,
+  "markdown-pdf.margin.top": "1.2cm",
+  "markdown-pdf.margin.bottom": "1.2cm",
+  "markdown-pdf.margin.right": "0.8cm",
+  "markdown-pdf.margin.left": "0.8cm",
+  "markdown-pdf.displayHeaderFooter": true,
+  "markdown-pdf.headerTemplate": "<div></div>",
+  // "markdown-pdf.headerTemplate": "<div style=\"font-size: 9px; margin-left: 1cm;\"> <span class='title'></span> </div> <div style=\"font-size: 9px; margin-left: auto; margin-right: 1cm; \">  </div>",
+  "markdown-pdf.footerTemplate": "<div></div>",
+  // "markdown-pdf.footerTemplate": "<div style=\"font-size: 9px; margin-left: 1cm;\"> MVladislav <span class='date'></span> </div> <div style=\"font-size: 9px; margin-left: auto; margin-right: 1cm; \"><span class='pageNumber'></span> / <span class='totalPages'></span></div>",
+  // https://github.com/DavidAnson/markdownlint/blob/v0.24.0/doc/Rules.md
+  "markdownlint.config": {
+    "MD031": false, // Fenced code blocks should be surrounded by blank lines
+    "MD033": false, // Inline HTML
+    "MD024": false, // Multiple headings with the same content
+    "MD026": false, // Trailing punctuation in heading
+    "MD036": false // Emphasis used instead of a heading
+  },
+  "[lua]": {
+    "editor.defaultFormatter": "sumneko.lua"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    },
+    "editor.formatOnType": true
+  },
+  "python.analysis.ignore": ["*"],
+  "python.analysis.typeCheckingMode": "basic",
+  "python.analysis.completeFunctionParens": true,
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.autoFormatStrings": true,
+  "ruff.organizeImports": true,
+  "ruff.fixAll": true,
+  "ruff.lint.run": "onSave",
+  "ruff.codeAction.fixViolation": {
+    "enable": true
+  },
+  // "flake8.args": [
+  //   "--max-line-length=130",
+  //   "--ignore=E203,W503"
+  // ],
+  // "black-formatter.args": [
+  //   "--line-length=130"
+  // ],
+  "[shellscript]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format",
+    "files.eol": "\n"
+  },
+  "shellcheck.run": "onSave",
+  // "shellcheck.executablePath": ".../shellcheck.sh",
+  // "shellcheck.useWorkspaceRootAsCwd": true,
+  "[c]": {
+    // "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  "[cpp]": {
+    // "editor.defaultFormatter": "ms-vscode.cpptools"
+  },
+  // "C_Cpp.updateChannel": "Insiders",
+  // "C_Cpp.formatting": "Default",
+  "[csharp]": {
+    // "editor.defaultFormatter": "Leopotam.csharpfixformat"
+  },
+  "[go]": {
+    // "editor.defaultFormatter": ""
+  },
+  // "go.toolsManagement.autoUpdate": true,
+  "[vue]": {
+    "editor.defaultFormatter": "vscode.emmet"
+  },
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact",
+    "vue-html": "html",
+    "vue": "html"
+  },
+  "[typescriptreact]": {
+    // "editor.defaultFormatter": ""
+  },
+  "[javascript]": {
+    // "editor.defaultFormatter": ""
+  },
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "[typescript]": {
+    "editor.defaultFormatter": "vscode.typescript-language-features"
+  },
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  // "typescript.tsdk": "workflowenginegui\\node_modules\\typescript\\lib",
+  "typescript.suggest.paths": false,
+  "[html]": {
+    "editor.defaultFormatter": "vscode.html-language-features"
+  },
+  "html.format.wrapLineLength": 500,
+  "html.format.enable": true,
+  "html.format.wrapAttributes": "force-expand-multiline",
+  "[css]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "css.lint.important": "warning",
+  "[scss]": {
+    "editor.defaultFormatter": "vscode.css-language-features"
+  },
+  "scss.lint.important": "warning",
+  "eslint.options": {
+    "env": {
+      "es6": true
+    },
+    "parserOptions": {
+      "ecmaVersion": 6 // or 7,8,9
+    }
+  },
+  "[php]": {
+    "editor.defaultFormatter": "vscode.php-language-features"
+  },
+  "[java]": {
+    "editor.defaultFormatter": "redhat.java"
+  },
+  "java.semanticHighlighting.enabled": true,
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "[sql]": {
+    "editor.defaultFormatter": "adpyke.vscode-sql-formatter"
+  },
+  "sql-formatter.dialect": "pl/sql",
+  "sql-formatter.uppercase": true,
+  "sql-formatter.linesBetweenQueries": 2,
+  // "pandoc.htmlOptString": "-s -t html5+smart --css '.../styles/github.css'",
+  // "pandoc.docxOptString": "-s -f gfm+yaml_metadata_block+pipe_tables+smart --css '.../styles/github.css'",
+  // // "pandoc.pdfOptString": "-s -f gfm+yaml_metadata_block+pipe_tables -t pdf --pdf-engine=xelatex --listings --lua-filter='.../styles/pandoc-links-to-pdf.lua' --template '.../styles/pandoc-eisvogel.tex'",
+  "latex-workshop.latex.tools": [
+    {
+      "name": "xelatex",
+      "command": "xelatex",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "%DOC%"
+      ]
+    },
+    {
+      "name": "biber",
+      "command": "biber",
+      "args": ["%DOCFILE%"]
+    },
+    {
+      "name": "latexmk",
+      "command": "latexmk",
+      "args": [
+        "-synctex=1",
+        "-interaction=nonstopmode",
+        "-file-line-error",
+        "-pdf",
+        "-outdir=%OUTDIR%",
+        "%DOC%"
+      ],
+      "env": {}
+    },
+    // {
+    //   "name": "pdflatex",
+    //   "command": "pdflatex",
+    //   "args": ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "%DOC%"],
+    //   "env": {}
+    // },
+    {
+      "name": "bibtex",
+      "command": "bibtex",
+      "args": ["%DOCFILE%"],
+      "env": {}
+    }
+  ],
+  "latex-workshop.latex.recipe.default": "first",
+  "latex-workshop.latex.recipes": [
+    // {
+    //   "name": "latexmk 🔃",
+    //   "tools": ["latexmk"]
+    // },
+    {
+      "name": "xelatex -> biber -> xelatex*2",
+      "tools": ["xelatex", "biber", "xelatex", "xelatex"]
+    }
+    // {
+    //   "name": "pdflatex ➞ bibtex ➞ pdflatex`×2",
+    //   "tools": ["pdflatex", "bibtex", "pdflatex", "pdflatex"]
+    // }
+  ],
+  "latex-workshop.view.pdf.viewer": "tab",
+  "pasteImage.showFilePathConfirmInputBox": true,
+  "pasteImage.path": "${currentFileDir}/docs",
+  "pasteImage.basePath": "${currentFileDir}/docs",
+  "pasteImage.forceUnixStyleSeparator": true,
+  "pasteImage.prefix": "./docs/",
+  "cSpell.enabled": true,
+  "cSpell.language": "en,en-EN,de,de-DE,en-US",
+  "cSpell.caseSensitive": true,
+  "cSpell.maxDuplicateProblems": 20,
+  "cSpell.maxNumberOfProblems": 500,
+  "cSpell.diagnosticLevel": "Information",
+  "cSpell.userWords": [
+    "ansible",
+    "Ansible",
+    "auditd",
+    "cheatsheet",
+    "datree",
+    "deebot",
+    "DSGVO",
+    "gitlab",
+    "gobuster",
+    "gospider",
+    "iface",
+    "kubernetes",
+    "masscan",
+    "massdns",
+    "netplan",
+    "nextcloud",
+    "ngrok",
+    "nmap",
+    "observium",
+    "pentest",
+    "rgba",
+    "scapy",
+    "SIEM",
+    "Sophos",
+    "traefik"
+  ],
+  "cSpell.enableFiletypes": ["*"],
+  "redhat.telemetry.enabled": false,
+  "telemetry.telemetryLevel": "off"
+}

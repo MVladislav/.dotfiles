@@ -5,10 +5,10 @@
 
 !.gitignore
 !.gitmodules
+!.gitattributes
 
 !.pre-commit-config.yaml
 !.yamllint
-
 
 !README.md
 !setup.sh
@@ -34,3 +34,10 @@ tmux/**
 !tmux/plugins/
 !tmux/plugins/tpm
 !tmux.conf
+
+!code/
+code/**
+!code/*.json
+!code/snippets/
+code/snippets/**
+!code/snippets/*.code-snippets

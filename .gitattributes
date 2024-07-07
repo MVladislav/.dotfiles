@@ -1,0 +1,7 @@
+* text=auto
+*.sh text eol=lf
+
+*.sh linguist-detectable=true
+*.yml linguist-detectable=true
+*.yaml linguist-detectable=true
+*.md linguist-documentation

@@ -42,6 +42,36 @@ if [ -d /etc/zsh/profile.d ]; then
   fi
 fi
 
+######################################################################
+##
+## set PATH for dev env
+##
+######################################################################
+export GOPATH="$HOME/.go"
+if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
+  export PATH="$PATH:/usr/local/go/bin"
+fi
+
+if [[ ":$PATH:" != *":$GOPATH/bin:"* ]]; then
+  export PATH="$PATH:$GOPATH/bin"
+fi
+
+NPM_PACKAGES="${HOME}/.npm-packages"
+if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
+  export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
+fi
+if [[ ":$PATH:" != *":/snap/node/current/bin:"* ]]; then
+  export PATH="/snap/node/current/bin:$PATH"
+fi
+if [[ ":$PATH:" != *":$NPM_PACKAGES/bin:"* ]]; then
+  export PATH="$PATH:$NPM_PACKAGES/bin"
+fi
+
+export GEM_HOME="$HOME/.gems"
+if [[ ":$PATH:" != *":$GEM_HOME/bin:"* ]]; then
+  export PATH="$PATH:$GEM_HOME/bin"
+fi
+
 ### LS as EZA ###
 alias ls='eza --color=always --git'
 alias l='ls -a1'
