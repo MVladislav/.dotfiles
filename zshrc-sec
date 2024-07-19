@@ -1,15 +1,39 @@
 #!/usr/bin/env bash
 
+LISTS_SECLISTS=~'/opt/sec/SecLists'
+# LISTS_WORDLISTS=~'/opt/sec/wordlists'
+LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
+
+######################################################################
+##
+## ALIAS
+##
+######################################################################
+
 alias vm_sec_nm='mkdir -p nmap && sudo nmap -vv -sC -sV -oA nmap/scan'
 
-LISTS_SECLISTS=~'/opt/sec/SecLists'
-LISTS_WORDLISTS=~'/opt/sec/wordlists'
-
-alias vm_sec_gobust="gobuster dir --wordlist ${LISTS_WORDLISTS}/diccnoext.txt --wildcard --url"
+alias vm_sec_gobust="gobuster dir --wordlist ${LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
 alias vm_sec_fuzz="ffuf -w ${LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
-alias vm_sec_massdns="massdns -r ${LISTS_WORDLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
+alias vm_sec_massdns="massdns -r ${LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
 alias vm_sec_server='python -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
+
+######################################################################
+##
+## LOADER
+##
+######################################################################
+
+vm_load_lists() {
+  git clone https://github.com/danielmiessler/SecLists.git "$LISTS_SECLISTS"
+  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$LISTS_PAYLOADS"
+}
+
+######################################################################
+##
+## FUNCTIONS
+##
+######################################################################
 
 vm_sec_ip_country() {
   if [ "$#" -lt 1 ]; then

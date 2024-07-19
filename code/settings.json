@@ -532,9 +532,9 @@
   "sql-formatter.dialect": "pl/sql",
   "sql-formatter.uppercase": true,
   "sql-formatter.linesBetweenQueries": 2,
-  // "pandoc.htmlOptString": "-s -t html5+smart --css '.../styles/github.css'",
-  // "pandoc.docxOptString": "-s -f gfm+yaml_metadata_block+pipe_tables+smart --css '.../styles/github.css'",
-  // // "pandoc.pdfOptString": "-s -f gfm+yaml_metadata_block+pipe_tables -t pdf --pdf-engine=xelatex --listings --lua-filter='.../styles/pandoc-links-to-pdf.lua' --template '.../styles/pandoc-eisvogel.tex'",
+  "pandoc.htmlOptString": "-s -t html5+smart --css './styles/github.css'",
+  // "pandoc.docxOptString": "-s -f gfm+yaml_metadata_block+pipe_tables+smart --css './styles/github.css'",
+  "pandoc.pdfOptString": "-s -f gfm+yaml_metadata_block+pipe_tables -t pdf --pdf-engine=xelatex --listings --lua-filter='./styles/pandoc-links-to-pdf.lua'",
   "latex-workshop.latex.tools": [
     {
       "name": "xelatex",

@@ -44,7 +44,7 @@ setup_base() {
 # DEPS :: install dependiencies -------------------------------------------------------------------------------------------------
 install_dependiencies_additional() {
   echo "DEPS :: install some base services"
-  sudo apt install rsync eza bat ripgrep fd-find
+  sudo apt install rsync fzf eza bat ripgrep fd-find
 
   echo "DEPS :: disable rsync systemd service"
   sudo systemctl disable rsync.service
@@ -75,7 +75,7 @@ install_dependiencies_tmux() {
 
 install_dependiencies_nvim() {
   echo "DEPS :: install nvim for user only"
-  git clone https://github.com/neovim/neovim "$HOME/Downloads/nvim" && cd "$HOME/Downloads/nvim"
+  git clone https://github.com/neovim/neovim.git "$HOME/Downloads/nvim" && cd "$HOME/Downloads/nvim"
   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$HOME/.local/"
   make install
 }

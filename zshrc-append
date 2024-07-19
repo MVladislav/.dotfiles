@@ -276,6 +276,29 @@ alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WE
 
 ######################################################################
 ##
+## markdown to csv: converts a markdown table to csv
+##
+######################################################################
+vm_markdown_to_csv() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    return 1
+  fi
+
+  cat "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' | \
+    awk -F, '{
+      for (i=1; i<=NF; i++) {
+        gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
+        if (i > 1) printf ",";
+          #$i = "\"" $i "\"";     # Sourund with double quote
+          printf "%s", $i;
+        }
+        printf "\n";
+      }' > "$(basename "$1" | cut -d. -f1).csv"
+}
+
+######################################################################
+##
 ## ii: display useful host related information
 ##
 ######################################################################
