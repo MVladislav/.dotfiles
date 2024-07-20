@@ -11,6 +11,7 @@ LN_TMUX_ORIG_SCRIPT=~/.local/bin
 
 LN_NVIM_ORIG_BASE=~/.config/nvim
 
+LN_ZSHRC=~/.zshrc
 LN_ADDS_01=~/.zshrc-append
 LN_ADDS_02=~/.zshrc-sec
 
@@ -120,6 +121,10 @@ setup_code() {
 
 # ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_adds() {
+  echo "ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'"
+  rm -f "${LN_ZSHRC}"
+  ln -sf "${PWD}/zshrc" "${LN_ZSHRC}"
+
   echo "ADDS :: Create symlink from './zshrc-append' as '$LN_ADDS_01'"
   rm -f "${LN_ADDS_01}"
   ln -sf "${PWD}/zshrc-append" "${LN_ADDS_01}"
