@@ -493,8 +493,8 @@ function vm_encrypt() {
 
 vm_pve_spice() {
   PVE_VMID="$1"
-  PVE_NODE="${PVE_NODE:-pve3}"
-  PVE_PROXY="${PVE_PROXY:-pve3.home.local}"
+  PVE_NODE="${PVE_NODE:-pve}"
+  PVE_PROXY="${PVE_PROXY:-pve.home.local}"
   PVE_API_USER="${PVE_API_USER:-api_spice@pam!spice}"
   # PVE_TOKEN=''
 
