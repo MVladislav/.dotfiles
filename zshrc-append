@@ -255,6 +255,14 @@ function vm_random2() {
 }
 alias vm_find_command='apropos'
 
+function vm_quick_android_emulator() {
+  selected_emulator=$(~/.android/Sdk/emulator/emulator -list-avds | grep -v INFO | fzf)
+  if [[ -z $selected_emulator ]]; then
+    exit 0
+  fi
+  ~/.android/Sdk/emulator/emulator -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd $selected_emulator
+}
+
 ### TOOLS ###
 alias vm_my_ip='curl ifconfig.io/ip'
 alias vm_my_host='curl ifconfig.io/host'

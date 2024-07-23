@@ -41,7 +41,7 @@ vm_sec_ip_country() {
     return 1
   fi
 
-  curl -s "http://ip-api.com//json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
+  curl -s "http://ip-api.com/json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
 }
 
 vm_sec_ip_country_batch() {
@@ -50,7 +50,7 @@ vm_sec_ip_country_batch() {
     return 1
   fi
 
-  curl http://ip-api.com//batch \
+  curl http://ip-api.com/batch \
     --data "[$1]" |
     jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
     sort -h
