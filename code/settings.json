@@ -13,6 +13,7 @@
   "workbench.editor.pinnedTabSizing": "compact",
   "workbench.iconTheme": "material-icon-theme",
   "workbench.editor.highlightModifiedTabs": true,
+  "workbench.tree.indent": 13,
   "workbench.editorAssociations": {
     "*.hex": "hexEditor.hexedit",
     "*.ini": "default",
@@ -51,7 +52,8 @@
   "editor.formatOnSave": true,
   "editor.formatOnSaveMode": "file",
   "editor.formatOnType": false,
-  "editor.guides.bracketPairs": true,
+  "editor.guides.bracketPairs": "active",
+  "editor.guides.bracketPairsHorizontal": "active",
   "editor.inlineSuggest.enabled": true,
   "editor.largeFileOptimizations": false,
   "editor.letterSpacing": 0.5,
@@ -63,6 +65,7 @@
   "editor.minimap.scale": 1,
   "editor.minimap.showSlider": "mouseover",
   "editor.minimap.size": "proportional",
+  "editor.stickyScroll.enabled": false,
   "editor.mouseWheelZoom": true,
   "editor.multiCursorLimit": 99000,
   "editor.rulers": [80, 130],
@@ -489,10 +492,15 @@
   "[javascript]": {
     // "editor.defaultFormatter": ""
   },
+  "javascript.preferences.quoteStyle": "single",
+  "javascript.preferences.useAliasesForRenames": false,
   "javascript.updateImportsOnFileMove.enabled": "always",
   "[typescript]": {
     "editor.defaultFormatter": "vscode.typescript-language-features"
   },
+  "typescript.preferences.quoteStyle": "single",
+  "typescript.preferences.useAliasesForRenames": false,
+  "typescript.preferences.importModuleSpecifier": "relative",
   "typescript.updateImportsOnFileMove.enabled": "always",
   // "typescript.tsdk": "workflowenginegui\\node_modules\\typescript\\lib",
   "typescript.suggest.paths": false,
