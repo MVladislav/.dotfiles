@@ -172,6 +172,7 @@ alias vm_up_flatpak='flatpak update && flatpak uninstall --unused'
 alias vm_up_py_pip='python3 -m pip list --user -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --user --no-cache-dir -U --break-system-packages'
 alias vm_up_py_pip_root='sudo python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
 function vm_update_clean_all() {
+  sudo systemctl daemon-reload
   echo "Update apt..."
   sudo apt update
   sudo apt full-upgrade

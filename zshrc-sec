@@ -31,6 +31,35 @@ vm_load_lists() {
 
 ######################################################################
 ##
+## Helper
+##
+######################################################################
+vm_sec_encode_utf8() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  printf '%s' "$1" | xxd -p -u | sed 's/\(..\)/\\x\1/g'
+}
+
+vm_sec_encode_utf16() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  printf '%s' "$1" | iconv -f UTF-8 -t UTF-16LE | xxd -p | sed 's/\(..\)\(..\)/\\u{\2\1}/g' | sed 's/\\u{00\([0-9a-fA-F]\{2\}\)}/\\u{\1}/g'
+}
+
+vm_sec_encode_base64() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  echo -n "$1" | base64
+}
+
+######################################################################
+##
 ## FUNCTIONS
 ##
 ######################################################################
