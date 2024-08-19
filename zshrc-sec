@@ -79,8 +79,9 @@ vm_sec_ip_country_batch() {
     return 1
   fi
 
-  curl http://ip-api.com/batch \
-    --data "[$1]" |
+  ips=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$1")
+
+  curl http://ip-api.com/batch  --data "$ips" |
     jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
     sort -h
 }
