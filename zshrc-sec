@@ -1,37 +1,68 @@
 #!/usr/bin/env bash
 
-LISTS_SECLISTS=~'/opt/sec/SecLists'
+VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 # LISTS_WORDLISTS=~'/opt/sec/wordlists'
-LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
+VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
+
+VM_SEC_USER_AGENT='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'
 
 ######################################################################
 ##
-## ALIAS
+## FUNCTIONS:: tools
 ##
 ######################################################################
 
-alias vm_sec_nm='mkdir -p nmap && sudo nmap -vv -sC -sV -oA nmap/scan'
+# -Pn -sS -T4
+alias vm_sec_nm1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
+alias vm_sec_nm2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
+alias vm_sec_what="whatweb -v -U='${VM_SEC_USER_AGENT}'"
 
-alias vm_sec_gobust="gobuster dir --wordlist ${LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
-alias vm_sec_fuzz="ffuf -w ${LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
-alias vm_sec_massdns="massdns -r ${LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
+vm_sec_xssall() {
+  gum input--placeholder='Input Target IP/DOMAIN' |
+    httpx -silent |
+    katana -silent |
+    dalfox pipe --silence
+}
+
+# echo https://192.168.111.41 | katana -jc -f qurl -d 5 -c 50 -kf robotstxt,sitemapxml -silent | dalfox pipe --skip-bav | grep "=" | egrep -iv ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|js)" | unew
+# echo https://192.168.111.41 | katana -jc -d 5 -c 50 -ef css,woff,woff2,eot,ttf,tiff,tif -kf robotstxt,sitemapxml | grep -v -e "="
+# subfinder -d https://192.168.111.41 -silent -all | httpx -silent | katana -d 5 silent -em js,jsp,json | grep -P "(?i).+\.js(?:on|p)?$"
+
+alias vm_sec_gobust="gobuster dir --wordlist ${VM_SEC_LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
+alias vm_sec_fuzz="ffuf -w ${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
+alias vm_sec_massdns="massdns -r ${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
 alias vm_sec_server='python -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
 
 ######################################################################
 ##
-## LOADER
+## HELPER: loader
 ##
 ######################################################################
 
-vm_load_lists() {
-  git clone https://github.com/danielmiessler/SecLists.git "$LISTS_SECLISTS"
-  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$LISTS_PAYLOADS"
+vm_sec_load_lists() {
+  git clone https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
+  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
+}
+
+vm_sec_install_base() {
+  sudo apt install jq
+
+  go install github.com/charmbracelet/gum@latest
+}
+
+vm_sec_install_tools() {
+  go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+  go install github.com/projectdiscovery/katana/cmd/katana@latest
+  go install github.com/hahwul/dalfox/v2@latest
+  go install github.com/OJ/gobuster/v3@latest
+  go install github.com/ffuf/ffuf/v2@latest
+  go install github.com/dwisiswant0/unew@latest
 }
 
 ######################################################################
 ##
-## Helper
+## HELPER:: converter
 ##
 ######################################################################
 vm_sec_encode_utf8() {
@@ -60,7 +91,7 @@ vm_sec_encode_base64() {
 
 ######################################################################
 ##
-## FUNCTIONS
+## FUNCTIONS:: base
 ##
 ######################################################################
 
@@ -70,7 +101,7 @@ vm_sec_ip_country() {
     return 1
   fi
 
-  curl -s "http://ip-api.com/json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "http://ip-api.com/json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
 }
 
 vm_sec_ip_country_batch() {
@@ -81,10 +112,18 @@ vm_sec_ip_country_batch() {
 
   ips=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$1")
 
-  curl http://ip-api.com/batch  --data "$ips" |
+  curl http://ip-api.com/batch \
+    -H "User-Agent: ${VM_SEC_USER_AGENT}" \
+    --data "$ips" |
     jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
     sort -h
 }
+
+######################################################################
+##
+## FUNCTIONS:: APT search
+##
+######################################################################
 
 vm_sec_apt() {
   if [ "$#" -lt 2 ]; then
@@ -98,7 +137,7 @@ vm_sec_apt() {
 
   case $VM_S_TYPE in
   "name")
-    curl -s "$VM_APT_JSON_LIST" |
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
       jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
       | select( \
       (.name | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase)) \
@@ -107,23 +146,23 @@ vm_sec_apt() {
       )]"
     ;;
   "tool")
-    curl -s "$VM_APT_JSON_LIST" |
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
       jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets, \
       tools: (.tools[] | select(.value | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase))) \
       }]"
     ;;
   "location")
-    curl -s "$VM_APT_JSON_LIST" |
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
       jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
       | select( \
       ((.location | ascii_downcase) | contains(\"$VM_APT_S\" | ascii_downcase)) and (.location | length > 0) \
       )]"
     ;;
   "raw")
-    curl -s "$VM_APT_JSON_LIST"
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST"
     ;;
   "save")
-    curl -O "$VM_APT_JSON_LIST"
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -O "$VM_APT_JSON_LIST"
     ;;
   *)
     echo "Type to search is not known"

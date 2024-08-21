@@ -35,7 +35,8 @@ if [ -d /etc/zsh/profile.d ]; then
   if ls /etc/zsh/profile.d/*.sh 1>/dev/null 2>&1; then
     for i in /etc/zsh/profile.d/*.sh; do
       if [ -r "$i" ]; then
-        . $i
+        # shellcheck disable=SC1090
+        . "$i"
       fi
     done
     unset i
@@ -115,6 +116,7 @@ alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
 alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --compose-file -'
 
+# shellcheck disable=SC2139
 alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:24.04"
 alias vm_quick_docker_iperf="docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s"
 
@@ -294,7 +296,7 @@ vm_markdown_to_csv() {
     return 1
   fi
 
-  cat "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' | \
+  cat "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
     awk -F, '{
       for (i=1; i<=NF; i++) {
         gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
@@ -303,7 +305,7 @@ vm_markdown_to_csv() {
           printf "%s", $i;
         }
         printf "\n";
-      }' > "$(basename "$1" | cut -d. -f1).csv"
+      }' >"$(basename "$1" | cut -d. -f1).csv"
 }
 
 ######################################################################
@@ -442,26 +444,32 @@ function vm_md_to_pdf() {
 ## extract: Extract most know archives with one command
 ##
 ######################################################################
-# usage:: vm_extract <file>
-function vm_extract() {
-  if [ -f "$1" ]; then
-    case "$1" in
-    *.tar.bz2) tar xjf "$1" ;;
-    *.tar.gz) tar xzf "$1" ;;
-    *.bz2) bunzip2 "$1" ;;
-    *.rar) unrar x "$1" ;;
-    *.gz) gunzip "$1" ;;
-    *.tar) tar xf "$1" ;;
-    *.tbz2) tar xjf "$1" ;;
-    *.tgz) tar xzf "$1" ;;
-    *.tar.xz) tar xvfJ "$1" ;;
-    *.zip) unzip "$1" ;;
-    *.Z) uncompress "$1" ;;
-    *.7z) 7z x "$1" ;;
-    *) echo "'$1' cannot be extracted via extract()" ;;
-    esac
+function vm_extract {
+  if [ -z "$1" ]; then
+    echo "Usage: vm_extract <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz>"
   else
-    echo "'$1' is not a valid file"
+    if [ -f "$1" ]; then
+      case $1 in
+      *.tar.bz2) tar xjf "$1" ;;
+      *.tar.gz) tar xzf "$1" ;;
+      *.tar.xz) tar xJf "$1" ;;
+      *.lzma) unlzma "$1" ;;
+      *.bz2) bunzip2 "$1" ;;
+      *.rar) unrar x -ad "$1" ;;
+      *.gz) gunzip "$1" ;;
+      *.tar) tar xf "$1" ;;
+      *.tbz2) tar xjf "$1" ;;
+      *.tgz) tar xvzf "$1" ;;
+      *.zip) unzip "$1" ;;
+      *.Z) uncompress "$1" ;;
+      *.7z) 7z x "$1" ;;
+      *.xz) unxz "$1" ;;
+      *.exe) cabextract "$1" ;;
+      *) echo "extract: '$1' - unknown archive method" ;;
+      esac
+    else
+      echo "$1 - file does not exist"
+    fi
   fi
 }
 

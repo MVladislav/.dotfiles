@@ -8,7 +8,7 @@ ZSH_THEME="spaceship"
 # Standard plugins can be found in $ZSH/plugins/
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(adb colored-man-pages command-not-found docker git gitignore golang helm history kubectl lxd nmap npm oc pip httpie pylint rust sudo terraform tmux ubuntu ufw zsh-autosuggestions zsh-syntax-highlighting)
+plugins=(colored-man-pages command-not-found docker git gitignore golang helm history kubectl lxd nmap npm oc pip httpie pylint rust sudo terraform tmux ubuntu ufw zsh-autosuggestions zsh-syntax-highlighting)
 
 source $ZSH/oh-my-zsh.sh
 

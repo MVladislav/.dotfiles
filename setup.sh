@@ -72,6 +72,8 @@ install_dependiencies_tmux() {
   sh autogen.sh
   ./configure --prefix="$HOME/.local/" && make
   make install
+  cd -
+  #rm -rf "$HOME/Downloads/tmux"
 }
 
 install_dependiencies_nvim() {
@@ -79,6 +81,8 @@ install_dependiencies_nvim() {
   git clone https://github.com/neovim/neovim.git "$HOME/Downloads/nvim" && cd "$HOME/Downloads/nvim"
   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$HOME/.local/"
   make install
+  cd -
+  #rm -rf "$HOME/Downloads/nvim"
 }
 
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
@@ -95,6 +99,9 @@ setup_tmux() {
     ln -sf "$script" "${LN_TMUX_ORIG_SCRIPT}/$(basename "$script")"
   done
 
+  echo "TMUX :: Run tpm to install plugins"
+  PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/scripts/install_plugins.sh"
+
   echo "TMUX :: All symlinks created."
 }
 
@@ -108,6 +115,7 @@ setup_nvim() {
 
 # CODE :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
 setup_code() {
+  mkdir -p "$LN_VS_CODE"
   echo "CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
   rm -f "${LN_VS_CODE}/keybindings.json"
   ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"

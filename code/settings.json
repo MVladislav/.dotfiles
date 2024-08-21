@@ -384,13 +384,14 @@
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"
   },
-  "[dotenv]": {
-    "editor.defaultFormatter": "foxundermoon.shell-format"
-  },
   // "xmlTools.splitXmlnsOnFormat": false,
   "xmlTools.removeCommentsOnMinify": false,
   "xml.symbols.maxItemsComputed": 99000,
   "xml.server.vmargs": "-Xmx2G",
+  "xml.format.maxLineWidth": 500,
+  "[dotenv]": {
+    "editor.defaultFormatter": "foxundermoon.shell-format"
+  },
   "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "files.trimTrailingWhitespace": false,
