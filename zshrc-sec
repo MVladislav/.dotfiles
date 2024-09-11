@@ -18,7 +18,7 @@ alias vm_sec_nm2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --scr
 alias vm_sec_what="whatweb -v -U='${VM_SEC_USER_AGENT}'"
 
 vm_sec_xssall() {
-  gum input--placeholder='Input Target IP/DOMAIN' |
+  gum input --placeholder='Input Target IP/DOMAIN' |
     httpx -silent |
     katana -silent |
     dalfox pipe --silence
@@ -30,7 +30,54 @@ vm_sec_xssall() {
 
 alias vm_sec_gobust="gobuster dir --wordlist ${VM_SEC_LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
 alias vm_sec_fuzz="ffuf -w ${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
+vm_sec_fuzz_path() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <[http(s)://]HOST>"
+    return 1
+  fi
+
+  # Check if the URL contains http or https
+  if [[ "$1" =~ ^(http|https):// ]]; then
+    # Extract protocol and domain
+    protocol=$(echo "$1" | awk -F'://' '{print $1}')
+    domain=$(echo "$1" | awk -F'://' '{print $2}')
+  else
+    # Default to https if no protocol is found
+    protocol="https"
+    domain="$1"
+  fi
+
+  ffuf -u "${protocol}://${domain}/FUZZ" \
+  -w "${VM_SEC_LISTS_SECLISTS}/Discovery/Web-Content/common.txt" \
+  -c -ac -recursion
+}
+vm_sec_fuzz_dns() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <[http(s)://]HOST>"
+    return 1
+  fi
+
+  # Check if the URL contains http or https
+  if [[ "$1" =~ ^(http|https):// ]]; then
+    # Extract protocol and domain
+    protocol=$(echo "$1" | awk -F'://' '{print $1}')
+    domain=$(echo "$1" | awk -F'://' '{print $2}')
+  else
+    # Default to https if no protocol is found
+    protocol="https"
+    domain="$1"
+  fi
+
+  ffuf -u "${protocol}://${domain}" \
+  -w "${VM_SEC_LISTS_SECLISTS}/Discovery/DNS/namelist.txt" \
+  -H "Host: ${protocol}://FUZZ.${domain}"
+}
+vm_sec_katana() {
+  echo "$1" | katana -headless -fs rdn -d 1 -ct 1 -rl 10 -o result.txt -jsonl
+}
+
 alias vm_sec_massdns="massdns -r ${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
+
 alias vm_sec_server='python -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
 
