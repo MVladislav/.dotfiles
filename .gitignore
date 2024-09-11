@@ -31,10 +31,12 @@ nvim/**
 
 !tmux/
 tmux/**
-!tmux/*.conf
-!tmux/plugins/
-!tmux/plugins/tpm
-!tmux.conf
+!tmux/tmux/
+tmux/tmux/**
+!tmux/tmux/*.conf
+!tmux/tmux/plugins/
+!tmux/tmux/plugins/tpm
+!tmux/tmux.conf
 
 !code/
 code/**

@@ -87,12 +87,12 @@ install_dependiencies_nvim() {
 
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
-  echo "TMUX :: Create symlink from './tmux' as '$LN_TMUX_ORIG_BASE'"
+  echo "TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
   rm -f "${LN_TMUX_ORIG_BASE}"
-  ln -sf "${PWD}/tmux" "${LN_TMUX_ORIG_BASE}"
-  echo "TMUX :: Create symlink from './tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
+  ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
+  echo "TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
   rm -f "${LN_TMUX_ORIG_TMUX}"
-  ln -sf "${PWD}/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
+  ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
 
   echo "TMUX :: Create symlink from './bin/*' into '$LN_TMUX_ORIG_SCRIPT/'"
   for script in "$PWD"/bin/*; do
