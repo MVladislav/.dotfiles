@@ -176,20 +176,20 @@ usage() {
   echo "Usage: $0 [options]"
   echo "Options:"
   echo "  -h, --help                                  Show this help message and exit"
-  echo "  -nsb, --no-setup-base                       Skip setup_base"
-  echo "  -nia, --no-install-dependencies-additional  Skip setup_dependiencies"
-  echo "  -nitn, --no-install-dependencies-tmux-nvim  Skip setup_dependiencies"
-  echo "  -nst, --no-setup-tmux                       Skip setup_tmux"
-  echo "  -nsn, --no-setup-nvim                       Skip setup_nvim"
-  echo "  -nsc, --no-setup-code                       Skip setup_code"
-  echo "  -nsa, --no-setup-adds                       Skip setup_adds"
-  echo "  -nsf, --no-setup-fonts                      Skip setup_fonts"
+  echo "  -nsb,  --no-setup-base                      Skip setup_base"
+  echo "  -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  echo "  -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)"
+  echo "  -nst,  --no-setup-tmux                      Skip setup_tmux"
+  echo "  -nsn,  --no-setup-nvim                      Skip setup_nvim"
+  echo "  -nsc,  --no-setup-code                      Skip setup_code"
+  echo "  -nsa,  --no-setup-adds                      Skip setup_adds"
+  echo "  -nsf,  --no-setup-fonts                     Skip setup_fonts"
 }
 
 # Function to parse command-line arguments
 parse_args() {
   RUN_SETUP_BASE=1
-  RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
+  RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
   RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=0
   RUN_SETUP_TMUX=1
   RUN_SETUP_NVIM=1
@@ -207,14 +207,11 @@ parse_args() {
     -nsb | --no-setup-base)
       RUN_SETUP_BASE=0
       ;;
-    -nia | --no-install-dependencies-additional)
-      RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
+    -ida | --install-dependencies-additional)
+      RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
       ;;
-    -nitn | --no-install-dependencies-tmux-nvim)
-      RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=0
-      ;;
-    -itn | --install-dependencies-tmux-nvim)
-      RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=0
+    -idtn | --install-dependencies-tmux-nvim)
+      RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=1
       ;;
     -nst | --no-setup-tmux)
       RUN_SETUP_TMUX=0
