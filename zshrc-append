@@ -326,6 +326,7 @@ function vm_ii() {
   echo -e "  - processor type        : $(uname -p)"
   echo -e "  - hardware platform     : $(uname -i)"
   echo -e "  - operating system      : $(uname -o)"
+  echo -e "  - secure boot status    : $(mokutil --sb-state)"
   echo -e "\\n${BRED}Users logged on:$NC"
   w -h
   echo -e "\\n${BRED}Current date:$NC"
