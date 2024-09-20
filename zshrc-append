@@ -18,7 +18,8 @@ export HISTTIMEFORMAT="%F %T "
 alias sudo-env='sudo -E env "PATH=$PATH"'
 
 ### EDITOR ###
-export EDITOR='vim'
+export EDITOR='nvim'
+export SUDO_EDITOR="nvim"
 
 ######################################################################
 ##
@@ -52,7 +53,6 @@ export GOPATH="$HOME/.go"
 if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
   export PATH="$PATH:/usr/local/go/bin"
 fi
-
 if [[ ":$PATH:" != *":$GOPATH/bin:"* ]]; then
   export PATH="$PATH:$GOPATH/bin"
 fi
@@ -94,10 +94,10 @@ alias scp-r='rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x"'
 alias scp-ra='rsync --info=progress2 -az -e "ssh -T -o Compression=no -x"'
 
 ### FIND ###
-alias find-no='sudo find / -nouser -o -nogroup -ls 2>/dev/null'
-function find-l() {
+alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
+find-l() {
   # -not -regex '/home/.*' \
-  sudo find / \
+  sudo /usr/bin/find / \
     -not -regex '/mnt/.*' \
     -not -regex '/media/.*' \
     -not -regex '.*/\.cache/.*' \
@@ -106,8 +106,8 @@ function find-l() {
     -not -regex '/var/log/.*' \
     -newermt "-${1:-5} minute" -ls 2>/dev/null
 }
-function find-la() {
-  sudo find / \
+find-la() {
+  sudo /usr/bin/find / \
     -newermt "-${1:-5} minute" -ls 2>/dev/null
 }
 
@@ -168,40 +168,40 @@ alias vm_tk='tmux kill-session -t'
 alias vim=nvim
 
 ### updater ###
-alias vm_up_apt='sudo apt update && sudo apt upgrade'
-alias vm_up_snap='sudo snap refresh'
-alias vm_up_flatpak='flatpak update && flatpak uninstall --unused'
+alias vm_up_apt='sudo /usr/bin/apt update && sudo /usr/bin/apt upgrade'
+alias vm_up_snap='sudo /usr/bin/snap refresh'
+alias vm_up_flatpak='/usr/bin/flatpak update && /usr/bin/flatpak uninstall --unused'
 alias vm_up_py_pip='python3 -m pip list --user -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --user --no-cache-dir -U --break-system-packages'
-alias vm_up_py_pip_root='sudo python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
-function vm_update_clean_all() {
-  sudo systemctl daemon-reload
+alias vm_up_py_pip_root='sudo /usr/bin/python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo /usr/bin/xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
+vm_update_clean_all() {
+  sudo /usr/bin/systemctl daemon-reload
   echo "Update apt..."
-  sudo apt update
-  sudo apt full-upgrade
+  sudo /usr/bin/apt update
+  sudo /usr/bin/apt full-upgrade
   echo "Cleanup apt..."
-  sudo apt autoclean -y
-  sudo apt autoremove -y
-  sudo apt clean
+  sudo /usr/bin/apt autoclean -y
+  sudo /usr/bin/apt autoremove -y
+  sudo /usr/bin/apt clean
 
   echo "#########################################################################"
   echo "#########################################################################"
 
   echo "Update snap..."
-  sudo snap refresh
+  sudo /usr/bin/snap refresh
   echo "Cleanup snap..."
-  LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/{print $1, $3}' |
+  LANG=en_US.UTF-8 sudo /usr/bin/snap list --all | awk '/disabled/{print $1, $3}' |
     while read -r SNAPNAME REVISION; do
-      sudo snap remove "$SNAPNAME" --revision="$REVISION"
+      sudo /usr/bin/snap remove "$SNAPNAME" --revision="$REVISION"
     done
 
   echo "#########################################################################"
   echo "#########################################################################"
 
   echo "Update flatpak..."
-  sudo flatpak update
+  sudo /usr/bin/flatpak update
   echo "Cleanup flatpak..."
-  sudo flatpak uninstall --unused
-  sudo rm -rfv /var/tmp/flatpak-cache-*
+  sudo /usr/bin/flatpak uninstall --unused
+  sudo /usr/bin/rm -rfv /var/tmp/flatpak-cache-*
 
   echo "#########################################################################"
   echo "#########################################################################"
@@ -216,7 +216,7 @@ alias grep='grep --color'
 alias sgrep='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 
 alias pigz='pigz -k -p$(nproc)'
-function tar-p() {
+tar-p() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: tar-p <directory> [<password>]"
     return 1
@@ -231,7 +231,7 @@ function tar-p() {
   fi
 }
 
-function untar-p() {
+untar-p() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: untar-p <encrypted_file> <password>"
     return 1
@@ -241,7 +241,7 @@ function untar-p() {
   gpg -d --batch --passphrase "$2" "$1" | tar --use-compress-program="pigz " -xpf - -C "$(dirname "$1")/${1%%.*}"
 }
 
-alias vm_mem_free='free -h && sudo sysctl -w vm.drop_caches=3 && sudo sync && echo 3 | sudo tee /proc/sys/vm/drop_caches && free -h'
+alias vm_mem_free='free -h && sudo /usr/bin/sysctl -w vm.drop_caches=3 && sudo /usr/bin/sync && echo 3 | sudo /usr/bin/tee /proc/sys/vm/drop_caches && free -h'
 
 alias t='tail -f'
 alias du-l='du -hs * .* 2>/dev/null | sort -h'
@@ -252,18 +252,18 @@ alias chmod_ux="chmod u+x"
 alias vm_ux_term="tr -d '\r' <"
 
 alias vm_random='openssl rand -base64'
-function vm_random2() {
+vm_random2() {
   tr -dc A-Za-z0-9 </dev/urandom | head -c "$1"
   echo ''
 }
 alias vm_find_command='apropos'
 
-function vm_quick_android_emulator() {
+vm_quick_android_emulator() {
   selected_emulator=$(~/.android/Sdk/emulator/emulator -list-avds | grep -v INFO | fzf)
   if [[ -z $selected_emulator ]]; then
     exit 0
   fi
-  ~/.android/Sdk/emulator/emulator -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd $selected_emulator
+  ~/.android/Sdk/emulator/emulator -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator"
 }
 
 ### TOOLS ###
@@ -272,8 +272,8 @@ alias vm_my_host='curl ifconfig.io/host'
 alias vm_my_country='curl ifconfig.io/country_code'
 alias vm_my_ua='curl ifconfig.io/ua'
 alias vm_my_all='curl ifconfig.io/all.json | jq'
-function vm_my_bios() {
-  for d in system-manufacturer system-product-name bios-release-date bios-version; do echo "${d}: $(sudo dmidecode -s $d)"; done
+vm_my_bios() {
+  for d in system-manufacturer system-product-name bios-release-date bios-version; do echo "${d}: $(sudo /usr/bin/dmidecode -s $d)"; done
 }
 
 alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
@@ -282,6 +282,8 @@ alias vm_speed_1='clear && iperf3 -c speedtest.serverius.net -p 5002 -Ts1 -4 -b0
 alias vm_speed_2='clear && iperf3 -c ping.online.net -p 5200 -Ts2 -4 -b0 -i3 -O1 -P1 -w128M -R'
 alias vm_speed_3='clear && iperf3 -c speedtest.shinternet.ch -p 5200 -Ts3 -4 -b0 -i3 -O1 -P1 -R'
 alias vm_speed_4='clear && iperf3 -c paris.testdebit.info -p 9212 -Ts4 -4 -b0 -i3 -O1 -P1 -w32M -R'
+
+alias vm_speed_local='clear && iperf3 -Ts1 -4 -t0 -w128m -b0 -P1 -p 5201 -i3 -O1 -c'
 
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
 
@@ -313,7 +315,7 @@ vm_markdown_to_csv() {
 ## ii: display useful host related information
 ##
 ######################################################################
-function vm_ii() {
+vm_ii() {
   echo -e "\\n${BRED}You are logged on:$NC"
   hostname
   echo -e "\\n${BRED}Additional information:$NC"
@@ -348,7 +350,7 @@ function vm_ii() {
 ## quick ubuntu: create multipass ubuntu vm
 ##
 ######################################################################
-function vm_quick_ubuntu() {
+vm_quick_ubuntu() {
   TMP_CLOUD_INIT=~/vm_quick_ubuntu_cloud_init.yaml
   touch "$TMP_CLOUD_INIT"
   {
@@ -367,7 +369,7 @@ function vm_quick_ubuntu() {
   rm "$TMP_CLOUD_INIT"
   multipass exec "ubuntu-$VM_NAME_VERSION" -- sh -c "${2:-neofetch}"
 }
-function vm_quick_ubuntu_rm() {
+vm_quick_ubuntu_rm() {
   multipass stop "ubuntu-$(echo "$1" | sed 's|\.||g' | tr ':' '-')"
   multipass delete "ubuntu-$(echo "$1" | sed 's|\.||g' | tr ':' '-')"
   multipass purge
@@ -379,7 +381,7 @@ function vm_quick_ubuntu_rm() {
 ##
 ##
 ######################################################################
-function vm_shortcut_appimage() {
+vm_shortcut_appimage() {
   if [[ "$#" != "3" ]]; then
     echo "Illegal number of parameters" >&2
     echo "$0 <NAME> <APPIMAGE> <PNG>"
@@ -389,30 +391,30 @@ function vm_shortcut_appimage() {
     image_png="$3"
 
     # create folder and move files
-    sudo mkdir -p "/opt/${name}"
-    sudo mv "$appimage" "/opt/${name}/${name}.AppImage"
-    sudo mv "$image_png" "/opt/${name}/${name}.png"
+    sudo /usr/bin/mkdir -p "/opt/${name}"
+    sudo /usr/bin/mv "$appimage" "/opt/${name}/${name}.AppImage"
+    sudo /usr/bin/mv "$image_png" "/opt/${name}/${name}.png"
 
     # set correct owner
-    sudo chown root:root "/opt/${name}" -R
+    sudo /usr/bin/chown root:root "/opt/${name}" -R
 
     # set correct permission
-    sudo chmod 755 "/opt/${name}"
-    sudo chmod 755 "/opt/${name}/${name}.AppImage"
-    sudo chmod 644 "/opt/${name}/${name}.png"
+    sudo /usr/bin/chmod 755 "/opt/${name}"
+    sudo /usr/bin/chmod 755 "/opt/${name}/${name}.AppImage"
+    sudo /usr/bin/chmod 644 "/opt/${name}/${name}.png"
 
     # create Desktop Entry
-    echo "[Desktop Entry]" | sudo tee "/usr/share/applications/${name}.desktop"
-    echo "Name=${name}" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Exec=/opt/${name}/${name}.AppImage" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Icon=/opt/${name}/${name}.png" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "comment=${name}" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Type=Application" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Terminal=false" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Encoding=UTF-8" | sudo tee -a "/usr/share/applications/${name}.desktop"
-    echo "Categories=Utility;" | sudo tee -a "/usr/share/applications/${name}.desktop"
+    echo "[Desktop Entry]" | sudo /usr/bin/tee "/usr/share/applications/${name}.desktop"
+    echo "Name=${name}" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Exec=/opt/${name}/${name}.AppImage" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Icon=/opt/${name}/${name}.png" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "comment=${name}" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Type=Application" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Terminal=false" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Encoding=UTF-8" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
+    echo "Categories=Utility;" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
 
-    sudo update-desktop-database
+    sudo /usr/bin/update-desktop-database
   fi
 }
 
@@ -421,7 +423,7 @@ function vm_shortcut_appimage() {
 ## EXPORT & ALIAS
 ##
 ######################################################################
-function vm_md_to_pdf() {
+vm_md_to_pdf() {
   cur_date=$(date +"%Y-%m-%d")
   filename=$(echo "$1" | cut -f 1 -d ".")
   pandoc "$1" \
@@ -445,7 +447,7 @@ function vm_md_to_pdf() {
 ## extract: Extract most know archives with one command
 ##
 ######################################################################
-function vm_extract {
+vm_extract() {
   if [ -z "$1" ]; then
     echo "Usage: vm_extract <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz>"
   else
@@ -479,7 +481,7 @@ function vm_extract {
 ## encrypt: encrypt to most know archives with one command
 ##
 ######################################################################
-function vm_encrypt() {
+vm_encrypt() {
   if [ -n "$3" ]; then
     case "$3" in
     sec)

@@ -1,20 +1,60 @@
 #!/usr/bin/env bash
 
 VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
-# LISTS_WORDLISTS=~'/opt/sec/wordlists'
 VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
 
 VM_SEC_USER_AGENT='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'
 
 ######################################################################
 ##
+## HELPER:: loader
+##
+######################################################################
+vm_sec_load_lists() {
+  git clone https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
+  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
+}
+
+vm_sec_nmap_scripts() {
+  git clone https://github.com/vulnersCom/nmap-vulners /usr/share/nmap/scripts/nmap-vulners
+  git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
+
+  nmap --script-updatedb
+}
+
+vm_sec_install_base() {
+  sudo apt install jq
+
+  go install github.com/charmbracelet/gum@latest
+}
+
+vm_sec_install_tools() {
+  go_github_commit_date_and_download(){
+    IFS='/' read -r owner repo addition <<< "$1"
+    echo 'LAST COMMIT' "[${repo}] ::" $(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')
+    package_path="${owner}/${repo}"
+    if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
+    go install "github.com/${package_path}@${2:-latest}"
+  }
+
+  go_github_commit_date_and_download 'projectdiscovery/httpx/cmd/httpx'
+  go_github_commit_date_and_download 'projectdiscovery/katana/cmd/katana'
+  go_github_commit_date_and_download 'hahwul/dalfox/v2'
+  go_github_commit_date_and_download 'OJ/gobuster/v3'
+  go_github_commit_date_and_download 'ffuf/ffuf/vm'
+  go_github_commit_date_and_download 'dwisiswant0/unew'
+  go_github_commit_date_and_download 'BishopFox/sj'
+}
+
+######################################################################
+##
 ## FUNCTIONS:: tools
 ##
 ######################################################################
-
 # -Pn -sS -T4
 alias vm_sec_nm1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
 alias vm_sec_nm2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
+
 alias vm_sec_what="whatweb -v -U='${VM_SEC_USER_AGENT}'"
 
 vm_sec_xssall() {
@@ -28,7 +68,8 @@ vm_sec_xssall() {
 # echo https://192.168.111.41 | katana -jc -d 5 -c 50 -ef css,woff,woff2,eot,ttf,tiff,tif -kf robotstxt,sitemapxml | grep -v -e "="
 # subfinder -d https://192.168.111.41 -silent -all | httpx -silent | katana -d 5 silent -em js,jsp,json | grep -P "(?i).+\.js(?:on|p)?$"
 
-alias vm_sec_gobust="gobuster dir --wordlist ${VM_SEC_LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
+alias vm_sec_gobuster="gobuster dir --wordlist ${VM_SEC_LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
+
 alias vm_sec_fuzz="ffuf -w ${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
 vm_sec_fuzz_path() {
   if [ "$#" -lt 1 ]; then
@@ -72,6 +113,7 @@ vm_sec_fuzz_dns() {
   -w "${VM_SEC_LISTS_SECLISTS}/Discovery/DNS/namelist.txt" \
   -H "Host: ${protocol}://FUZZ.${domain}"
 }
+
 vm_sec_katana() {
   echo "$1" | katana -headless -fs rdn -d 1 -ct 1 -rl 10 -o result.txt -jsonl
 }
@@ -81,31 +123,7 @@ alias vm_sec_massdns="massdns -r ${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolver
 alias vm_sec_server='python -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
 
-######################################################################
-##
-## HELPER: loader
-##
-######################################################################
-
-vm_sec_load_lists() {
-  git clone https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
-  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
-}
-
-vm_sec_install_base() {
-  sudo apt install jq
-
-  go install github.com/charmbracelet/gum@latest
-}
-
-vm_sec_install_tools() {
-  go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-  go install github.com/projectdiscovery/katana/cmd/katana@latest
-  go install github.com/hahwul/dalfox/v2@latest
-  go install github.com/OJ/gobuster/v3@latest
-  go install github.com/ffuf/ffuf/v2@latest
-  go install github.com/dwisiswant0/unew@latest
-}
+alias vm_sec_sj="sj -a ${VM_SEC_USER_AGENT} -i"
 
 ######################################################################
 ##
