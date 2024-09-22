@@ -273,7 +273,7 @@ alias vm_my_country='curl ifconfig.io/country_code'
 alias vm_my_ua='curl ifconfig.io/ua'
 alias vm_my_all='curl ifconfig.io/all.json | jq'
 vm_my_bios() {
-  for d in system-manufacturer system-product-name bios-release-date bios-version; do echo "${d}: $(sudo /usr/bin/dmidecode -s $d)"; done
+  for d in system-manufacturer system-product-name bios-release-date bios-version; do echo "${d}: $(sudo /usr/sbin/dmidecode -s $d)"; done
 }
 
 alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
