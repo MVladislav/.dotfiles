@@ -375,6 +375,7 @@
     "editor.defaultFormatter": "redhat.vscode-yaml",
     "editor.autoIndent": "none"
   },
+  "yaml.maxItemsComputed": 9999,
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
