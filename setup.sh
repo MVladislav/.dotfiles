@@ -4,6 +4,14 @@ PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin
 set -euo pipefail
 IFS=$'\n\t'
 
+### COLOR ### (https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
+NC='\033[0m' # No Color
+# Bold
+BRED='\033[1;31m'    # Red
+BPURPLE='\033[1;35m' # Purple
+BYELLOW='\033[1;33m' # Yellow
+BCyan='\033[1;36m'   # Cyan
+
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
 LN_TMUX_ORIG_BASE=~/.tmux
 LN_TMUX_ORIG_TMUX=~/.tmux.conf
@@ -44,111 +52,112 @@ setup_base() {
 
 # DEPS :: install dependiencies -------------------------------------------------------------------------------------------------
 install_dependiencies_additional() {
-  echo "DEPS :: install some base services"
+  echo -e "${BYELLOW}DEPS :: install some base services${NC}"
   sudo apt install rsync fzf eza bat ripgrep fd-find
 
-  echo "DEPS :: disable rsync systemd service"
+  echo -e "${BYELLOW}DEPS :: disable rsync systemd service${NC}"
   sudo systemctl disable rsync.service
   sudo systemctl mask rsync.service
 
   # echo "DEPS :: install lazygit with go"
+  # sudo snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
 }
 
 install_dependiencies_needs() {
-  echo "DEPS :: install build dependincies"
+  echo -e "${BYELLOW}DEPS :: install build dependincies${NC}"
   sudo apt install ninja-build gettext cmake unzip curl build-essential \
     automake pkg-config libevent-dev libncurses5-dev bison
 }
 
 install_dependiencies_needs_rm() {
-  echo "DEPS :: remove some build dependincies"
+  echo -e "${BYELLOW}DEPS :: remove some build dependincies${NC}"
   sudo apt remove cmake automake
 }
 
 install_dependiencies_tmux() {
-  echo "DEPS :: install tmux for user only"
-  echo "  - current installed version '$(tmux -V 2>/dev/null)'"
+  echo -e "${BYELLOW}DEPS :: install tmux for user only${NC}"
+  echo -e "${BCyan}  - current installed version :: '$("$HOME/.local/bin/tmux" -V 2>/dev/null)'${NC}"
   git clone https://github.com/tmux/tmux.git "$HOME/Downloads/tmux" && cd "$HOME/Downloads/tmux"
   sh autogen.sh
   ./configure --prefix="$HOME/.local/" && make
   make install
+  rm -rf "$HOME/Downloads/tmux"
   cd -
-  echo "  - current installed version '$(tmux -V 2>/dev/null)'"
-  #rm -rf "$HOME/Downloads/tmux"
+  echo -e "${BCyan}  - current installed version :: '$("$HOME/.local/bin/tmux" -V 2>/dev/null)'${NC}"
 }
 
 install_dependiencies_nvim() {
-  echo "DEPS :: install nvim for user only"
-  echo "  - current installed version '$(nvim -v 2>/dev/null)'"
+  echo -e "${BYELLOW}DEPS :: install nvim for user only${NC}"
+  echo -e "${BCyan}  - current installed version :: '$("$HOME/.local/bin/nvim" -v 2>/dev/null)'${NC}"
   git clone https://github.com/neovim/neovim.git "$HOME/Downloads/nvim" && cd "$HOME/Downloads/nvim"
   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$HOME/.local/"
   make install
+  rm -rf "$HOME/Downloads/nvim"
   cd -
-  echo "  - current installed version '$(nvim -v 2>/dev/null)'"
-  #rm -rf "$HOME/Downloads/nvim"
+  echo -e "${BCyan}  - current installed version :: '$("$HOME/.local/bin/nvim" -v 2>/dev/null)'${NC}"
 }
 
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
-  echo "TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
+  echo -e "${BYELLOW}TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
   rm -f "${LN_TMUX_ORIG_BASE}"
   ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
-  echo "TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
+  echo -e "${BYELLOW}TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'${NC}"
   rm -f "${LN_TMUX_ORIG_TMUX}"
   ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
 
-  echo "TMUX :: Create symlink from './bin/*' into '$LN_TMUX_ORIG_SCRIPT/'"
+  echo -e "${BYELLOW}TMUX :: Create symlink from './bin/*' into '$LN_TMUX_ORIG_SCRIPT/'${NC}"
   for script in "$PWD"/bin/*; do
     ln -sf "$script" "${LN_TMUX_ORIG_SCRIPT}/$(basename "$script")"
   done
 
-  echo "TMUX :: Run tpm to install plugins"
+  echo -e "${BYELLOW}TMUX :: Run tpm to install plugins${NC}"
   PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/scripts/install_plugins.sh"
 
-  echo "TMUX :: All symlinks created."
+  echo -e "${BYELLOW}TMUX :: All symlinks created.${NC}"
 }
 
 # NVIM :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_nvim() {
-  echo "NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
+  echo -e "${BYELLOW}NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'${NC}"
   rm -f "${LN_NVIM_ORIG_BASE}"
   ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
-  echo "NVIM :: All symlinks created."
+  echo -e "${BYELLOW}NVIM :: All symlinks created.${NC}"
 }
 
 # CODE :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
 setup_code() {
   mkdir -p "$LN_VS_CODE"
-  echo "CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
+  echo -e "${BYELLOW}CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'${NC}"
   rm -f "${LN_VS_CODE}/keybindings.json"
   ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
-  echo "CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'"
+  echo -e "${BYELLOW}CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'${NC}"
   rm -f "${LN_VS_CODE}/settings.json"
   ln -sf "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
-  echo "CODE :: Create symlink from './code/snippets' into '$LN_VS_CODE'"
+  echo -e "${BYELLOW}CODE :: Create symlink from './code/snippets' into '$LN_VS_CODE'${NC}"
   rm -f "${LN_VS_CODE}/snippets"
   ln -sf "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
 }
 
 # ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_adds() {
-  echo "ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'"
+  echo -e "${BYELLOW}ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'${NC}"
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zshrc" "${LN_ZSHRC}"
 
-  echo "ADDS :: Create symlink from './zshrc-append' as '$LN_ADDS_01'"
+  echo -e "${BYELLOW}ADDS :: Create symlink from './zshrc-append' as '$LN_ADDS_01'${NC}"
   rm -f "${LN_ADDS_01}"
   ln -sf "${PWD}/zshrc-append" "${LN_ADDS_01}"
-  echo "ADDS :: Create symlink from './zshrc-sec' as '$LN_ADDS_02'"
+  echo -e "${BYELLOW}ADDS :: Create symlink from './zshrc-sec' as '$LN_ADDS_02'${NC}"
   rm -f "${LN_ADDS_02}"
   ln -sf "${PWD}/zshrc-sec" "${LN_ADDS_02}"
-  echo "ADDS :: All symlinks created."
+  echo -e "${BYELLOW}ADDS :: All symlinks created.${NC}"
 }
 
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 setup_fonts() {
-  echo "FONTS :: Download some nerd fonts"
+  echo -e "${BYELLOW}FONTS :: Download some nerd fonts${NC}"
   FONTS_RELEASE_VERSION='v3.2.1'
   FONTS_URLS=(
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
@@ -164,31 +173,32 @@ setup_fonts() {
 
   for url in "${FONTS_URLS[@]}"; do
     file_name=$(basename "$url")
-    echo "FONTS :: Downloading $file_name..."
+    echo -e "${BYELLOW}FONTS :: Downloading $file_name...${NC}"
     curl -sL -o "/tmp/$file_name" "$url"
-    echo "FONTS :: Extracting $file_name..."
+    echo -e "${BYELLOW}FONTS :: Extracting $file_name...${NC}"
     tar -xf "/tmp/$file_name" -C "$FONTS_DIR"
     rm "/tmp/$file_name"
   done
 
-  echo "FONTS :: All fonts are downloaded and extracted"
+  echo -e "${BYELLOW}FONTS :: All fonts are downloaded and extracted${NC}"
 }
 
 # ******************************************************************************
 
 # Function to show usage information
 usage() {
-  echo "Usage: $0 [options]"
-  echo "Options:"
-  echo "  -h, --help                                  Show this help message and exit"
-  echo "  -nsb,  --no-setup-base                      Skip setup_base"
-  echo "  -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]"
-  echo "  -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)"
-  echo "  -nst,  --no-setup-tmux                      Skip setup_tmux"
-  echo "  -nsn,  --no-setup-nvim                      Skip setup_nvim"
-  echo "  -nsc,  --no-setup-code                      Skip setup_code"
-  echo "  -nsa,  --no-setup-adds                      Skip setup_adds"
-  echo "  -nsf,  --no-setup-fonts                     Skip setup_fonts"
+  echo -e "${BPURPLE}Usage: $0 [options]${NC}"
+  echo -e "${BPURPLE}Options:${NC}"
+  echo -e "${BPURPLE}  -h, --help                                  Show this help message and exit${NC}"
+  echo -e "${BPURPLE}  -nsb,  --no-setup-base                      Skip setup_base${NC}"
+  echo -e "${BPURPLE}  -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]${NC}"
+  echo -e "${BPURPLE}  -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)${NC}"
+  echo -e "${BPURPLE}  -nst,  --no-setup-tmux                      Skip setup_tmux${NC}"
+  echo -e "${BPURPLE}  -nsn,  --no-setup-nvim                      Skip setup_nvim${NC}"
+  echo -e "${BPURPLE}  -nsc,  --no-setup-code                      Skip setup_code${NC}"
+  echo -e "${BPURPLE}  -nsa,  --no-setup-adds                      Skip setup_adds${NC}"
+  echo -e "${BPURPLE}  -nsf,  --no-setup-fonts                     Skip setup_fonts${NC}"
+  echo -e "${BPURPLE}  -ds,   --disable-setups                     Skip all setup${NC}"
 }
 
 # Function to parse command-line arguments
@@ -233,8 +243,15 @@ parse_args() {
     -nsf | --no-setup-fonts)
       RUN_SETUP_FONTS=0
       ;;
+    -ds | --disable-setups)
+      RUN_SETUP_TMUX=0
+      RUN_SETUP_NVIM=0
+      RUN_SETUP_CODE=0
+      RUN_SETUP_ADDS=0
+      RUN_SETUP_FONTS=0
+      ;;
     *)
-      echo "Unknown option: $key" >&2
+      echo -e "${BRED}Unknown option: $key${NC}" >&2
       usage
       exit 1
       ;;
@@ -245,7 +262,7 @@ parse_args() {
 
 # ******************************************************************************
 
-echo "Starting script $0 ..."
+echo -e "${BYELLOW}Starting script $0 ...${NC}"
 
 # Parse command-line arguments
 parse_args "$@"
