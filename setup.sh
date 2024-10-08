@@ -68,20 +68,24 @@ install_dependiencies_needs_rm() {
 
 install_dependiencies_tmux() {
   echo "DEPS :: install tmux for user only"
+  echo "  - current installed version '$(tmux -V 2>/dev/null)'"
   git clone https://github.com/tmux/tmux.git "$HOME/Downloads/tmux" && cd "$HOME/Downloads/tmux"
   sh autogen.sh
   ./configure --prefix="$HOME/.local/" && make
   make install
   cd -
+  echo "  - current installed version '$(tmux -V 2>/dev/null)'"
   #rm -rf "$HOME/Downloads/tmux"
 }
 
 install_dependiencies_nvim() {
   echo "DEPS :: install nvim for user only"
+  echo "  - current installed version '$(nvim -v 2>/dev/null)'"
   git clone https://github.com/neovim/neovim.git "$HOME/Downloads/nvim" && cd "$HOME/Downloads/nvim"
   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$HOME/.local/"
   make install
   cd -
+  echo "  - current installed version '$(nvim -v 2>/dev/null)'"
   #rm -rf "$HOME/Downloads/nvim"
 }
 
@@ -145,14 +149,15 @@ setup_adds() {
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 setup_fonts() {
   echo "FONTS :: Download some nerd fonts"
+  FONTS_RELEASE_VERSION='v3.2.1'
   FONTS_URLS=(
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/NerdFontsSymbolsOnly.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/FiraCode.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Hack.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/UbuntuMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/FiraMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/RobotoMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/ProggyClean.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraCode.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/Hack.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/UbuntuMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/RobotoMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/ProggyClean.tar.xz"
   )
   FONTS_DIR=~/.local/share/fonts/nerd-fonts
   mkdir -p "$FONTS_DIR"
