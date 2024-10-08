@@ -4,6 +4,17 @@ PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin
 set -euo pipefail
 IFS=$'\n\t'
 
+cat << 'EOF'
+      .--.
+     |o_o |  HI :)
+     |:_/ |
+    //   \ \
+   (|     | )
+  /'\_   _/`\
+  \___)=(___/
+EOF
+
+
 ### COLOR ### (https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
 NC='\033[0m' # No Color
 # Bold
