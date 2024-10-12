@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin
+PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -50,6 +50,7 @@ main() {
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
+  [[ $RUN_SETUP_CODE_EXT -eq 1 ]] && setup_code_ext
   [[ $RUN_SETUP_ADDS -eq 1 ]] && setup_adds
   [[ $RUN_SETUP_FONTS -eq 1 ]] && setup_fonts
 }
@@ -151,6 +152,32 @@ setup_code() {
   ln -sf "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
 }
 
+setup_code_ext(){
+
+  if command -v code &> /dev/null
+  then
+    echo -e "${BYELLOW}CODE :: installing code extensions${NC}"
+
+    VS_CODE_EXTS=(
+      "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf" "bibhasdn.unique-lines"
+      "bierner.markdown-preview-github-styles" "charliermarsh.ruff" "donjayamanne.githistory" "eamodio.gitlens"
+      "esbenp.prettier-vscode" "foxundermoon.shell-format" "ms-python.python" "mushan.vscode-paste-image"
+      "pkief.material-icon-theme" "redhat.ansible" "redhat.vscode-xml" "redhat.vscode-yaml"
+      "samuelcolvin.jinjahtml" "silofy.hackthebox" "streetsidesoftware.code-spell-checker"
+      "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml" "timonwong.shellcheck"
+      "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
+    )
+
+    for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
+      echo -e "${BYELLOW}  - CODE:: install extionsion '$vs_code_ext'${NC}"
+      code --install-extension "$vs_code_ext"
+    done
+  else
+    echo -e "${BRED}CODE :: code is not installed, extension install will skipped!${NC}"
+  fi
+
+}
+
 # ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_adds() {
   echo -e "${BYELLOW}ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'${NC}"
@@ -200,13 +227,14 @@ setup_fonts() {
 usage() {
   echo -e "${BPURPLE}Usage: $0 [options]${NC}"
   echo -e "${BPURPLE}Options:${NC}"
-  echo -e "${BPURPLE}  -h, --help                                  Show this help message and exit${NC}"
+  echo -e "${BPURPLE}  -h,    --help                               Show this help message and exit${NC}"
   echo -e "${BPURPLE}  -nsb,  --no-setup-base                      Skip setup_base${NC}"
   echo -e "${BPURPLE}  -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]${NC}"
   echo -e "${BPURPLE}  -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)${NC}"
   echo -e "${BPURPLE}  -nst,  --no-setup-tmux                      Skip setup_tmux${NC}"
   echo -e "${BPURPLE}  -nsn,  --no-setup-nvim                      Skip setup_nvim${NC}"
   echo -e "${BPURPLE}  -nsc,  --no-setup-code                      Skip setup_code${NC}"
+  echo -e "${BPURPLE}  -nsce, --no-setup-code-ext                  Skip setup_code_ext${NC}"
   echo -e "${BPURPLE}  -nsa,  --no-setup-adds                      Skip setup_adds${NC}"
   echo -e "${BPURPLE}  -nsf,  --no-setup-fonts                     Skip setup_fonts${NC}"
   echo -e "${BPURPLE}  -ds,   --disable-setups                     Skip all setup${NC}"
@@ -220,6 +248,7 @@ parse_args() {
   RUN_SETUP_TMUX=1
   RUN_SETUP_NVIM=1
   RUN_SETUP_CODE=1
+  RUN_SETUP_CODE_EXT=1
   RUN_SETUP_ADDS=1
   RUN_SETUP_FONTS=1
 
@@ -247,6 +276,9 @@ parse_args() {
       ;;
     -nsc | --no-setup-code)
       RUN_SETUP_CODE=0
+      ;;
+    -nsce | --no-setup-code-ext)
+      RUN_SETUP_CODE_EXT=0
       ;;
     -nsa | --no-setup-adds)
       RUN_SETUP_ADDS=0
