@@ -290,6 +290,7 @@ parse_args() {
       RUN_SETUP_TMUX=0
       RUN_SETUP_NVIM=0
       RUN_SETUP_CODE=0
+      RUN_SETUP_CODE_EXT=0
       RUN_SETUP_ADDS=0
       RUN_SETUP_FONTS=0
       ;;
