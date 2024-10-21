@@ -36,6 +36,7 @@ tmux/tmux/**
 !tmux/tmux/*.conf
 !tmux/tmux/plugins/
 !tmux/tmux/plugins/tpm
+!tmux/tmux/plugins/catppuccin
 !tmux/tmux.conf
 
 !code/

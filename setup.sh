@@ -59,13 +59,14 @@ main() {
 
 # GIT :: init recursives --------------------------------------------------------------------------------------------------------
 setup_base() {
+  #git submodule update --init --recursive
   git submodule update --init --recursive --remote
 }
 
 # DEPS :: install dependiencies -------------------------------------------------------------------------------------------------
 install_dependiencies_additional() {
   echo -e "${BYELLOW}DEPS :: install some base services${NC}"
-  sudo apt install rsync fzf eza bat ripgrep fd-find
+  sudo apt install rsync fzf eza bat ripgrep fd-find xclip
 
   echo -e "${BYELLOW}DEPS :: disable rsync systemd service${NC}"
   sudo systemctl disable rsync.service
@@ -125,7 +126,8 @@ setup_tmux() {
   done
 
   echo -e "${BYELLOW}TMUX :: Run tpm to install plugins${NC}"
-  PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/scripts/install_plugins.sh"
+  #PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/clean_plugins"
+  PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins"
 
   echo -e "${BYELLOW}TMUX :: All symlinks created.${NC}"
 }
