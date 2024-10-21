@@ -65,7 +65,7 @@ repos:
           - --exclude-files=tests/*
 
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.20.1
+    rev: v8.21.1
     hooks:
       - id: gitleaks
 
