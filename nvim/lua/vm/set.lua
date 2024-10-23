@@ -1,9 +1,7 @@
-vim.cmd("set expandtab")
-vim.cmd("set tabstop=2")
-vim.cmd("set softtabstop=2")
-vim.cmd("set shiftwidth=2")
+vim.cmd("let g:netrw_liststyle = 3")
 
 vim.opt.guicursor = ""
+vim.opt.background = "dark"
 -- vim.opt.guicursor = {
 --   "n-v-c:block",                                 -- Normal, visual, command-line: block cursor
 --   "i-ci-ve:ver25",                               -- Insert, command-line insert, visual-exclude: vertical bar cursor with 25% width
@@ -84,3 +82,5 @@ vim.opt.foldlevelstart = 99
 vim.opt.foldenable = true
 
 vim.opt.clipboard = 'unnamedplus'
+
+vim.opt.backspace = "indent,eol,start"

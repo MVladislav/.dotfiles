@@ -68,17 +68,17 @@ return {
         vim.cmd("normal! z" .. level)
       end
 
-      -- Map Ctrl+k Ctrl+0 to fold unfold
+      -- Map ALT+k ALT+0 to fold unfold
       vim.keymap.set("n", "<A-k><A-0>", function() vim.cmd("normal! zR") end)
-      -- Map Ctrl+k Ctrl+1 to fold depth 1
+      -- Map ALT+k ALT+1 to fold depth 1
       vim.keymap.set("n", "<A-k><A-1>", function() FoldToLevel(0) end)
-      -- Map Ctrl+k Ctrl+2 to fold depth 2
+      -- Map ALT+k ALT+2 to fold depth 2
       vim.keymap.set("n", "<A-k><A-2>", function() FoldToLevel(1) end)
-      -- Map Ctrl+k Ctrl+3 to fold depth 3
+      -- Map ALT+k ALT+3 to fold depth 3
       vim.keymap.set("n", "<A-k><A-3>", function() FoldToLevel(2) end)
-      -- Map Ctrl+k Ctrl+4 to fold depth 4
+      -- Map ALT+k ALT+4 to fold depth 4
       vim.keymap.set("n", "<A-k><A-4>", function() FoldToLevel(4) end)
-      -- Map Ctrl+k Ctrl+5 to fold depth 5
+      -- Map ALT+k ALT+5 to fold depth 5
       vim.keymap.set("n", "<A-k><A-5>", function() FoldToLevel(5) end)
 
     end

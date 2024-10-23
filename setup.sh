@@ -72,6 +72,9 @@ install_dependiencies_additional() {
   sudo systemctl disable rsync.service
   sudo systemctl mask rsync.service
 
+  # echo "DEPS :: install npm"
+  # sudo snap install node --classic
+
   # echo "DEPS :: install lazygit with go"
   # sudo snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
