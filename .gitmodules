@@ -2,7 +2,3 @@
 	path = tmux/tmux/plugins/tpm
 	url = https://github.com/tmux-plugins/tpm
 	branch = master
-[submodule "tmux/tmux/plugins/catppuccin"]
-	path = tmux/tmux/plugins/catppuccin
-	url = https://github.com/catppuccin/tmux.git
-	branch = main
