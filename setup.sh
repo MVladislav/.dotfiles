@@ -47,6 +47,8 @@ main() {
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX_NVIM -eq 1 ]] && install_dependiencies_nvim
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX_NVIM -eq 1 ]] && install_dependiencies_needs_rm
 
+
+  [[ $RUN_SETUP_BIN -eq 1 ]] && setup_bin
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
@@ -114,6 +116,14 @@ install_dependiencies_nvim() {
   echo -e "${BCyan}  - current installed version :: '$("$HOME/.local/bin/nvim" -v 2>/dev/null)'${NC}"
 }
 
+# BIN :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+setup_bin() {
+  echo -e "${BYELLOW}BIN :: Create symlink from './bin/*' into '$LN_TMUX_ORIG_SCRIPT/'${NC}"
+  for script in "$PWD"/bin/*; do
+    ln -sf "$script" "${LN_TMUX_ORIG_SCRIPT}/$(basename "$script")"
+  done
+  echo -e "${BYELLOW}BIN :: All symlinks created.${NC}"
+}
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
   echo -e "${BYELLOW}TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
@@ -122,11 +132,6 @@ setup_tmux() {
   echo -e "${BYELLOW}TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'${NC}"
   rm -f "${LN_TMUX_ORIG_TMUX}"
   ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
-
-  echo -e "${BYELLOW}TMUX :: Create symlink from './bin/*' into '$LN_TMUX_ORIG_SCRIPT/'${NC}"
-  for script in "$PWD"/bin/*; do
-    ln -sf "$script" "${LN_TMUX_ORIG_SCRIPT}/$(basename "$script")"
-  done
 
   echo -e "${BYELLOW}TMUX :: Run tpm to install plugins${NC}"
   #PATH="$HOME/.local/bin:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/clean_plugins"
@@ -250,6 +255,7 @@ parse_args() {
   RUN_SETUP_BASE=1
   RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
   RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=0
+  RUN_SETUP_BIN=1
   RUN_SETUP_TMUX=1
   RUN_SETUP_NVIM=1
   RUN_SETUP_CODE=1
@@ -272,6 +278,9 @@ parse_args() {
       ;;
     -idtn | --install-dependencies-tmux-nvim)
       RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=1
+      ;;
+    -nsb | --no-setup-bin)
+      RUN_SETUP_BIN=0
       ;;
     -nst | --no-setup-tmux)
       RUN_SETUP_TMUX=0

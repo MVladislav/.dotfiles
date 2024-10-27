@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+PVE_NODE="${PVE_NODE:-pve}"
+PVE_PROXY="${PVE_PROXY:-pve.home.local}"
+PVE_API_USER="${PVE_API_USER:-api_spice@pam!spice}"
+# PVE_TOKEN=''
+
+PVE_VM_PROCESS="start"
+PVE_VMID=""
+if [[ "$1" == *"stop"* ]]; then
+  PVE_VM_PROCESS="stop"
+else
+  PVE_VMID="$1"
+fi
+
+# INITIALIZATION #############################################################
+if ! type "jq" >/dev/null; then
+  echo 'Command line tool "jq" is needed. Please install.'
+fi
+
+if [ -z "$PVE_API_USER" ]; then
+  echo -n "API User: "
+  read -r PVE_API_USER
+  echo
+fi
+
+if [ -z "$PVE_TOKEN" ]; then
+  echo -n "Token: "
+  read -r -s PVE_TOKEN
+  echo
+fi
+
+if [ -z "$PVE_PROXY" ]; then
+  PVE_PROXY=$PVE_NODE
+fi
+
+# GET VM LIST ################################################################
+if [ -z "$PVE_VMID" ]; then
+  {
+    RESPONSE=$(curl -f -s -S -k -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" "https://$PVE_PROXY:8006/api2/json/nodes/$PVE_NODE/qemu")
+  } || {
+    echo "ERROR: Authentication failed"
+    return 1
+  }
+
+  echo "$RESPONSE" |
+    jq -r '.data | .[] | " \(.status | if . == "stopped" then "🔴" elif . == "running" then "🟢" else . end) \(.vmid) :: \(.name)"' |
+    sort -h
+
+  echo -n "VM ID: "
+  read -r PVE_VMID
+  echo
+fi
+
+if [ -z "$PVE_VMID" ]; then
+  echo "ERROR: VM ID not set"
+  return 1
+fi
+
+# GET VM STATUS ##############################################################
+{
+  RESPONSE=$(curl -f -s -S -k -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" "https://$PVE_PROXY:8006/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/current")
+} || {
+  echo "ERROR: Authentication failed"
+  return 1
+}
+
+STATUS=$(echo "$RESPONSE" | jq -r '.data.qmpstatus')
+if [[ "$PVE_VM_PROCESS" == "stop" ]]; then
+  if [[ "$STATUS" == "running" ]]; then
+    echo "VM will be stopped ..."
+    RESPONSE=$(curl -d "" -f -s -S -k -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" "https://$PVE_PROXY:8006/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/shutdown")
+  else
+    echo "VM is not running and can not stopped!"
+  fi
+  return 0
+fi
+if [[ "$STATUS" == "stopped" && "$PVE_VM_PROCESS" == "start" ]]; then
+  echo "WARN: VM not running. Trying to start"
+  RESPONSE=$(curl -d "" -f -s -S -k -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" "https://$PVE_PROXY:8006/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/start")
+
+  echo "Waiting 3 seconds before trying Spice connection ..."
+  sleep 3
+fi
+
+# GET SPICE CONFIGURATION ####################################################
+{
+  RESPONSE=$(curl -f -s -S -k -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" "https://$PVE_PROXY:8006/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/spiceproxy" -d "proxy=$PVE_PROXY")
+} || {
+  echo "ERROR: Maybe Proxmox-API changed?"
+  echo "$RESPONSE"
+  return 1
+}
+
+# GENERATING REMOTE-VIEWER CONNECTION FILE ###################################
+PVE_TMP=$(mktemp)
+{
+  echo "[virt-viewer]"
+  echo "secure-attention=$(echo "$RESPONSE" | jq -r '.data."secure-attention"')"
+  echo "delete-this-file=$(echo "$RESPONSE" | jq -r '.data."delete-this-file"')"
+  echo "proxy=$(echo "$RESPONSE" | jq -r '.data.proxy')"
+  echo "type=$(echo "$RESPONSE" | jq -r '.data.type')"
+  echo "ca=$(echo "$RESPONSE" | jq -r '.data.ca' | sed ':a;N;$!ba;s/\n/\\\\n/g')"
+  echo "toggle-fullscreen=$(echo "$RESPONSE" | jq -r '.data."toggle-fullscreen"')"
+  echo "title=$(echo "$RESPONSE" | jq -r '.data.title')"
+  echo "host=$(echo "$RESPONSE" | jq -r '.data.host')"
+  echo "password=$(echo "$RESPONSE" | jq -r '.data.password')"
+  echo "host-subject=$(echo "$RESPONSE" | jq -r '.data."host-subject"')"
+  echo "release-cursor=$(echo "$RESPONSE" | jq -r '.data."release-cursor"')"
+  echo "tls-port=$(echo "$RESPONSE" | jq -r '.data."tls-port"')"
+} >"$PVE_TMP"
+
+# STARTING REMOTE-VIEWER #####################################################
+nohup remote-viewer "$PVE_TMP" >/dev/null 2>&1 &

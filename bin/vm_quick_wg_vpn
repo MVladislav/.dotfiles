@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+
+# Define variables
+WG_CONF_PATH="./wg0.conf"               # Replace with the path to your WireGuard config file
+WG_INTERFACE="wg0"                      # WireGuard interface name
+VPN_DNS="9.9.9.9"                       # Replace with VPN-provided or desired DNS
+PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Define your private network subnet
+
+# Get default interface and gateway IP
+DEFAULT_IFACE=$(ip route | grep default | grep enp | awk '{print $5}' | head -n1)
+GATEWAY_IP=$(ip route | grep default | grep enp | awk '{print $3}' | head -n1)
+
+# Function to check if WireGuard is installed
+check_wireguard_installed() {
+  if ! command -v wg &>/dev/null; then
+    echo "[ERROR] WireGuard (wg) is not installed."
+    echo "You can install it by running the following command:"
+    echo "sudo apt update && sudo apt install wireguard"
+    exit 1
+  fi
+}
+
+# Function to check if the WireGuard config file exists
+check_config_file_exists() {
+  # Check if the config file exists in /etc/wireguard
+  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf"; then
+    # Check if the local config file exists
+    if [[ ! -f "$WG_CONF_PATH" ]]; then
+      echo "[ERROR] WireGuard config file not found in either location:"
+      echo "  - $WG_CONF_PATH"
+      echo "  - /etc/wireguard/$WG_INTERFACE.conf"
+      exit 1
+    fi
+  fi
+  echo "[INFO] Configuration file found."
+}
+
+# Function to move WireGuard config into place
+move_wireguard_conf() {
+  if [[ -f "$WG_CONF_PATH" ]]; then
+    echo "[INFO] Moving WireGuard config file to /etc/wireguard/"
+    sudo mv "$WG_CONF_PATH" "/etc/wireguard/$WG_INTERFACE.conf"
+    sudo chmod 600 "/etc/wireguard/$WG_INTERFACE.conf"
+  fi
+}
+
+# Function to set up WireGuard
+setup_wireguard() {
+  # Add route for private network subnet
+  echo "[INFO] Adding route for private network subnet $PRIVATE_NETWORK_SUBNET via $GATEWAY_IP."
+  sudo ip route add "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP"
+
+  # Check if the WireGuard interface is already up
+  if sudo wg show "$WG_INTERFACE" >/dev/null 2>&1; then
+    echo "[INFO] WireGuard interface $WG_INTERFACE is already running. Restarting it."
+    sudo wg-quick down "$WG_INTERFACE" >/dev/null 2>&1
+    sleep 2
+  fi
+
+  echo "[INFO] Bringing up WireGuard interface $WG_INTERFACE."
+  if ! sudo wg-quick up "$WG_INTERFACE" >/dev/null 2>&1; then
+    echo "[ERROR] Failed to start WireGuard interface."
+    exit 1
+  fi
+  echo "[INFO] WireGuard interface $WG_INTERFACE is up."
+}
+
+# Function to set up a kill switch with UFW
+setup_kill_switch() {
+  echo -e "[INFO] Enabling UFW kill switch to prevent traffic leak.\n"
+
+  # Reset UFW and apply basic deny policies
+  sudo ufw disable >/dev/null 2>&1
+  sudo ufw --force reset >/dev/null 2>&1
+
+  sudo ufw default deny outgoing >/dev/null 2>&1
+  sudo ufw default deny incoming >/dev/null 2>&1
+
+  # Get WireGuard Endpoint IP and Port from config file
+  WG_ENDPOINT=$(sudo grep -E "^Endpoint" "/etc/wireguard/$WG_INTERFACE.conf" | awk '{print $3}')
+  WG_ENDPOINT_IP=$(echo "$WG_ENDPOINT" | cut -d: -f1)
+  WG_PORT=$(echo "$WG_ENDPOINT" | cut -d: -f2)
+
+  # Allow UDP traffic to WireGuard endpoint IP and port
+  sudo ufw allow out to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp >/dev/null 2>&1
+  # sudo ufw allow out from any to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp
+
+  # Allow traffic on WireGuard interface
+  sudo ufw allow out on "$WG_INTERFACE" from any to any >/dev/null 2>&1
+
+  # Allow SSH access over default interface for management
+  sudo ufw allow in on "$DEFAULT_IFACE" to any port 22 proto tcp >/dev/null 2>&1
+  # sudo ufw allow out on "$DEFAULT_IFACE" to 192.168.0.0/16
+
+  # Allow DNS requests through the VPN
+  sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp >/dev/null 2>&1
+
+  sudo ufw enable
+  echo -e "\n[INFO] Kill switch active. All traffic forced through VPN."
+}
+
+# Main script executions
+check_wireguard_installed
+check_config_file_exists
+move_wireguard_conf
+setup_wireguard
+setup_kill_switch
+
+echo "[INFO] VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
