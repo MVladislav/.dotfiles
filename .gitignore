@@ -38,6 +38,8 @@ tmux/tmux/**
 !tmux/tmux/plugins/tpm
 !tmux/tmux/plugins/catppuccin
 !tmux/tmux.conf
+# tmux/tmux/plugins/tpm/
+tmux/tmux/plugins/tpm/lib/tmux-test
 
 !code/
 code/**
