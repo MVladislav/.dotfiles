@@ -11,15 +11,22 @@ export PY_COLOR=1
 export ANSIBLE_FORCE_COLOR=1
 
 ### ZSH ###
-setopt NO_NOMATCH
+if command -v zsh &>/dev/null; then
+  setopt NO_NOMATCH
+fi
 
 ### BASH ###
 export HISTTIMEFORMAT="%F %T "
 alias sudo-env='sudo -E env "PATH=$PATH"'
 
 ### EDITOR ###
-export EDITOR='nvim'
-export SUDO_EDITOR="nvim"
+if command -v nvim &>/dev/null; then
+  export EDITOR='nvim'
+  export SUDO_EDITOR="nvim"
+else
+  export EDITOR='vim'
+  export SUDO_EDITOR="vim"
+fi
 
 ######################################################################
 ##
@@ -74,7 +81,9 @@ if [[ ":$PATH:" != *":$GEM_HOME/bin:"* ]]; then
 fi
 
 ### LS as EZA ###
-alias ls='eza --color=always --git'
+if command -v eza &>/dev/null; then
+  alias ls='eza --color=always --git'
+fi
 alias l='ls -a1'
 alias ll='ls -aalhg'
 alias lg='ll --grid'
@@ -165,7 +174,9 @@ alias vm_ta='tmux attach -t'
 alias vm_tk='tmux kill-session -t'
 
 ### VIM ###
-alias vim=nvim
+if command -v nvim &>/dev/null; then
+  alias vim=nvim
+fi
 
 ### updater ###
 alias vm_up_apt='sudo /usr/bin/apt update && sudo /usr/bin/apt upgrade'

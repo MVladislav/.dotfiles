@@ -375,7 +375,7 @@
     "editor.defaultFormatter": "redhat.vscode-yaml",
     "editor.autoIndent": "none"
   },
-  "yaml.maxItemsComputed": 9999,
+  "yaml.maxItemsComputed": 99999,
   "[json]": {
     "editor.defaultFormatter": "vscode.json-language-features"
   },
@@ -613,7 +613,7 @@
   "cSpell.caseSensitive": true,
   "cSpell.maxDuplicateProblems": 20,
   "cSpell.maxNumberOfProblems": 500,
-  "cSpell.diagnosticLevel": "Information",
+  "cSpell.diagnosticLevel": "Hint",
   "cSpell.userWords": [
     "ansible",
     "Ansible",
@@ -641,7 +641,7 @@
     "Sophos",
     "traefik"
   ],
-  "cSpell.enableFiletypes": ["*"],
+  "cSpell.enableFiletypes": ["!yaml", "*"],
   "redhat.telemetry.enabled": false,
   "telemetry.telemetryLevel": "off"
 }
