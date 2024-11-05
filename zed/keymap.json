@@ -1,0 +1,43 @@
+// Zed keymap
+//
+// For information on binding keys, see the Zed
+// documentation: https://zed.dev/docs/key-bindings
+//
+// To see the default key bindings run `zed: open default keymap`
+// from the command palette.
+[
+  {
+    "context": "Editor",
+    "bindings": {
+      // "j k": ["workspace::SendKeystrokes", "escape"]
+      // "ctrl-alt-c": "editor::CopyRelativePath",
+      "ctrl-#": "editor::ToggleComments",
+
+      "ctrl-k ctrl-l": "editor::ToggleFold",
+      "ctrl-k ctrl-j": "editor::UnfoldLines",
+      "ctrl-k ctrl-0": "editor::UnfoldAll",
+      "ctrl-k ctrl-1": ["editor::FoldAtLevel", { "level": 1 }],
+      "ctrl-k ctrl-2": ["editor::FoldAtLevel", { "level": 2 }],
+      "ctrl-k ctrl-3": ["editor::FoldAtLevel", { "level": 3 }],
+      "ctrl-k ctrl-4": ["editor::FoldAtLevel", { "level": 4 }],
+      "ctrl-k ctrl-5": ["editor::FoldAtLevel", { "level": 5 }],
+      "ctrl-k ctrl-6": ["editor::FoldAtLevel", { "level": 6 }],
+      "ctrl-k ctrl-7": ["editor::FoldAtLevel", { "level": 7 }],
+      "ctrl-k ctrl-8": ["editor::FoldAtLevel", { "level": 8 }],
+      "ctrl-k ctrl-9": ["editor::FoldAtLevel", { "level": 9 }],
+
+      "ctrl-shift-up": "editor::AddSelectionAbove",
+      "ctrl-shift-down": "editor::AddSelectionBelow",
+
+      "shift-alt-up": "editor::DuplicateLineUp",
+      "shift-alt-down": "editor::DuplicateLineDown"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      // "shift shift": "file_finder::Toggle"
+      // "ctrl-cmd-t": "workspace::NewCenterTerminal"
+    }
+  }
+]
