@@ -130,7 +130,7 @@ install_dependencies_needs() {
 install_dependencies_needs_rm() {
   echo -e "\n${BYELLOW}📥 DEPS :: removing not needed build dependincies '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'...${NC}"
   sudo apt-get -y remove "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
-  sudo apt-get -y autoremove  1>/dev/null
+  sudo apt-get -y autoremove 1>/dev/null
   sudo apt-get -y autoclean 1>/dev/null
   echo -e "${BYELLOW}📥 DEPS :: removed!${NC}"
 }

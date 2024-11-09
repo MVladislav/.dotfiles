@@ -151,7 +151,7 @@ alias tf='terraform'
 
 ### ZED ###
 if command -v flatpak &>/dev/null; then
-  alias zed='flatpak run dev.zed.Zed'
+  alias zed-editor='flatpak run dev.zed.Zed'
 fi
 
 ### PYTHON TOOLS ###
