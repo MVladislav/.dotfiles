@@ -52,7 +52,9 @@ LN_ADDS_01=~/.zshrc-append
 LN_ADDS_02=~/.zshrc-sec
 
 LN_VS_CODE=~/.config/Code/User
-LN_ZED=~/.config/zed
+
+LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed
+LN_ZED=$LN_ZED_FLATPAK # ~/.config/zed
 
 # ******************************************************************************
 
@@ -85,7 +87,7 @@ setup_base() {
 
 # DEPS :: install dependencies -------------------------------------------------------------------------------------------------
 install_dependencies_additional() {
-  echo -e "${BYELLOW}📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]${NC}"
+  echo -e "\n${BYELLOW}📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]${NC}"
   sudo apt-get install rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   echo -e "${BYELLOW}📥 DEPS :: disable rsync systemd service${NC}"
@@ -98,10 +100,13 @@ install_dependencies_additional() {
   # echo "DEPS :: install lazygit with go"
   # sudo snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
+
+  # echo "DEPS :: install zed over flatpak"
+  # flatpak install flathub dev.zed.Zed
 }
 
 install_dependencies_needs() {
-  echo -e "${BYELLOW}📥 DEPS :: install build dependincies${NC}"
+  echo -e "\n${BYELLOW}📥 DEPS :: install build dependincies${NC}"
   local packages_tools=(git curl unzip libevent-dev)
   local packages_build=(ninja-build gettext cmake build-essential
     automake pkg-config libevent-dev libncurses-dev bison)
@@ -123,7 +128,7 @@ install_dependencies_needs() {
 }
 
 install_dependencies_needs_rm() {
-  echo -e "${BYELLOW}📥 DEPS :: removing not needed build dependincies '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'...${NC}"
+  echo -e "\n${BYELLOW}📥 DEPS :: removing not needed build dependincies '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'...${NC}"
   sudo apt-get -y remove "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
   sudo apt-get -y autoremove  1>/dev/null
   sudo apt-get -y autoclean 1>/dev/null
@@ -131,7 +136,7 @@ install_dependencies_needs_rm() {
 }
 
 install_dependencies_tmux() {
-  echo -e "${BYELLOW}🚀 TMUX :: install tmux for user only...${NC}"
+  echo -e "\n${BYELLOW}🚀 TMUX :: install tmux for user only...${NC}"
   echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'${NC}"
   git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
   cd "$DEPS_INSTALL_PATH/tmux"
@@ -146,7 +151,7 @@ install_dependencies_tmux() {
 }
 
 install_dependencies_nvim() {
-  echo -e "${BYELLOW}🚀 NVIM :: install nvim for user only...${NC}"
+  echo -e "\n${BYELLOW}🚀 NVIM :: install nvim for user only...${NC}"
   echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v | head -n1 2>/dev/null)'${NC}"
   git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   cd "$DEPS_INSTALL_PATH/nvim"
@@ -160,7 +165,7 @@ install_dependencies_nvim() {
 
 # BIN :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_bin() {
-  echo -e "${BYELLOW}🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/'${NC}"
+  echo -e "\n${BYELLOW}🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/'${NC}"
   mkdir -p "$USER_LOCAL_PREFIX_BIN"
   for script in "$PWD"/bin/*; do
     ln -sf "$script" "${USER_LOCAL_PREFIX_BIN}/$(basename "$script")"
@@ -169,7 +174,7 @@ setup_bin() {
 }
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
-  echo -e "${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
+  echo -e "\n${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
   rm -f "${LN_TMUX_ORIG_BASE}"
   ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
   echo -e "${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'${NC}"
@@ -185,7 +190,7 @@ setup_tmux() {
 
 # NVIM :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_nvim() {
-  echo -e "${BYELLOW}🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'${NC}"
+  echo -e "\n${BYELLOW}🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'${NC}"
   rm -f "${LN_NVIM_ORIG_BASE}"
   ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
   echo -e "${BYELLOW}🚀 NVIM :: All symlinks created.${NC}"
@@ -194,7 +199,7 @@ setup_nvim() {
 # CODE :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
 setup_code() {
   mkdir -p "$LN_VS_CODE"
-  echo -e "${BYELLOW}🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'${NC}"
+  echo -e "\n${BYELLOW}🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'${NC}"
   rm -f "${LN_VS_CODE}/keybindings.json"
   ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
   echo -e "${BYELLOW}🚀 CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'${NC}"
@@ -208,7 +213,7 @@ setup_code() {
 
 setup_code_ext() {
   if command -v code &>/dev/null; then
-    echo -e "${BYELLOW}🚀 CODE :: installing code extensions${NC}"
+    echo -e "\n${BYELLOW}🚀 CODE :: installing code extensions${NC}"
 
     VS_CODE_EXTS=(
       "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf" "bibhasdn.unique-lines"
@@ -232,18 +237,21 @@ setup_code_ext() {
 # ZED :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
 setup_zed() {
   mkdir -p "$LN_ZED"
-  echo -e "${BYELLOW}🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'${NC}"
+  echo -e "\n${BYELLOW}🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'${NC}"
   rm -f "${LN_ZED}/keymap.json"
   ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
   echo -e "${BYELLOW}🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'${NC}"
   rm -f "${LN_ZED}/settings.json"
   ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
+  echo -e "${BYELLOW}🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'${NC}"
+  rm -f "${LN_ZED}/snippets"
+  ln -sf "${PWD}/zed/snippets" "${LN_ZED}/snippets"
   echo -e "${BYELLOW}🚀 ZED :: All symlinks created.${NC}"
 }
 
 # ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_adds() {
-  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'${NC}"
+  echo -e "\n${BYELLOW}🚀 ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'${NC}"
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zshrc" "${LN_ZSHRC}"
 
@@ -259,7 +267,7 @@ setup_adds() {
 
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 setup_fonts() {
-  echo -e "${BYELLOW}🚀 FONTS :: Download some nerd fonts${NC}"
+  echo -e "\n${BYELLOW}🚀 FONTS :: Download some nerd fonts${NC}"
   FONTS_RELEASE_VERSION='v3.2.1'
   FONTS_URLS=(
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"

@@ -149,6 +149,11 @@ alias kcns='kubectl config set-context --current --namespace'
 ### TERRAFORM ###
 alias tf='terraform'
 
+### ZED ###
+if command -v flatpak &>/dev/null; then
+  alias zed='flatpak run dev.zed.Zed'
+fi
+
 ### PYTHON TOOLS ###
 alias vm_url_decode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
 alias vm_url_encode='python3 -c "import sys, urllib.parse as ul; print(ul.quote_plus(sys.argv[1]))"'

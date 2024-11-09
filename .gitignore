@@ -51,3 +51,6 @@ code/snippets/**
 !zed/
 zed/**
 !zed/*.json
+!zed/snippets/
+zed/snippets/**
+!zed/snippets/*.json

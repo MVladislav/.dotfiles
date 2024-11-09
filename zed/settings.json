@@ -11,6 +11,7 @@
   "show_wrap_guides": true,
   "soft_wrap": "editor_width",
   "cursor_blink": false,
+  "cursor_shape": "bar",
   "ui_font_family": "Hack Nerd Font Mono",
   "ui_font_size": 16,
   "ui_font_weight": 400,
@@ -32,10 +33,13 @@
     "light": "One Light",
     "dark": "One Dark"
   },
+  "tabs": {
+    "file_icons": true,
+    "git_status": true
+  },
 
-  "base_keymap": "VSCode",
   // "vim_mode": true,
-  "cursor_shape": "bar",
+  "base_keymap": "VSCode",
   "use_autoclose": true,
   "current_line_highlight": "all",
   "indent_guides": { "enabled": true },
@@ -83,6 +87,36 @@
       "use_on_type_format": false
     }
   },
+
+  "file_types": {
+    "ansible": [
+      "**/defaults/**/*",
+      "**/tasks/**/*.yml",
+      "**/handler/*.yml",
+      "**/*_vars/**/*.yml",
+      "**/roles/**/*.yml",
+      "**/playbooks/**/*.yml",
+      "**/*ansible*/**/*.yml",
+      "**/vars/**/*.yml",
+      "**/inventory/*/*"
+    ],
+    "Docker Compose": ["docker-compose*"],
+    "Dockerfile": ["Dockerfile*"],
+    "env": [".env"],
+    "Git Ignore": [".gitignore", ".dockerignore", ".gitattributes"],
+    "YAML": ["*.yaml", ".yamllint"]
+  },
+
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.svn",
+    "**/.hg",
+    "**/CVS",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.classpath",
+    "**/.settings"
+  ],
 
   "telemetry": {
     "diagnostics": false,
