@@ -37,27 +37,27 @@ RUN_SETUP_ADDS=1
 RUN_SETUP_FONTS=1
 
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
-DEPS_INSTALL_PATH=/tmp
+DEPS_INSTALL_PATH=${HOME}/.tmp # /tmp
 DEPS_INSTALL_PKGS=()
 
-USER_LOCAL_PREFIX=~/.local
+USER_LOCAL_PREFIX=${HOME}/.local
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
-: "${LN_TMUX_ORIG_BASE=~/.tmux}"
-: "${LN_TMUX_ORIG_TMUX=~/.tmux.conf}"
+: "${LN_TMUX_ORIG_BASE=${HOME}/.tmux}"
+: "${LN_TMUX_ORIG_TMUX=${HOME}/.tmux.conf}"
 
-: "${LN_NVIM_ORIG_BASE=~/.config/nvim}"
+: "${LN_NVIM_ORIG_BASE=${HOME}/.config/nvim}"
 
-: "${LN_ZSH_OH_FOLDER=~/.oh-my-zsh}"
-LN_ZSHRC=~/.zshrc
-LN_ADDS_01=~/.zshrc-append
-LN_ADDS_02=~/.zshrc-sec
+: "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
+LN_ZSHRC=${HOME}/.zshrc
+LN_ADDS_01=${HOME}/.zshrc-append
+LN_ADDS_02=${HOME}/.zshrc-sec
 
-: "${LN_VS_CODE=~/.config/Code/User}"
+: "${LN_VS_CODE=${HOME}/.config/Code/User}"
 
-LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed
+LN_ZED_FLATPAK=${HOME}/.var/app/dev.zed.Zed/config/zed
 : "${LN_ZED=$LN_ZED_FLATPAK}"
-# LN_ZED=~/.config/zed
+# LN_ZED=${HOME}/.config/zed
 
 # ******************************************************************************
 
@@ -142,10 +142,11 @@ install_dependencies_needs_rm() {
 install_dependencies_tmux() {
   echo -e "\n${BYELLOW}🚀 TMUX :: install tmux for user only...${NC}"
   echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'${NC}"
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
   cd "$DEPS_INSTALL_PATH/tmux"
-  bash autogen.sh 1>/dev/null
-  ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+  bash ./autogen.sh 1>/dev/null
+  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
   make 1>/dev/null
   make install 1>/dev/null
   cd - 1>/dev/null
@@ -157,7 +158,8 @@ install_dependencies_tmux() {
 install_dependencies_nvim() {
   echo -e "\n${BYELLOW}🚀 NVIM :: install nvim for user only...${NC}"
   echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v | head -n1 2>/dev/null)'${NC}"
-  git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+  git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
   cd "$DEPS_INSTALL_PATH/nvim"
   make CMAKE_BUILD_TYPE=RelWithDebInfo CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
@@ -169,32 +171,36 @@ install_dependencies_nvim() {
 
 install_dependencies_zsh() {
   echo -e "\n${BYELLOW}🚀 ZSH :: install zsh ...${NC}"
+  echo -e "${BCYAN}   💡 current installed version :: '$(zsh --version | head -n1 2>/dev/null)'${NC}"
   sudo apt-get install -y zsh 1>/dev/null
 
-  echo -e "\n${BYELLOW}🚀 ZSH :: Load git submodules${NC}"
+  echo -e "${BYELLOW}🚀 ZSH :: Load git submodules${NC}"
   git submodule update --init --remote \
     zsh/oh-my-zsh \
     zsh/themes/spaceship \
     zsh/themes/headline \
     zsh/themes/powerlevel10k \
     zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting
+    zsh/plugins/zsh-syntax-highlighting 1>/dev/null
 
-  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/oh-my-zsh' as '$LN_ZSH_OH_FOLDER'${NC}"
-  ln -s "${PWD}/zsh/oh-my-zsh" "$LN_ZSH_OH_FOLDER"
+  rm -f "$LN_ZSH_OH_FOLDER" 1>/dev/null
 
-  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/themes/*'${NC}"
-  ln -s "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/spaceship.zsh-theme" 2>/dev/null
-  ln -s "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/headline.zsh-theme" 2>/dev/null
-  ln -s "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/powerlevel10k.zsh-theme" 2>/dev/null
+  echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/oh-my-zsh' as '$LN_ZSH_OH_FOLDER'${NC}"
+  ln -sf "${PWD}/zsh/oh-my-zsh" "$LN_ZSH_OH_FOLDER"
 
-  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'${NC}"
-  ln -s "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
-  ln -s "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-syntax-highlighting"
+  echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/themes/*'${NC}"
+  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/spaceship.zsh-theme" 1>/dev/null
+  ln -sf "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/headline.zsh-theme" 1>/dev/null
+  ln -sf "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/powerlevel10k.zsh-theme" 1>/dev/null
 
-  echo -e "\n${BYELLOW}🚀 ZSH :: Set 'zsh' as new shell für user '$USER'${NC}"
+  echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'${NC}"
+  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
+  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-syntax-highlighting"
+
+  echo -e "${BYELLOW}🚀 ZSH :: Set 'zsh' as new shell für user '$USER'${NC}"
   sudo chsh -s "$(which zsh)" "$USER"
 
+  echo -e "${BCYAN}   💡 new installed version :: '$(zsh --version | head -n1 2>/dev/null)'${NC}"
   echo -e "${BYELLOW}🚀 ZSH :: zsh installed!${NC}"
 }
 
@@ -210,7 +216,7 @@ setup_bin() {
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
   echo -e "\n${BYELLOW}🚀 TMUX :: Load git submodules${NC}"
-  git submodule update --init --remote tmux/tmux/plugins/tpm
+  git submodule update --init --remote tmux/tmux/plugins/tpm 1>/dev/null
 
   echo -e "\n${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
   rm -f "${LN_TMUX_ORIG_BASE}"
@@ -315,7 +321,7 @@ setup_fonts() {
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/RobotoMono.tar.xz"
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/ProggyClean.tar.xz"
   )
-  FONTS_DIR=~/.local/share/fonts/nerd-fonts
+  FONTS_DIR="${HOME}/.local/share/fonts/nerd-fonts"
   mkdir -p "$FONTS_DIR"
 
   for url in "${FONTS_URLS[@]}"; do
