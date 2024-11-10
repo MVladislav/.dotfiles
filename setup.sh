@@ -52,6 +52,7 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 LN_ZSHRC=${HOME}/.zshrc
 LN_ADDS_01=${HOME}/.zshrc-append
 LN_ADDS_02=${HOME}/.zshrc-sec
+LN_ADDS_03=${HOME}/.p10k.zsh
 
 : "${LN_VS_CODE=${HOME}/.config/Code/User}"
 
@@ -188,10 +189,10 @@ install_dependencies_zsh() {
   echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/oh-my-zsh' as '$LN_ZSH_OH_FOLDER'${NC}"
   ln -sf "${PWD}/zsh/oh-my-zsh" "$LN_ZSH_OH_FOLDER"
 
-  echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/themes/*'${NC}"
-  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/spaceship.zsh-theme" 1>/dev/null
-  ln -sf "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/headline.zsh-theme" 1>/dev/null
-  ln -sf "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/powerlevel10k.zsh-theme" 1>/dev/null
+  echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/custom/themes/*'${NC}"
+  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/spaceship.zsh-theme" 1>/dev/null
+  ln -sf "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/headline.zsh-theme" 1>/dev/null
+  ln -sf "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/powerlevel10k.zsh-theme" 1>/dev/null
 
   echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'${NC}"
   ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
@@ -294,16 +295,19 @@ setup_zed() {
 
 # ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_adds() {
-  echo -e "\n${BYELLOW}🚀 ADDS :: Create symlink from './zshrc' as '$LN_ZSHRC'${NC}"
+  echo -e "\n${BYELLOW}🚀 ADDS :: Create symlink from './zsh/zshrc' as '$LN_ZSHRC'${NC}"
   rm -f "${LN_ZSHRC}"
-  ln -sf "${PWD}/zshrc" "${LN_ZSHRC}"
+  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
 
-  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zshrc-append' as '$LN_ADDS_01'${NC}"
+  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'${NC}"
   rm -f "${LN_ADDS_01}"
-  ln -sf "${PWD}/zshrc-append" "${LN_ADDS_01}"
-  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zshrc-sec' as '$LN_ADDS_02'${NC}"
+  ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
+  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zsh/zshrc-sec' as '$LN_ADDS_02'${NC}"
   rm -f "${LN_ADDS_02}"
-  ln -sf "${PWD}/zshrc-sec" "${LN_ADDS_02}"
+  ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
+  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zsh/p10k.zsh' as '$LN_ADDS_03'${NC}"
+  rm -f "${LN_ADDS_03}"
+  ln -sf "${PWD}/zsh/p10k.zsh" "${LN_ADDS_03}"
 
   echo -e "${BYELLOW}🚀 ADDS :: All symlinks created.${NC}"
 }
