@@ -3,7 +3,7 @@
 VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
 
-VM_SEC_USER_AGENT='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'
+: ${VM_SEC_USER_AGENT:='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
 
 ######################################################################
 ##

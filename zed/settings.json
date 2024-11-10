@@ -45,6 +45,7 @@
   "indent_guides": { "enabled": true },
   "inlay_hints": { "enabled": true },
   "scrollbar": { "show": "auto" },
+  "hour_format": "hour24",
 
   "assistant": {
     "default_model": {

@@ -17,6 +17,9 @@
 zsh/**
 !zsh/.gitempty
 
+!zsh/oh-my-zsh/
+zsh/oh-my-zsh/**
+
 !zsh/themes/
 zsh/themes/**
 !zsh/themes/.gitempty

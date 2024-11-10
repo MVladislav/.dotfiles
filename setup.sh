@@ -55,8 +55,9 @@ LN_ADDS_02=~/.zshrc-sec
 
 : "${LN_VS_CODE=~/.config/Code/User}"
 
-LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed # ~/.config/zed
+LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed
 : "${LN_ZED=$LN_ZED_FLATPAK}"
+# LN_ZED=~/.config/zed
 
 # ******************************************************************************
 
@@ -85,7 +86,7 @@ main() {
 
 # GIT :: init recursive --------------------------------------------------------------------------------------------------------
 setup_base() {
-  git submodule update --init --recursive --remote
+  :
 }
 
 # DEPS :: install dependencies -------------------------------------------------------------------------------------------------
@@ -170,6 +171,7 @@ install_dependencies_zsh() {
   echo -e "\n${BYELLOW}🚀 ZSH :: install zsh ...${NC}"
   sudo apt-get install -y zsh 1>/dev/null
 
+  echo -e "\n${BYELLOW}🚀 ZSH :: Load git submodules${NC}"
   git submodule update --init --remote \
     zsh/oh-my-zsh \
     zsh/themes/spaceship \
@@ -207,6 +209,9 @@ setup_bin() {
 }
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
+  echo -e "\n${BYELLOW}🚀 TMUX :: Load git submodules${NC}"
+  git submodule update --init --remote tmux/tmux/plugins/tpm
+
   echo -e "\n${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
   rm -f "${LN_TMUX_ORIG_BASE}"
   ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
@@ -215,7 +220,6 @@ setup_tmux() {
   ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
 
   echo -e "${BYELLOW}🚀 TMUX :: Run tpm to install plugins${NC}"
-  #PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/clean_plugins"
   PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
 
   echo -e "${BYELLOW}🚀 TMUX :: All symlinks created.${NC}"
