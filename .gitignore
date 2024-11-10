@@ -13,6 +13,28 @@
 !README.md
 !setup.sh
 
+!zsh/
+zsh/**
+!zsh/.gitempty
+
+!zsh/themes/
+zsh/themes/**
+!zsh/themes/.gitempty
+!zsh/themes/headline
+zsh/themes/headline/**
+!zsh/themes/powerlevel10k
+zsh/themes/powerlevel10k/**
+!zsh/themes/spaceship
+zsh/themes/spaceship/**
+
+!zsh/plugins/
+zsh/plugins/**
+!zsh/plugins/.gitempty
+!zsh/plugins/zsh-autosuggestions
+zsh/plugins/zsh-autosuggestions/**
+!zsh/plugins/zsh-syntax-highlighting
+zsh/plugins/zsh-syntax-highlighting/**
+
 !zshrc
 !zshrc-append
 !zshrc-sec
@@ -31,15 +53,16 @@ nvim/**
 
 !tmux/
 tmux/**
+!tmux/tmux.conf
+
 !tmux/tmux/
 tmux/tmux/**
 !tmux/tmux/*.conf
+
 !tmux/tmux/plugins/
+tmux/tmux/plugins/**
 !tmux/tmux/plugins/tpm
-!tmux/tmux/plugins/catppuccin
-!tmux/tmux.conf
-# tmux/tmux/plugins/tpm/
-tmux/tmux/plugins/tpm/lib/tmux-test
+!tmux/tmux/plugins/tpm/**
 
 !code/
 code/**

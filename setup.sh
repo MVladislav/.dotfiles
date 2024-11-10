@@ -26,6 +26,7 @@ BCYAN='\033[1;36m'   # Cyan
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
 RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=0
+RUN_INSTALL_DEPENDENCIES_ZSH=0
 RUN_SETUP_BIN=1
 RUN_SETUP_TMUX=1
 RUN_SETUP_NVIM=1
@@ -42,19 +43,20 @@ DEPS_INSTALL_PKGS=()
 USER_LOCAL_PREFIX=~/.local
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
-LN_TMUX_ORIG_BASE=~/.tmux
-LN_TMUX_ORIG_TMUX=~/.tmux.conf
+: "${LN_TMUX_ORIG_BASE=~/.tmux}"
+: "${LN_TMUX_ORIG_TMUX=~/.tmux.conf}"
 
-LN_NVIM_ORIG_BASE=~/.config/nvim
+: "${LN_NVIM_ORIG_BASE=~/.config/nvim}"
 
+: "${LN_ZSH_OH_FOLDER=~/.oh-my-zsh}"
 LN_ZSHRC=~/.zshrc
 LN_ADDS_01=~/.zshrc-append
 LN_ADDS_02=~/.zshrc-sec
 
-LN_VS_CODE=~/.config/Code/User
+: "${LN_VS_CODE=~/.config/Code/User}"
 
-LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed
-LN_ZED=$LN_ZED_FLATPAK # ~/.config/zed
+LN_ZED_FLATPAK=~/.var/app/dev.zed.Zed/config/zed # ~/.config/zed
+: "${LN_ZED=$LN_ZED_FLATPAK}"
 
 # ******************************************************************************
 
@@ -66,6 +68,8 @@ main() {
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX_NVIM -eq 1 ]] && install_dependencies_tmux
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX_NVIM -eq 1 ]] && install_dependencies_nvim
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX_NVIM -eq 1 ]] && install_dependencies_needs_rm
+
+  [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
 
   [[ $RUN_SETUP_BIN -eq 1 ]] && setup_bin
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
@@ -81,14 +85,13 @@ main() {
 
 # GIT :: init recursive --------------------------------------------------------------------------------------------------------
 setup_base() {
-  #git submodule update --init --recursive
   git submodule update --init --recursive --remote
 }
 
 # DEPS :: install dependencies -------------------------------------------------------------------------------------------------
 install_dependencies_additional() {
   echo -e "\n${BYELLOW}📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]${NC}"
-  sudo apt-get install rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  sudo apt-get install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   echo -e "${BYELLOW}📥 DEPS :: disable rsync systemd service${NC}"
   sudo systemctl disable rsync.service &>/dev/null
@@ -161,6 +164,36 @@ install_dependencies_nvim() {
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   echo -e "${BCYAN}   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v | head -n1 2>/dev/null)'${NC}"
   echo -e "${BYELLOW}🚀 NVIM :: nvim for user only installed!${NC}"
+}
+
+install_dependencies_zsh() {
+  echo -e "\n${BYELLOW}🚀 ZSH :: install zsh ...${NC}"
+  sudo apt-get install -y zsh 1>/dev/null
+
+  git submodule update --init --remote \
+    zsh/oh-my-zsh \
+    zsh/themes/spaceship \
+    zsh/themes/headline \
+    zsh/themes/powerlevel10k \
+    zsh/plugins/zsh-autosuggestions \
+    zsh/plugins/zsh-syntax-highlighting
+
+  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/oh-my-zsh' as '$LN_ZSH_OH_FOLDER'${NC}"
+  ln -s "${PWD}/zsh/oh-my-zsh" "$LN_ZSH_OH_FOLDER"
+
+  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/themes/*'${NC}"
+  ln -s "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/spaceship.zsh-theme" 2>/dev/null
+  ln -s "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/headline.zsh-theme" 2>/dev/null
+  ln -s "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/themes/powerlevel10k.zsh-theme" 2>/dev/null
+
+  echo -e "\n${BYELLOW}🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'${NC}"
+  ln -s "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
+  ln -s "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-syntax-highlighting"
+
+  echo -e "\n${BYELLOW}🚀 ZSH :: Set 'zsh' as new shell für user '$USER'${NC}"
+  sudo chsh -s "$(which zsh)" "$USER"
+
+  echo -e "${BYELLOW}🚀 ZSH :: zsh installed!${NC}"
 }
 
 # BIN :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
@@ -302,6 +335,7 @@ usage() {
   echo -e "${BPURPLE}     -h,    --help                               Show this help message and exit${NC}"
   echo -e "${BPURPLE}     -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]${NC}"
   echo -e "${BPURPLE}     -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)${NC}"
+  echo -e "${BPURPLE}     -idz,  --install-dependencies-zsh           Not Skip install service zsh${NC}"
   echo -e "${BPURPLE}     -nsb,  --no-setup-bin                       Skip setup_bin${NC}"
   echo -e "${BPURPLE}     -nst,  --no-setup-tmux                      Skip setup_tmux${NC}"
   echo -e "${BPURPLE}     -nsn,  --no-setup-nvim                      Skip setup_nvim${NC}"
@@ -327,6 +361,9 @@ parse_args() {
       ;;
     -idtn | --install-dependencies-tmux-nvim)
       RUN_INSTALL_DEPENDENCIES_TMUX_NVIM=1
+      ;;
+    -idz | --install-dependencies-zsh)
+      RUN_INSTALL_DEPENDENCIES_ZSH=1
       ;;
     -nsb | --no-setup-bin)
       RUN_SETUP_BIN=0
