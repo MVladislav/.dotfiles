@@ -15,7 +15,10 @@
 
 !zsh/
 zsh/**
-!zsh/.gitempty
+!zsh/zshrc
+!zsh/p10k.zsh
+!zsh/zshrc-append
+!zsh/zshrc-sec
 
 !zsh/oh-my-zsh
 zsh/oh-my-zsh/**
@@ -38,10 +41,6 @@ zsh/plugins/zsh-autosuggestions/**
 !zsh/plugins/zsh-syntax-highlighting
 zsh/plugins/zsh-syntax-highlighting/**
 
-!zshrc
-!zshrc-append
-!zshrc-sec
-
 !bin/
 !bin/*
 
@@ -49,9 +48,12 @@ zsh/plugins/zsh-syntax-highlighting/**
 nvim/**
 !nvim/*.lua
 !nvim/lua/
+nvim/lua/**
 !nvim/lua/vm/
+nvim/lua/vm/**
 !nvim/lua/vm/*.lua
 !nvim/lua/vm/lazy/
+nvim/lua/vm/lazy/**
 !nvim/lua/vm/lazy/*.lua
 
 !tmux/
@@ -65,7 +67,7 @@ tmux/tmux/**
 !tmux/tmux/plugins/
 tmux/tmux/plugins/**
 !tmux/tmux/plugins/tpm
-!tmux/tmux/plugins/tpm/**
+tmux/tmux/plugins/tpm/**
 
 !code/
 code/**
