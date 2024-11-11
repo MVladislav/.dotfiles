@@ -80,3 +80,15 @@ zed/**
 !zed/snippets/
 zed/snippets/**
 !zed/snippets/*.json
+
+!logseq/
+logseq/**
+!logseq/*.edn
+!logseq/*.json
+
+!os/
+os/**
+
+!os/pipewire/
+os/pipewire/**
+!os/pipewire/*.conf

@@ -1,0 +1,4 @@
+{:logseq-bullet-threading {:version "v1.1.4", :repo "pengx17/logseq-plugin-bullet-threading", :effect false, :theme false}
+ :logseq-markdown-table {:version "v1.8.1", :repo "haydenull/logseq-plugin-markdown-table", :effect false, :theme false}
+ :logseq-heatmap {:version "v2.4.3", :repo "pengx17/logseq-plugin-heatmap", :effect true, :theme false}
+ :logseq-tocgen {:version "v2.13.0", :repo "sethyuan/logseq-plugin-tocgen", :effect true, :theme false}}

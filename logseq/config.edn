@@ -1,0 +1,30 @@
+{:meta/version 1
+
+ :preferred-format "Markdown"
+ :preferred-workflow :todo
+ :journal/page-title-format "MMM do, yyyy"
+ :journal/file-name-format "yyyy_MM_dd"
+
+ :ui/show-brackets? true
+ :ui/show-full-blocks? false
+ :ui/auto-expand-block-refs? true
+
+ :feature/enable-block-timestamps? false
+ :feature/enable-search-remove-accents? true
+
+ :ref/default-open-blocks-level 2
+ :ref/linked-references-collapsed-threshold 50
+
+ :start-of-week 0
+
+ ;; :custom-css-url "@import url('https://cdn.jsdelivr.net/gh/dracula/logseq@master/custom.css');"
+ ;; :custom-js-url "https://cdn.logseq.com/custom.js"
+
+ :property-pages/enabled? true
+ :export/bullet-indentation :tab
+ :publishing/all-pages-public? false
+ :block/content-max-length 99999
+ :editor/preferred-pasting-file? true
+
+ :shortcuts {:graph/re-index ["ctrl+i ctrl+i"]}
+}
