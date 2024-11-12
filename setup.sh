@@ -87,7 +87,7 @@ main() {
 
 # GIT :: init recursive --------------------------------------------------------------------------------------------------------
 setup_base() {
-  :
+  mkdir -p "$HOME/.config" 1>/dev/null
 }
 
 # DEPS :: install dependencies -------------------------------------------------------------------------------------------------
@@ -158,7 +158,7 @@ install_dependencies_tmux() {
 
 install_dependencies_nvim() {
   echo -e "\n${BYELLOW}🚀 NVIM :: install nvim for user only...${NC}"
-  echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v | head -n1 2>/dev/null)'${NC}"
+  echo -e "${BCYAN}   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'${NC}"
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
   cd "$DEPS_INSTALL_PATH/nvim"
@@ -166,23 +166,23 @@ install_dependencies_nvim() {
   make install 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-  echo -e "${BCYAN}   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v | head -n1 2>/dev/null)'${NC}"
+  echo -e "${BCYAN}   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'${NC}"
   echo -e "${BYELLOW}🚀 NVIM :: nvim for user only installed!${NC}"
 }
 
 install_dependencies_zsh() {
   echo -e "\n${BYELLOW}🚀 ZSH :: install zsh ...${NC}"
-  echo -e "${BCYAN}   💡 current installed version :: '$(zsh --version | head -n1 2>/dev/null)'${NC}"
+  echo -e "${BCYAN}   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'${NC}"
   sudo apt-get install -y zsh 1>/dev/null
 
   echo -e "${BYELLOW}🚀 ZSH :: Load git submodules${NC}"
-  git submodule update --init --remote \
+  git submodule -q update --init --remote \
     zsh/oh-my-zsh \
     zsh/themes/spaceship \
     zsh/themes/headline \
     zsh/themes/powerlevel10k \
     zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting 1>/dev/null
+    zsh/plugins/zsh-syntax-highlighting
 
   rm -f "$LN_ZSH_OH_FOLDER" 1>/dev/null
 
@@ -201,7 +201,7 @@ install_dependencies_zsh() {
   echo -e "${BYELLOW}🚀 ZSH :: Set 'zsh' as new shell für user '$USER'${NC}"
   sudo chsh -s "$(which zsh)" "$USER"
 
-  echo -e "${BCYAN}   💡 new installed version :: '$(zsh --version | head -n1 2>/dev/null)'${NC}"
+  echo -e "${BCYAN}   💡 new installed version :: '$(zsh --version 2>/dev/null | head -n1)'${NC}"
   echo -e "${BYELLOW}🚀 ZSH :: zsh installed!${NC}"
 }
 
@@ -217,7 +217,7 @@ setup_bin() {
 # TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
 setup_tmux() {
   echo -e "\n${BYELLOW}🚀 TMUX :: Load git submodules${NC}"
-  git submodule update --init --remote tmux/tmux/plugins/tpm 1>/dev/null
+  git submodule -q update --init --remote tmux/tmux/plugins/tpm
 
   echo -e "\n${BYELLOW}🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'${NC}"
   rm -f "${LN_TMUX_ORIG_BASE}"

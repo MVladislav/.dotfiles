@@ -10,8 +10,8 @@ WG_INTERFACE="wg0"                      # WireGuard interface name
 PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Define your private network subnet
 
 # Get default interface and gateway IP
-DEFAULT_IFACE=$(ip route | grep default | grep enp | awk '{print $5}' | head -n1)
-GATEWAY_IP=$(ip route | grep default | grep enp | awk '{print $3}' | head -n1)
+DEFAULT_IFACE=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $5}' | head -n1)
+GATEWAY_IP=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $3}' | head -n1)
 
 # Function to check if WireGuard is installed
 check_wireguard_installed() {

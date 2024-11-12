@@ -274,12 +274,13 @@ vm_random2() {
 }
 alias vm_find_command='apropos'
 
+: "${VM_ANDROID_PATH=$HOME/Android}"
 vm_quick_android_emulator() {
-  selected_emulator=$(~/.android/Sdk/emulator/emulator -list-avds | grep -v INFO | fzf)
+  selected_emulator=$(${VM_ANDROID_PATH}/Sdk/emulator/emulator -list-avds | grep -v INFO | fzf)
   if [[ -z $selected_emulator ]]; then
-    exit 0
+    return 1
   fi
-  ~/.android/Sdk/emulator/emulator -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator"
+  "${VM_ANDROID_PATH}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator"
 }
 
 ### TOOLS ###
@@ -498,31 +499,61 @@ vm_extract() {
 ##
 ######################################################################
 vm_encrypt() {
+  # Ensure at least type and file_or_path parameters are provided
+  if [ $# -lt 2 ]; then
+    echo "Usage: vm_encrypt <rar|7z> <file_or_path> [keyword 'sec'|password]"
+    return 1
+  fi
+
+  local type="$1"
+  local file_or_path="$2"
+  local password_option=""
+
+  # Handle the optional password/keyword parameter
   if [ -n "$3" ]; then
     case "$3" in
-    sec)
-      case "$1" in
-      rar) password="-hp" ;;
-      7z) password="-p" ;;
-      *) echo "'$2' cannot be encrypt via encrypt() to '$1'" ;;
-      esac
+      sec)
+        case "$type" in
+          rar) password_option="-hp" ;;
+          7z) password_option="-p" ;;
+          *) echo "'$type' is an unsupported encryption type"; return 1 ;;
+        esac
+        ;;
+      *)
+        case "$type" in
+          rar) password_option="-hp$3" ;;
+          7z) password_option="-p$3" ;;
+          *) echo "'$type' is an unsupported encryption type"; return 1 ;;
+        esac
+        ;;
+    esac
+  fi
+
+  # Check if the file or path exists
+  if [ ! -e "$file_or_path" ]; then
+    echo "'$file_or_path' is not a valid file or path"
+    return 1
+  fi
+
+  # Perform the compression and encryption based on the specified type
+  case "$type" in
+    rar)
+      if [ -n "$password_option" ]; then
+        rar a "$password_option" "${file_or_path}.rar" "$file_or_path"
+      else
+        rar a "${file_or_path}.rar" "$file_or_path"
+      fi
+      ;;
+    7z)
+      if [ -n "$password_option" ]; then
+        7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password_option" "${file_or_path}.7z" "$file_or_path"
+      else
+        7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "${file_or_path}.7z" "$file_or_path"
+      fi
       ;;
     *)
-      case "$1" in
-      rar) password="-hp$3" ;;
-      7z) password="-p$3" ;;
-      *) echo "'$2' cannot be encrypt via encrypt() to '$1'" ;;
-      esac
+      echo "'$type' is an unsupported compression type"
+      return 1
       ;;
-    esac
-  fi
-  if [ -e "$2" ]; then
-    case "$1" in
-    rar) rar a "$password" "$2.rar" "$2" ;;
-    7z) 7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password" "$2.7z" "$2" ;;
-    *) echo "'$2' cannot be encrypt via encrypt() to '$1'" ;;
-    esac
-  else
-    echo "'$2' is not a valid file"
-  fi
+  esac
 }
