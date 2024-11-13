@@ -16,7 +16,6 @@
 !zsh/
 zsh/**
 !zsh/zshrc
-!zsh/p10k.zsh
 !zsh/zshrc-append
 !zsh/zshrc-sec
 
@@ -28,8 +27,6 @@ zsh/themes/**
 !zsh/themes/.gitempty
 !zsh/themes/headline
 zsh/themes/headline/**
-!zsh/themes/powerlevel10k
-zsh/themes/powerlevel10k/**
 !zsh/themes/spaceship
 zsh/themes/spaceship/**
 

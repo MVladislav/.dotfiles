@@ -52,7 +52,6 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 LN_ZSHRC=${HOME}/.zshrc
 LN_ADDS_01=${HOME}/.zshrc-append
 LN_ADDS_02=${HOME}/.zshrc-sec
-LN_ADDS_03=${HOME}/.p10k.zsh
 
 : "${LN_VS_CODE=${HOME}/.config/Code/User}"
 
@@ -180,7 +179,6 @@ install_dependencies_zsh() {
     zsh/oh-my-zsh \
     zsh/themes/spaceship \
     zsh/themes/headline \
-    zsh/themes/powerlevel10k \
     zsh/plugins/zsh-autosuggestions \
     zsh/plugins/zsh-syntax-highlighting
 
@@ -192,7 +190,6 @@ install_dependencies_zsh() {
   echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/custom/themes/*'${NC}"
   ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/spaceship.zsh-theme" 1>/dev/null
   ln -sf "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/headline.zsh-theme" 1>/dev/null
-  ln -sf "${PWD}/zsh/themes/powerlevel10k/powerlevel10k.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/powerlevel10k.zsh-theme" 1>/dev/null
 
   echo -e "${BYELLOW}🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'${NC}"
   ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
@@ -305,9 +302,6 @@ setup_adds() {
   echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zsh/zshrc-sec' as '$LN_ADDS_02'${NC}"
   rm -f "${LN_ADDS_02}"
   ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
-  echo -e "${BYELLOW}🚀 ADDS :: Create symlink from './zsh/p10k.zsh' as '$LN_ADDS_03'${NC}"
-  rm -f "${LN_ADDS_03}"
-  ln -sf "${PWD}/zsh/p10k.zsh" "${LN_ADDS_03}"
 
   echo -e "${BYELLOW}🚀 ADDS :: All symlinks created.${NC}"
 }
