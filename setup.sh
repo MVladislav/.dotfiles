@@ -36,11 +36,13 @@ RUN_SETUP_ZED=1
 RUN_SETUP_ADDS=1
 RUN_SETUP_FONTS=1
 
+RUN_SETUP_LOGSEQ=1
+
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
-DEPS_INSTALL_PATH=${HOME}/.tmp # /tmp
+DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_INSTALL_PKGS=()
 
-USER_LOCAL_PREFIX=${HOME}/.local
+USER_LOCAL_PREFIX="${HOME}/.local"
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 : "${LN_TMUX_ORIG_BASE=${HOME}/.tmux}"
@@ -49,15 +51,17 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 : "${LN_NVIM_ORIG_BASE=${HOME}/.config/nvim}"
 
 : "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
-LN_ZSHRC=${HOME}/.zshrc
-LN_ADDS_01=${HOME}/.zshrc-append
-LN_ADDS_02=${HOME}/.zshrc-sec
+LN_ZSHRC="${HOME}/.zshrc"
+LN_ADDS_01="${HOME}/.zshrc-append"
+LN_ADDS_02="${HOME}/.zshrc-sec"
 
 : "${LN_VS_CODE=${HOME}/.config/Code/User}"
 
-LN_ZED_FLATPAK=${HOME}/.var/app/dev.zed.Zed/config/zed
+LN_ZED_FLATPAK="${HOME}/.var/app/dev.zed.Zed/config/zed"
 : "${LN_ZED=$LN_ZED_FLATPAK}"
 # LN_ZED=${HOME}/.config/zed
+
+LN_LOGSEQ_PATH="${HOME}/.logseq"
 
 # ******************************************************************************
 
@@ -80,6 +84,8 @@ main() {
   [[ $RUN_SETUP_ZED -eq 1 ]] && setup_zed
   [[ $RUN_SETUP_ADDS -eq 1 ]] && setup_adds
   [[ $RUN_SETUP_FONTS -eq 1 ]] && setup_fonts
+
+  [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
 }
 
 # ******************************************************************************
@@ -306,6 +312,23 @@ setup_adds() {
   echo -e "${BYELLOW}🚀 ADDS :: All symlinks created.${NC}"
 }
 
+# LOGSEQ :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+setup_logseq() {
+  mkdir -p "${LN_LOGSEQ_PATH}/config/"
+
+  echo -e "\n${BYELLOW}🚀 LOGSEQ :: Create symlink from './logseq/preferences.json' as '$LN_LOGSEQ_PATH/preferences.json'${NC}"
+  rm -f "${LN_LOGSEQ_PATH}/preferences.json"
+  ln -sf "${PWD}/logseq/preferences.json" "${LN_LOGSEQ_PATH}/preferences.json"
+  echo -e "\n${BYELLOW}🚀 LOGSEQ :: Create symlink from './logseq/config.edn' as '$LN_LOGSEQ_PATH/config/config.edn'${NC}"
+  rm -f "${LN_LOGSEQ_PATH}/config/config.edn"
+  ln -sf "${PWD}/logseq/config.edn" "${LN_LOGSEQ_PATH}/config/config.edn"
+  echo -e "\n${BYELLOW}🚀 LOGSEQ :: Create symlink from './logseq/plugins.edn' as '$LN_LOGSEQ_PATH/config/plugins.edn'${NC}"
+  rm -f "${LN_LOGSEQ_PATH}/config/plugins.edn"
+  ln -sf "${PWD}/logseq/plugins.edn" "${LN_LOGSEQ_PATH}/config/plugins.edn"
+
+  echo -e "${BYELLOW}🚀 LOGSEQ :: All symlinks created.${NC}"
+}
+
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 setup_fonts() {
   echo -e "\n${BYELLOW}🚀 FONTS :: Download some nerd fonts${NC}"
@@ -352,6 +375,7 @@ usage() {
   echo -e "${BPURPLE}     -nsz,  --no-setup-zed                       Skip setup_zed${NC}"
   echo -e "${BPURPLE}     -nsa,  --no-setup-adds                      Skip setup_adds${NC}"
   echo -e "${BPURPLE}     -nsf,  --no-setup-fonts                     Skip setup_fonts${NC}"
+  echo -e "${BPURPLE}     -nsl,  --no-setup-logseq                    Skip setup_logseq${NC}"
   echo -e "${BPURPLE}     -ds,   --disable-setups                     Skip all setup${NC}"
 }
 
@@ -397,6 +421,9 @@ parse_args() {
     -nsf | --no-setup-fonts)
       RUN_SETUP_FONTS=0
       ;;
+    -nsl | --no-setup-logseq)
+      RUN_SETUP_LOGSEQ=0
+      ;;
     -ds | --disable-setups)
       RUN_SETUP_BIN=0
       RUN_SETUP_TMUX=0
@@ -406,6 +433,7 @@ parse_args() {
       RUN_SETUP_ZED=0
       RUN_SETUP_ADDS=0
       RUN_SETUP_FONTS=0
+      RUN_SETUP_LOGSEQ=0
       ;;
     *)
       echo -e "${BRED}❌ Unknown option: $key${NC}" >&2
