@@ -104,7 +104,7 @@ alias scp-ra='rsync --info=progress2 -az -e "ssh -T -o Compression=no -x"'
 
 ### FIND ###
 alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
-find-l() {
+find-g() {
   # -not -regex '/home/.*' \
   sudo /usr/bin/find / \
     -not -regex '/mnt/.*' \
@@ -115,8 +115,9 @@ find-l() {
     -not -regex '/var/log/.*' \
     -newermt "-${1:-5} minute" -ls 2>/dev/null
 }
-find-la() {
-  sudo /usr/bin/find / \
+find-l() {
+  /usr/bin/find "${2:-.}" \
+    -not -regex "${3:-x}" \
     -newermt "-${1:-5} minute" -ls 2>/dev/null
 }
 
