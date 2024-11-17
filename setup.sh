@@ -39,6 +39,8 @@ RUN_SETUP_FONTS=1
 RUN_SETUP_LOGSEQ=1
 
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
+FONTS_RELEASE_VERSION='v3.2.1'
+
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_INSTALL_PKGS=()
 
@@ -332,7 +334,6 @@ setup_logseq() {
 # FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
 setup_fonts() {
   echo -e "\n${BYELLOW}🚀 FONTS :: Download some nerd fonts${NC}"
-  FONTS_RELEASE_VERSION='v3.2.1'
   FONTS_URLS=(
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraCode.tar.xz"
@@ -367,15 +368,15 @@ usage() {
   echo -e "${BPURPLE}     -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]${NC}"
   echo -e "${BPURPLE}     -idtn, --install-dependencies-tmux-nvim     Not Skip install services [tmux nvim] (user based)${NC}"
   echo -e "${BPURPLE}     -idz,  --install-dependencies-zsh           Not Skip install service zsh${NC}"
-  echo -e "${BPURPLE}     -nsb,  --no-setup-bin                       Skip setup_bin${NC}"
-  echo -e "${BPURPLE}     -nst,  --no-setup-tmux                      Skip setup_tmux${NC}"
-  echo -e "${BPURPLE}     -nsn,  --no-setup-nvim                      Skip setup_nvim${NC}"
-  echo -e "${BPURPLE}     -nsc,  --no-setup-code                      Skip setup_code${NC}"
-  echo -e "${BPURPLE}     -nsce, --no-setup-code-ext                  Skip setup_code_ext${NC}"
-  echo -e "${BPURPLE}     -nsz,  --no-setup-zed                       Skip setup_zed${NC}"
-  echo -e "${BPURPLE}     -nsa,  --no-setup-adds                      Skip setup_adds${NC}"
-  echo -e "${BPURPLE}     -nsf,  --no-setup-fonts                     Skip setup_fonts${NC}"
-  echo -e "${BPURPLE}     -nsl,  --no-setup-logseq                    Skip setup_logseq${NC}"
+  echo -e "${BPURPLE}     -nsb,  --not-setup-bin                      Skip setup_bin${NC}"
+  echo -e "${BPURPLE}     -nst,  --not-setup-tmux                     Skip setup_tmux${NC}"
+  echo -e "${BPURPLE}     -nsn,  --not-setup-nvim                     Skip setup_nvim${NC}"
+  echo -e "${BPURPLE}     -nsc,  --not-setup-code                     Skip setup_code${NC}"
+  echo -e "${BPURPLE}     -nsce, --not-setup-code-ext                 Skip setup_code_ext${NC}"
+  echo -e "${BPURPLE}     -nsz,  --not-setup-zed                      Skip setup_zed${NC}"
+  echo -e "${BPURPLE}     -nsa,  --not-setup-adds                     Skip setup_adds${NC}"
+  echo -e "${BPURPLE}     -nsf,  --not-setup-fonts                    Skip setup_fonts${NC}"
+  echo -e "${BPURPLE}     -nsl,  --not-setup-logseq                   Skip setup_logseq${NC}"
   echo -e "${BPURPLE}     -ds,   --disable-setups                     Skip all setup${NC}"
 }
 
@@ -397,31 +398,31 @@ parse_args() {
     -idz | --install-dependencies-zsh)
       RUN_INSTALL_DEPENDENCIES_ZSH=1
       ;;
-    -nsb | --no-setup-bin)
+    -nsb | --not-setup-bin)
       RUN_SETUP_BIN=0
       ;;
-    -nst | --no-setup-tmux)
+    -nst | --not-setup-tmux)
       RUN_SETUP_TMUX=0
       ;;
-    -nsn | --no-setup-nvim)
+    -nsn | --not-setup-nvim)
       RUN_SETUP_NVIM=0
       ;;
-    -nsc | --no-setup-code)
+    -nsc | --not-setup-code)
       RUN_SETUP_CODE=0
       ;;
-    -nsce | --no-setup-code-ext)
+    -nsce | --not-setup-code-ext)
       RUN_SETUP_CODE_EXT=0
       ;;
-    -nsz | --no-setup-zed)
+    -nsz | --not-setup-zed)
       RUN_SETUP_ZED=0
       ;;
-    -nsa | --no-setup-adds)
+    -nsa | --not-setup-adds)
       RUN_SETUP_ADDS=0
       ;;
-    -nsf | --no-setup-fonts)
+    -nsf | --not-setup-fonts)
       RUN_SETUP_FONTS=0
       ;;
-    -nsl | --no-setup-logseq)
+    -nsl | --not-setup-logseq)
       RUN_SETUP_LOGSEQ=0
       ;;
     -ds | --disable-setups)
