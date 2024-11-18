@@ -120,7 +120,7 @@ vm_sec_katana() {
 
 alias vm_sec_massdns="massdns -r ${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
 
-alias vm_sec_server='python -m http.server 4445'
+alias vm_sec_server='python3 -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
 
 alias vm_sec_sj="sj -a ${VM_SEC_USER_AGENT} -i"

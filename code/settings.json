@@ -507,7 +507,7 @@
   // "typescript.tsdk": "workflowenginegui\\node_modules\\typescript\\lib",
   "typescript.suggest.paths": false,
   "[html]": {
-    "editor.defaultFormatter": "vscode.html-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "html.format.wrapLineLength": 500,
   "html.format.enable": true,
