@@ -123,26 +123,3 @@ setup_wireguard
 setup_kill_switch
 
 echo "[INFO] VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
-
-# sudo cp .local/bin/vm_quick_wg_vpn /opt/startup.sh
-
-# sudo tee sudo nano /etc/systemd/system/vm-startup-script.service >/dev/null <<'EOF'
-# [Unit]
-# Description=Run Startup Script
-# Requires=systemd-networkd.service
-# After=network-online.target
-# Wants=network-online.target
-
-# [Service]
-# ExecStart=/opt/startup.sh
-# Type=simple
-# User=root
-
-# [Install]
-# WantedBy=default.target
-
-# EOF
-
-# sudo systemctl daemon-reload
-# sudo systemctl enable vm-startup-script.service
-# sudo systemctl start my-startup-script.service

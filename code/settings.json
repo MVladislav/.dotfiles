@@ -445,6 +445,7 @@
   "python.analysis.completeFunctionParens": true,
   "python.analysis.autoImportCompletions": true,
   "python.analysis.autoFormatStrings": true,
+  "ruff.importStrategy": "useBundled",
   "ruff.organizeImports": true,
   "ruff.fixAll": true,
   "ruff.lint.run": "onSave",

@@ -125,6 +125,14 @@ find-l() {
 alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
 alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --compose-file -'
+alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=changed --with-registry-auth --compose-file -'
+docker-context() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: docker-context <CONTEXT-NAME> <SSH-HOST>"
+    return 1
+  fi
+  docker context create "$1" --docker "host=ssh://$2"
+}
 
 # shellcheck disable=SC2139
 alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:24.04"
