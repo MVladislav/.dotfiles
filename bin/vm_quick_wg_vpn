@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
 set -euo pipefail
 IFS=$'\n\t'
@@ -9,9 +8,26 @@ WG_CONF_PATH="./wg0.conf"               # Replace with the path to your WireGuar
 WG_INTERFACE="wg0"                      # WireGuard interface name
 PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Define your private network subnet
 
+SERVICE_PORT_CAIDO="9999"
+
 # Get default interface and gateway IP
 DEFAULT_IFACE=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $5}' | head -n1)
 GATEWAY_IP=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $3}' | head -n1)
+
+# ******************************************************************************
+
+main() {
+  # Main script executions
+  check_wireguard_installed
+  check_config_file_exists
+  move_wireguard_conf
+  setup_wireguard
+  setup_kill_switch
+
+  echo "[INFO] VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
+}
+
+# ******************************************************************************
 
 # Function to check if WireGuard is installed
 check_wireguard_installed() {
@@ -103,7 +119,12 @@ setup_kill_switch() {
 
   # Allow SSH access over default interface for management
   sudo ufw allow in on "$DEFAULT_IFACE" to any port 22 proto tcp 1>&/dev/null
+  # Allow HTTPS access over default interface for management
   sudo ufw allow in on "$DEFAULT_IFACE" to any port 443 proto tcp 1>&/dev/null
+  # Allow caido proxy access over default interface for pentest
+  sudo ufw allow in on "$DEFAULT_IFACE" to any port "$SERVICE_PORT_CAIDO" proto tcp 1>&/dev/null
+
+  # Allow out to private subnet access over default interface
   sudo ufw allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" 1>&/dev/null
 
   # Allow DNS requests through the VPN
@@ -115,11 +136,56 @@ setup_kill_switch() {
   echo -e "\n[INFO] Kill switch active. All traffic forced through VPN."
 }
 
-# Main script executions
-check_wireguard_installed
-check_config_file_exists
-move_wireguard_conf
-setup_wireguard
-setup_kill_switch
+# ******************************************************************************
 
-echo "[INFO] VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
+usage() {
+  echo "Usage: $0 [options]"
+  echo "Options:"
+  echo "  -h, --help          Show this help message and exit"
+  echo "  -c, --conf          Provide path to wireguard .conf file"
+  echo "  -i, --interface     Define how to name wireguard interface"
+  echo "  -s, --subnet        Define private subnet to allow internal communication"
+}
+
+# Function to parse command-line arguments
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -c | --conf)
+      WG_CONF_PATH="$2"
+      shift 2
+      ;;
+    -i | --interface)
+      WG_INTERFACE="$2"
+      shift 2
+      ;;
+    -s | --subnet)
+      PRIVATE_NETWORK_SUBNET="$2"
+      shift 2
+      ;;
+    -sc | --caido)
+      SERVICE_PORT_CAIDO="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $key" >&2
+      usage
+      exit 1
+      ;;
+    esac
+    shift
+  done
+}
+
+# ******************************************************************************
+
+# Parse command-line arguments
+parse_args "$@"
+
+main
+exit 0
