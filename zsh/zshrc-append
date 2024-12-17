@@ -178,7 +178,7 @@ alias vm_copyFromClip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.arg
 alias vm_git_log1="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all"
 alias vm_git_log2="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all"
 
-alias vm_git_pre='git ls-files | xargs pre-commit run --files'
+alias vm_git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
 alias vm_git_diff='git difftool --tool=nvimdiff'
 alias vm_git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
 
