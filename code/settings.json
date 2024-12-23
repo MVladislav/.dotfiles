@@ -68,7 +68,10 @@
   "editor.stickyScroll.enabled": false,
   "editor.mouseWheelZoom": true,
   "editor.multiCursorLimit": 99000,
-  "editor.rulers": [80, 130],
+  "editor.rulers": [
+    80,
+    130
+  ],
   "editor.semanticHighlighting.enabled": true,
   "editor.multiDocumentOccurrencesHighlight": true,
   "editor.suggestSelection": "first",
@@ -133,7 +136,7 @@
     "**/*.cache": true,
     "**/*.jekyll-cache": true,
     "**/*.tweet-cache": true,
-    "**/__pycache__": true,
+    // "**/__pycache__": true,
     "**/.pytest_cache": true,
     "**/*.egg-info": true,
     "**/*.coverage": true,
@@ -174,8 +177,16 @@
       "graph": false
     }
   },
-  "gitlens.codeLens.scopes": ["document", "containers", "blocks"],
-  "gitlens.graph.minimap.additionalTypes": ["localBranches", "stashes", "tags"],
+  "gitlens.codeLens.scopes": [
+    "document",
+    "containers",
+    "blocks"
+  ],
+  "gitlens.graph.minimap.additionalTypes": [
+    "localBranches",
+    "stashes",
+    "tags"
+  ],
   "gitlens.advanced.repositorySearchDepth": 3,
   "gitlens.ai.experimental.generateCommitMessage.enabled": false,
   "gitlens.blame.heatmap.enabled": true,
@@ -440,7 +451,9 @@
     },
     "editor.formatOnType": true
   },
-  "python.analysis.ignore": ["*"],
+  "python.analysis.ignore": [
+    "*"
+  ],
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.completeFunctionParens": true,
   "python.analysis.autoImportCompletions": true,
@@ -560,7 +573,9 @@
     {
       "name": "biber",
       "command": "biber",
-      "args": ["%DOCFILE%"]
+      "args": [
+        "%DOCFILE%"
+      ]
     },
     {
       "name": "latexmk",
@@ -584,7 +599,9 @@
     {
       "name": "bibtex",
       "command": "bibtex",
-      "args": ["%DOCFILE%"],
+      "args": [
+        "%DOCFILE%"
+      ],
       "env": {}
     }
   ],
@@ -596,7 +613,12 @@
     // },
     {
       "name": "xelatex -> biber -> xelatex*2",
-      "tools": ["xelatex", "biber", "xelatex", "xelatex"]
+      "tools": [
+        "xelatex",
+        "biber",
+        "xelatex",
+        "xelatex"
+      ]
     }
     // {
     //   "name": "pdflatex ➞ bibtex ➞ pdflatex`×2",
@@ -642,7 +664,10 @@
     "Sophos",
     "traefik"
   ],
-  "cSpell.enableFiletypes": ["!yaml", "*"],
+  "cSpell.enableFiletypes": [
+    "!yaml",
+    "*"
+  ],
   "redhat.telemetry.enabled": false,
   "telemetry.telemetryLevel": "off"
 }
