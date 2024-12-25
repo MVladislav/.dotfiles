@@ -34,6 +34,9 @@ FILES_TO_BACKUP_PBS=(
   "/etc/proxmox-backup/prune.cfg"
 )
 
+export FILES_TO_BACKUP_PVE
+export FILES_TO_BACKUP_PBS
+
 # ******************************************************************************
 
 usage() {
@@ -41,7 +44,7 @@ usage() {
   echo "Options:"
   echo "  -h, --help          Show this help message and exit"
   echo "  -r, --remote-host   Remote server alias (default: your_proxmox_server_alias)"
-  echo "  -b, --backup-dir    Local backup directory (default: /tmp/backup-pve-\${REMOTE_HOST})"
+  echo "  -b, --backup-dir    Local backup directory (default: /tmp/backup-pve-${REMOTE_HOST})"
 }
 
 parse_args() {
@@ -87,32 +90,53 @@ trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT
 
 # Function to sync files using rsync
 sync_files() {
+  local -n files_list=$1
+  local type="$2"
+
   local total_files=0
   local total_errors=0
+  local total_size=0
 
-  for FILE_PATTERN in "${FILES_TO_BACKUP_PVE[@]}"; do
+  local start_time
+  start_time=$(date +%s)
+
+  for FILE_PATTERN in "${files_list[@]}"; do
     echo "Backing up: $FILE_PATTERN"
 
     # Validate and construct local target directory
-    LOCAL_DIR="$BACKUP_DIR$(dirname "$FILE_PATTERN")"
-    mkdir -p "$LOCAL_DIR"
+    local local_dir
+    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
+    mkdir -p "$local_dir"
 
     # Sync files with rsync, using tested compatibility options
     if rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x" --include="$(basename "$FILE_PATTERN")" --exclude="*" \
-      "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$LOCAL_DIR/"; then
+      "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$local_dir/"; then
       total_files=$((total_files + 1))
+      # Calculate size of transferred files
+      local size
+      size=$(du -sb "$local_dir" | cut -f1)
+      total_size=$((total_size + size))
     else
       echo "Error backing up $FILE_PATTERN" >&2
       total_errors=$((total_errors + 1))
     fi
   done
 
+  local end_time
+  end_time=$(date +%s)
+  local elapsed_time
+  elapsed_time=$((end_time - start_time))
+
   echo "Total files backed up: $total_files"
+  echo "Total size transferred: $((total_size / 1024)) KB"
   echo "Total errors encountered: $total_errors"
+  echo "Elapsed time: ${elapsed_time}s"
+  echo ""
 }
 
 # Sync files
-sync_files
+sync_files "FILES_TO_BACKUP_PVE" "pve"
+sync_files "FILES_TO_BACKUP_PBS" "pbs"
 
 # Print completion message
 echo "Backup completed. Files saved to $BACKUP_DIR."
