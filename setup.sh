@@ -407,6 +407,7 @@ usage() {
   echo -e "${BPURPLE}     $0 -ds -ida                                Install only additional tools${NC}"
   echo -e "${BPURPLE}     $0 -ds -idtn                               Install only tmux and nvim${NC}"
   echo -e "${BPURPLE}     $0 -ds -idz                                Install only zsh${NC}"
+  echo -e "${BPURPLE}     $0 -nsce -nsf -ida -idtn -idz              Full setup and install${NC}"
   echo -e "${BPURPLE}   Options:${NC}"
   echo -e "${BPURPLE}     -h,    --help                               Show this help message and exit${NC}"
   echo -e "${BPURPLE}     -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]${NC}"
