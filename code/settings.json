@@ -355,7 +355,7 @@
   "ansible.executionEnvironment.enabled": false,
   "shellformat.effectLanguages": [
     "shellscript",
-    // "dockerfile",
+    "dockerfile",
     "dotenv",
     "hosts",
     "jvmoptions",
@@ -465,13 +465,11 @@
   "ruff.codeAction.fixViolation": {
     "enable": true
   },
-  // "flake8.args": [
-  //   "--max-line-length=130",
-  //   "--ignore=E203,W503"
-  // ],
-  // "black-formatter.args": [
-  //   "--line-length=130"
-  // ],
+  "mypy-type-checker.ignorePatterns": [
+    "**/site-packages/**/*.py",
+    ".vscode/*.py",
+    "**/tests/**",
+  ],
   "[shellscript]": {
     "editor.defaultFormatter": "foxundermoon.shell-format",
     "files.eol": "\n"
