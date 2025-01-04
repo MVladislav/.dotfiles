@@ -408,7 +408,8 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "files.trimTrailingWhitespace": false,
     "editor.formatOnPaste": true,
-    "editor.formatOnType": true
+    "editor.formatOnType": true,
+    "diffEditor.ignoreTrimWhitespace": true
   },
   "markdown-preview-github-styles.colorTheme": "light",
   "markdown.preview.scrollEditorWithPreview": true,

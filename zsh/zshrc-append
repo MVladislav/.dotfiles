@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 ### COLOR ### (https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
-NC='\033[0m' # No Color
-# Bold
+NC='\033[0m'         # No Color
 BRED='\033[1;31m'    # Red
 BPURPLE='\033[1;35m' # Purple
 
@@ -105,8 +104,8 @@ alias scp-ra='rsync --info=progress2 -az -e "ssh -T -o Compression=no -x"'
 ### FIND ###
 alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
 find-g() {
-  # -not -regex '/home/.*' \
   sudo /usr/bin/find / \
+    -not -regex '/home/.*' \
     -not -regex '/mnt/.*' \
     -not -regex '/media/.*' \
     -not -regex '.*/\.cache/.*' \
@@ -172,7 +171,7 @@ alias vm_hun_to_min="python3 -c 'import sys;x = sys.argv[1].split(\":\");x3 = (i
 
 # $sudo apt install xclip
 # $pip3 install pyperclip
-alias vm_copyFromClip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
+alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
 
 ### GIT ###
 alias vm_git_log1="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all"
@@ -199,41 +198,67 @@ alias vm_up_flatpak='/usr/bin/flatpak update && /usr/bin/flatpak uninstall --unu
 alias vm_up_py_pip='python3 -m pip list --user -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --user --no-cache-dir -U --break-system-packages'
 alias vm_up_py_pip_root='sudo /usr/bin/python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo /usr/bin/xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
 vm_update_clean_all() {
-  sudo /usr/bin/systemctl daemon-reload
-  echo "Update apt..."
-  sudo /usr/bin/apt update
-  sudo /usr/bin/apt full-upgrade
-  echo "Cleanup apt..."
-  sudo /usr/bin/apt autoclean -y
-  sudo /usr/bin/apt autoremove -y
-  sudo /usr/bin/apt clean
+  print_separator() {
+    echo -e '\n#########################################################################\n'
+  }
 
-  echo "#########################################################################"
-  echo "#########################################################################"
+  # Update and clean apt
+  echo "${BPURPLE}Updating apt...${NC}"
+  if sudo apt update && sudo apt full-upgrade -y; then
+    echo "${BPURPLE}Apt update and upgrade completed.${NC}"
+  else
+    echo "${BRED}Apt update or upgrade failed.${NC}" >&2
+  fi
 
-  echo "Update snap..."
-  sudo /usr/bin/snap refresh
-  echo "Cleanup snap..."
-  LANG=en_US.UTF-8 sudo /usr/bin/snap list --all | awk '/disabled/{print $1, $3}' |
-    while read -r SNAPNAME REVISION; do
-      sudo /usr/bin/snap remove "$SNAPNAME" --revision="$REVISION"
-    done
+  echo "${BPURPLE}Cleaning apt...${NC}"
+  if sudo apt autoclean -y && sudo apt autoremove -y && sudo apt clean; then
+    echo "${BPURPLE}Apt cleanup completed.${NC}"
+  else
+    echo "${BRED}Apt cleanup failed.${NC}" >&2
+  fi
 
-  echo "#########################################################################"
-  echo "#########################################################################"
+  print_separator
 
-  echo "Update flatpak..."
-  sudo /usr/bin/flatpak update
-  echo "Cleanup flatpak..."
-  sudo /usr/bin/flatpak uninstall --unused
-  sudo /usr/bin/rm -rfv /var/tmp/flatpak-cache-*
+  # Update and clean snap
+  echo "${BPURPLE}Updating snap...${NC}"
+  if sudo snap refresh; then
+    echo "${BPURPLE}Snap update completed.${NC}"
+  else
+    echo "${BRED}Snap update failed.${NC}" >&2
+  fi
 
-  echo "#########################################################################"
-  echo "#########################################################################"
+  echo "${BPURPLE}Cleaning snap...${NC}"
+  if LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/ {print $1, $3}' | while read -r SNAPNAME REVISION; do
+    sudo snap remove "$SNAPNAME" --revision="$REVISION"
+  done; then
+    echo "${BPURPLE}Snap cleanup completed.${NC}"
+  else
+    echo "${BRED}Snap cleanup failed.${NC}" >&2
+  fi
 
+  print_separator
+
+  # Update and clean flatpak
+  echo "${BPURPLE}Updating flatpak...${NC}"
+  if sudo flatpak update; then
+    echo "${BPURPLE}Flatpak update completed.${NC}"
+  else
+    echo "${BRED}Flatpak update failed.${NC}" >&2
+  fi
+
+  echo "${BPURPLE}Cleaning flatpak...${NC}"
+  if sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*; then
+    echo "${BPURPLE}Flatpak cleanup completed.${NC}"
+  else
+    echo "${BRED}Flatpak cleanup failed.${NC}" >&2
+  fi
+
+  print_separator
+
+  # Additional updates for Python pip
   echo "You could also run more additional updates:"
-  echo "  - run ${BPURPLE}'vm_up_py_pip'${NC} for update python pip installs by user"
-  echo "  - run ${BRED}'vm_up_py_pip_root'${NC} for update python pip installs by root (could possible break things)"
+  echo "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
+  echo "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
 }
 
 ### OTHER ###
@@ -285,7 +310,7 @@ alias vm_find_command='apropos'
 
 : "${VM_ANDROID_PATH=$HOME/Android}"
 vm_quick_android_emulator() {
-  selected_emulator=$(${VM_ANDROID_PATH}/Sdk/emulator/emulator -list-avds | grep -v INFO | fzf)
+  selected_emulator=$("${VM_ANDROID_PATH}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
   if [[ -z $selected_emulator ]]; then
     return 1
   fi
@@ -293,15 +318,6 @@ vm_quick_android_emulator() {
 }
 
 ### TOOLS ###
-alias vm_my_ip='curl ifconfig.io/ip'
-alias vm_my_host='curl ifconfig.io/host'
-alias vm_my_country='curl ifconfig.io/country_code'
-alias vm_my_ua='curl ifconfig.io/ua'
-alias vm_my_all='curl ifconfig.io/all.json | jq'
-vm_my_bios() {
-  for d in system-manufacturer system-product-name bios-release-date bios-version; do echo "${d}: $(sudo /usr/sbin/dmidecode -s $d)"; done
-}
-
 alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
 # https://github.com/R0GGER/public-iperf3-servers
 alias vm_speed_1='clear && iperf3 -c speedtest.serverius.net -p 5002 -Ts1 -4 -b0 -i3 -O1 -P1 -w128M -t0'
@@ -324,7 +340,7 @@ vm_markdown_to_csv() {
     return 1
   fi
 
-  cat "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
+  sed '2d' "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
     awk -F, '{
       for (i=1; i<=NF; i++) {
         gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
@@ -341,11 +357,21 @@ vm_markdown_to_csv() {
 ## ii: display useful host related information
 ##
 ######################################################################
+alias vm_my_ip='curl -s ifconfig.io/ip'
+alias vm_my_host='curl -s ifconfig.io/host'
+alias vm_my_country='curl -s ifconfig.io/country_code'
+alias vm_my_ua='curl -s ifconfig.io/ua'
+alias vm_my_all='curl -s ifconfig.io/all.json | jq'
+vm_my_bios() {
+  for d in system-manufacturer system-product-name bios-release-date bios-version; do
+    printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
+  done
+}
+
 vm_ii() {
-  echo -e "\\n${BRED}You are logged on:$NC"
-  hostname
+  echo -e "\\n${BRED}You are logged on:$NC $(hostname)"
   echo -e "\\n${BRED}Additional information:$NC"
-  echo -e "  - description           : $(lsb_release -d | cut -d':' -f2 | awk '{$1=$1};1')"
+  echo -e "  - description           : $(lsb_release -d | cut -d':' -f2- | xargs)"
   echo -e "  - kernel name           : $(uname -s)"
   echo -e "  - network node hostname : $(uname -n)"
   echo -e "  - kernel release        : $(uname -r)"
@@ -354,31 +380,78 @@ vm_ii() {
   echo -e "  - processor type        : $(uname -p)"
   echo -e "  - hardware platform     : $(uname -i)"
   echo -e "  - operating system      : $(uname -o)"
-  echo -e "  - secure boot status    : $(mokutil --sb-state)"
+  echo -e "  - secure boot status    : $(mokutil --sb-state 2>/dev/null || echo "Not available")"
+
   echo -e "\\n${BRED}Users logged on:$NC"
-  w -h
+  echo "  $(w -h)"
+
   echo -e "\\n${BRED}Current date:$NC"
-  date
+  echo "  $(date)"
+
   echo -e "\\n${BRED}Machine stats:$NC"
-  uptime | awk '{$1=$1};1'
-  # echo -e "\\n${BRED}Machine BIOS:$NC"
-  # vm_my_bios
+  echo "  $(uptime | xargs)"
+
+  echo -e "\\n${BRED}Machine BIOS:$NC"
+  vm_my_bios
+
   echo -e "\\n${BRED}Public facing IP Address:$NC"
-  vm_my_ip
-  vm_my_host
-  vm_my_country
-  vm_my_ua
+  echo "  $(vm_my_ip)"
+  echo "  $(vm_my_host)"
+  echo "  $(vm_my_country)"
+  echo "  $(vm_my_ua)"
   echo
 }
 
 ######################################################################
 ##
-## quick ubuntu: create multipass ubuntu vm
+##
+##
+######################################################################
+vm_convert_gif() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <VIDEO>"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${input%.*}.gif"
+  local temp_video="${input%.*}.mp4"
+  local palette="/tmp/palette.png"
+
+  local codec="libx265" # You can also try libx264 if you prefer
+  local quality=32      # Lower quality for better file size
+  local fps=10          # Reduce fps to optimize GIF size
+  local scale=320       # Lower resolution for smaller GIF size
+
+  ffmpeg -y -i "$input" \
+    -vaapi_device /dev/dri/renderD128 \
+    -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
+    -map 0:0 -c:v "$codec" \
+    -map 0:a? -c:a copy \
+    -crf "$quality" \
+    -pix_fmt yuv420p \
+    -preset fast \
+    -r 30 \
+    "$temp_video"
+
+  ffmpeg -y -i "$temp_video" -vf "fps=$fps,scale=$scale:-1:flags=lanczos,palettegen=stats_mode=diff" "$palette"
+  ffmpeg -y -i "$temp_video" -i "$palette" -filter_complex "fps=$fps,scale=$scale:-1:flags=lanczos[x];[x][1:v]paletteuse" "$output"
+
+  rm "$palette"
+}
+
+######################################################################
+##
+## quick ubuntu: create and remove multipass ubuntu VM
 ##
 ######################################################################
 vm_quick_ubuntu() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: vm_quick_ubuntu <VM_NAME_VERSION> [<optional post-creation command>]"
+    return 1
+  fi
+
   TMP_CLOUD_INIT=~/vm_quick_ubuntu_cloud_init.yaml
-  touch "$TMP_CLOUD_INIT"
   {
     echo '#cloud-config'
     echo 'packages_update: true'
@@ -390,58 +463,107 @@ vm_quick_ubuntu() {
     echo '  - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJOBsi+JPb9GLFKA83kRpaphBrvb2uM9r0U0S+SPx1Mo ansible-admin'
   } >"$TMP_CLOUD_INIT"
 
+  # Clean up VM name by removing dots and replacing colons with hyphens
   VM_NAME_VERSION=$(echo "$1" | sed 's|\.||g' | tr ':' '-')
-  multipass launch "$1" -n "ubuntu-$VM_NAME_VERSION" -c 2 -d 16G -m 4G --cloud-init "$TMP_CLOUD_INIT"
+
+  # Launch the VM with multipass
+  multipass launch "$1" -n "ubuntu-$VM_NAME_VERSION" -c 2 -d 16G -m 4G --cloud-init "$TMP_CLOUD_INIT" || {
+    echo "Failed to launch VM."
+    rm "$TMP_CLOUD_INIT"
+    return 1
+  }
+
+  # Remove cloud-init file after VM creation
   rm "$TMP_CLOUD_INIT"
+
+  # Run an optional post-creation command, default to 'neofetch' if not provided
   multipass exec "ubuntu-$VM_NAME_VERSION" -- sh -c "${2:-neofetch}"
 }
+
 vm_quick_ubuntu_rm() {
-  multipass stop "ubuntu-$(echo "$1" | sed 's|\.||g' | tr ':' '-')"
-  multipass delete "ubuntu-$(echo "$1" | sed 's|\.||g' | tr ':' '-')"
-  multipass purge
+  if [[ -z "$1" ]]; then
+    echo "Usage: vm_quick_ubuntu_rm <VM_NAME_VERSION>"
+    return 1
+  fi
+
+  # Clean up VM name
+  VM_NAME_VERSION=$(echo "$1" | sed 's|\.||g' | tr ':' '-')
+
+  # Stop, delete, and purge the VM
+  multipass stop "ubuntu-$VM_NAME_VERSION" || {
+    echo "Failed to stop VM."
+    return 1
+  }
+  multipass delete "ubuntu-$VM_NAME_VERSION" || {
+    echo "Failed to delete VM."
+    return 1
+  }
+  multipass purge || {
+    echo "Failed to purge VM resources."
+    return 1
+  }
+
+  # Show current list of VMs
   multipass list
 }
 
 ######################################################################
 ##
-##
+## Create a shortcut for an AppImage with a PNG icon.
 ##
 ######################################################################
 vm_shortcut_appimage() {
-  if [[ "$#" != "3" ]]; then
-    echo "Illegal number of parameters" >&2
-    echo "$0 <NAME> <APPIMAGE> <PNG>"
-  else
-    name="$1"
-    appimage="$2"
-    image_png="$3"
-
-    # create folder and move files
-    sudo /usr/bin/mkdir -p "/opt/${name}"
-    sudo /usr/bin/mv "$appimage" "/opt/${name}/${name}.AppImage"
-    sudo /usr/bin/mv "$image_png" "/opt/${name}/${name}.png"
-
-    # set correct owner
-    sudo /usr/bin/chown root:root "/opt/${name}" -R
-
-    # set correct permission
-    sudo /usr/bin/chmod 755 "/opt/${name}"
-    sudo /usr/bin/chmod 755 "/opt/${name}/${name}.AppImage"
-    sudo /usr/bin/chmod 644 "/opt/${name}/${name}.png"
-
-    # create Desktop Entry
-    echo "[Desktop Entry]" | sudo /usr/bin/tee "/usr/share/applications/${name}.desktop"
-    echo "Name=${name}" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Exec=/opt/${name}/${name}.AppImage" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Icon=/opt/${name}/${name}.png" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "comment=${name}" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Type=Application" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Terminal=false" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Encoding=UTF-8" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-    echo "Categories=Utility;" | sudo /usr/bin/tee -a "/usr/share/applications/${name}.desktop"
-
-    sudo /usr/bin/update-desktop-database
+  if [[ "$#" -ne 3 ]]; then
+    echo "Usage: $0 <NAME> <APPIMAGE> <PNG>" >&2
+    return 1
   fi
+
+  # Parameters
+  local name="$1"
+  local appimage="$2"
+  local image_png="$3"
+  local install_dir="/opt/${name}"
+  local desktop_entry="/usr/share/applications/${name}.desktop"
+
+  # Create necessary directories and move files
+  sudo mkdir -p "$install_dir" || {
+    echo "Failed to create directory $install_dir"
+    return 1
+  }
+  sudo mv "$appimage" "$install_dir/${name}.AppImage" || {
+    echo "Failed to move AppImage file"
+    return 1
+  }
+  sudo mv "$image_png" "$install_dir/${name}.png" || {
+    echo "Failed to move PNG file"
+    return 1
+  }
+
+  # Set the correct owner and permissions
+  sudo chown -R root:root "$install_dir"
+  sudo chmod -R 755 "$install_dir"
+  sudo chmod 644 "$install_dir/${name}.png"
+
+  # Create Desktop Entry with indentation using printf and tee
+  printf "[Desktop Entry]\n\
+    Name=%s\n\
+    Exec=%s/%s.AppImage\n\
+    Icon=%s/%s.png\n\
+    Comment=%s\n\
+    Type=Application\n\
+    Terminal=false\n\
+    Encoding=UTF-8\n\
+    Categories=Utility;\n" \
+    "$name" "$install_dir" "$name" "$install_dir" "$name" "$name" |
+    sudo tee "$desktop_entry" >/dev/null
+
+  # Update the desktop database
+  sudo update-desktop-database || {
+    echo "Failed to update desktop database"
+    return 1
+  }
+
+  echo "Shortcut for '${name}' created successfully."
 }
 
 ######################################################################
@@ -450,19 +572,74 @@ vm_shortcut_appimage() {
 ##
 ######################################################################
 vm_md_to_pdf() {
+  # Ensure the file path is provided
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <input_file.md>"
+    return 1
+  fi
+
+  local input_file="$1"
+  local cur_date
+  local filename
+  local template_path="${2:-$HOME/.config/templates/pandoc-latex-eisvogel.tex}"
+  local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/eisvogel.tex"
+
+  # Check if the template file exists, if not, download it
+  if [ ! -f "$template_path" ]; then
+    mkdir -p "$(dirname "$template_path")"
+    echo "Template not found locally. Downloading from URL..."
+    if ! curl -sf -o "$template_path" "$template_url"; then
+      echo "Error: Failed to download the template from '$template_url'."
+      return 1
+    fi
+    echo "Template downloaded successfully."
+  fi
+
+  # Check if the input file exists
+  if [ ! -f "$input_file" ]; then
+    echo "Error: '$input_file' does not exist."
+    return 1
+  fi
+
+  # Check if pandoc is installed
+  if ! command -v pandoc &>/dev/null; then
+    echo "Error: pandoc is not installed."
+    return 1
+  fi
+
   cur_date=$(date +"%Y-%m-%d")
-  filename=$(echo "$1" | cut -f 1 -d ".")
-  pandoc "$1" \
-    -o "$filename".pdf \
+  filename=$(basename "$input_file" | cut -f 1 -d ".")
+
+  # Check if fc-list command is available
+  if ! command -v fc-list &>/dev/null; then
+    echo "Error: fc-list is not installed."
+    return 1
+  fi
+
+  # Font list and checking for available fonts
+  local main_font="DejaVu Sans Mono"
+  local font_list=("Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
+
+  for font_check in "${font_list[@]}"; do
+    if fc-list | grep -iq "$font_check"; then
+      main_font=$font_check
+      break
+    fi
+  done
+  echo "Using font: $main_font"
+
+  # Run pandoc to convert markdown to PDF
+  pandoc "$input_file" \
+    -o "${filename}.pdf" \
     --from markdown \
-    --template "/opt/git/pandoc-latex-template/eisvogel.tex" \
+    --template "$template_path" \
     --pdf-engine=xelatex \
     --listings \
     -V lang=en-GB \
     -V classoption=onside \
     -V book \
     -V date="$cur_date" \
-    -V 'mainfont:Source Code Pro for Powerline' \
+    -V "mainfont:$main_font" \
     -V 'sansfont:DejaVuSans' \
     -V 'monofont:DejaVuSansMono' \
     -V 'mathfont:TeXGyreDejaVuMath-Regular'
@@ -470,47 +647,51 @@ vm_md_to_pdf() {
 
 ######################################################################
 ##
-## extract: Extract most know archives with one command
+## extract: Extract most known archives with one command
 ##
 ######################################################################
 vm_extract() {
   if [ -z "$1" ]; then
-    echo "Usage: vm_extract <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|ex|tar.bz2|tar.gz|tar.xz>"
-  else
-    if [ -f "$1" ]; then
-      case $1 in
-      *.tar.bz2) tar xjf "$1" ;;
-      *.tar.gz) tar xzf "$1" ;;
-      *.tar.xz) tar xJf "$1" ;;
-      *.lzma) unlzma "$1" ;;
-      *.bz2) bunzip2 "$1" ;;
-      *.rar) unrar x -ad "$1" ;;
-      *.gz) gunzip "$1" ;;
-      *.tar) tar xf "$1" ;;
-      *.tbz2) tar xjf "$1" ;;
-      *.tgz) tar xvzf "$1" ;;
-      *.zip) unzip "$1" ;;
-      *.Z) uncompress "$1" ;;
-      *.7z) 7z x "$1" ;;
-      *.xz) unxz "$1" ;;
-      *.exe) cabextract "$1" ;;
-      *) echo "extract: '$1' - unknown archive method" ;;
-      esac
-    else
-      echo "$1 - file does not exist"
-    fi
+    echo "Usage: $0 <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|exe|tar.bz2|tar.gz|tar.xz>"
+    return 1
   fi
+
+  local file="$1"
+
+  # Check if the file exists
+  if [ ! -f "$file" ]; then
+    echo "Error: '$file' does not exist."
+    return 1
+  fi
+
+  # Extract based on file extension
+  case "$file" in
+  *.tar.bz2 | *.tbz2) tar xjf "$file" ;;
+  *.tar.gz | *.tgz) tar xzf "$file" ;;
+  *.tar.xz) tar xJf "$file" ;;
+  *.lzma) unlzma "$file" ;;
+  *.bz2) bunzip2 "$file" ;;
+  *.rar) unrar x -ad "$file" ;;
+  *.gz) gunzip "$file" ;;
+  *.tar) tar xf "$file" ;;
+  *.zip) unzip "$file" ;;
+  *.Z) uncompress "$file" ;;
+  *.7z) 7z x "$file" ;;
+  *.xz) unxz "$file" ;;
+  *.exe) cabextract "$file" ;;
+  *) echo "Error: Unknown archive method for '$file'" ;;
+  esac
 }
 
 ######################################################################
 ##
-## encrypt: encrypt to most know archives with one command
+## encrypt: Encrypt files using known archives with a single command
 ##
 ######################################################################
 vm_encrypt() {
   # Ensure at least type and file_or_path parameters are provided
   if [ $# -lt 2 ]; then
-    echo "Usage: vm_encrypt <rar|7z> <file_or_path> [keyword 'sec'|password]"
+    echo "Usage: $0 <rar|7z> <file_or_path> [keyword 'sec'|password]"
     return 1
   fi
 
@@ -518,51 +699,47 @@ vm_encrypt() {
   local file_or_path="$2"
   local password_option=""
 
-  # Handle the optional password/keyword parameter
-  if [ -n "$3" ]; then
-    case "$3" in
-      sec)
-        case "$type" in
-          rar) password_option="-hp" ;;
-          7z) password_option="-p" ;;
-          *) echo "'$type' is an unsupported encryption type"; return 1 ;;
-        esac
-        ;;
-      *)
-        case "$type" in
-          rar) password_option="-hp$3" ;;
-          7z) password_option="-p$3" ;;
-          *) echo "'$type' is an unsupported encryption type"; return 1 ;;
-        esac
-        ;;
-    esac
-  fi
+  # Validate type and set password_option
+  case "$type" in
+  rar)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for RAR
+      password_option="$([[ "$3" == "sec" ]] && echo "-hp")${3#sec}"
+    fi
+    ;;
+  7z)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for 7z
+      password_option="$([[ "$3" == "sec" ]] && echo "-p")${3#sec}"
+    fi
+    ;;
+  *)
+    echo "Error: Unsupported compression type '$type'. Supported types are 'rar' and '7z'."
+    return 1
+    ;;
+  esac
 
   # Check if the file or path exists
   if [ ! -e "$file_or_path" ]; then
-    echo "'$file_or_path' is not a valid file or path"
+    echo "Error: '$file_or_path' is not a valid file or path."
     return 1
   fi
 
-  # Perform the compression and encryption based on the specified type
+  # Perform the compression and encryption
   case "$type" in
-    rar)
-      if [ -n "$password_option" ]; then
-        rar a "$password_option" "${file_or_path}.rar" "$file_or_path"
-      else
-        rar a "${file_or_path}.rar" "$file_or_path"
-      fi
-      ;;
-    7z)
-      if [ -n "$password_option" ]; then
-        7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password_option" "${file_or_path}.7z" "$file_or_path"
-      else
-        7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "${file_or_path}.7z" "$file_or_path"
-      fi
-      ;;
-    *)
-      echo "'$type' is an unsupported compression type"
-      return 1
-      ;;
+  rar)
+    if [ -n "$password_option" ]; then
+      rar a "$password_option" "${file_or_path}.rar" "$file_or_path"
+    else
+      rar a "${file_or_path}.rar" "$file_or_path"
+    fi
+    ;;
+  7z)
+    if [ -n "$password_option" ]; then
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password_option" "${file_or_path}.7z" "$file_or_path"
+    else
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "${file_or_path}.7z" "$file_or_path"
+    fi
+    ;;
   esac
 }
