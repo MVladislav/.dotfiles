@@ -3,155 +3,209 @@ PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
 set -euo pipefail
 IFS=$'\n\t'
 
-# Define variables
-WG_CONF_PATH="./wg0.conf"               # Replace with the path to your WireGuard config file
+# Default variables
+WG_CONF_PATH="./wg0.conf"               # Path to WireGuard config file
 WG_INTERFACE="wg0"                      # WireGuard interface name
-PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Define your private network subnet
-
-SERVICE_PORT_CAIDO="9999"
+PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Private network subnet
+SERVICE_PORT_CAIDO="9999"               # Port for Caido service
 
 # Get default interface and gateway IP
 DEFAULT_IFACE=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $5}' | head -n1)
 GATEWAY_IP=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $3}' | head -n1)
 
+SETUP_SYSTEMD=0
+ALLOW_ACCESS_PRIVATE=0
+
 # ******************************************************************************
 
+# Logging function
+log() {
+  local level="$1"
+  local message="$2"
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [$level] $message"
+}
+
+# Exit with error message
+exit_with_error() {
+  log "ERROR" "$1"
+  exit 1
+}
+
+# Main function
 main() {
-  # Main script executions
-  check_wireguard_installed
+  log "INFO" "Starting WireGuard VPN setup."
+  check_requirements
   check_config_file_exists
   move_wireguard_conf
   setup_wireguard
   setup_kill_switch
 
-  echo "[INFO] VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
+  [[ $SETUP_SYSTEMD -eq 1 ]] && setup_systemd
+
+  log "INFO" "VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
 }
 
 # ******************************************************************************
 
-# Function to check if WireGuard is installed
-check_wireguard_installed() {
-  if ! command -v wg &>/dev/null; then
-    echo "[ERROR] WireGuard (wg) is not installed."
-    echo "You can install it by running the following command:"
-    echo "sudo apt update && sudo apt install wireguard"
-    exit 1
-  fi
-}
-
-# Function to check if the WireGuard config file exists
-check_config_file_exists() {
-  # Check if the config file exists in /etc/wireguard
-  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf"; then
-    # Check if the local config file exists
-    if [[ ! -f "$WG_CONF_PATH" ]]; then
-      echo "[ERROR] WireGuard config file not found in either location:"
-      echo "  - $WG_CONF_PATH"
-      echo "  - /etc/wireguard/$WG_INTERFACE.conf"
-      exit 1
+# Verify required commands are available
+check_requirements() {
+  local cmds=("wg" "ip" "ufw")
+  for cmd in "${cmds[@]}"; do
+    if ! command -v "$cmd" &>/dev/null; then
+      exit_with_error "Command '$cmd' is not available. Please install it."
     fi
-  fi
-  echo "[INFO] Configuration file found."
+  done
 }
 
-# Function to move WireGuard config into place
+# Check if WireGuard config file exists
+check_config_file_exists() {
+  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf" && [[ ! -f "$WG_CONF_PATH" ]]; then
+    exit_with_error "WireGuard config file not found in: $WG_CONF_PATH or /etc/wireguard/$WG_INTERFACE.conf"
+  fi
+  log "INFO" "Configuration file found."
+}
+
+# Move WireGuard config file into place
 move_wireguard_conf() {
   if [[ -f "$WG_CONF_PATH" ]]; then
-    echo "[INFO] Moving WireGuard config file to /etc/wireguard/"
+    log "INFO" "Moving WireGuard config file to /etc/wireguard/"
     sudo mv "$WG_CONF_PATH" "/etc/wireguard/$WG_INTERFACE.conf"
     sudo chmod 600 "/etc/wireguard/$WG_INTERFACE.conf"
     sudo chown root:root "/etc/wireguard/$WG_INTERFACE.conf"
   fi
 }
 
-# Function to set up WireGuard
+# Set up WireGuard interface
 setup_wireguard() {
+  log "INFO" "Setting up WireGuard interface $WG_INTERFACE."
+
   # Add route for private network subnet
-  echo "[INFO] Adding route for private network subnet $PRIVATE_NETWORK_SUBNET via $GATEWAY_IP."
-  sudo ip route replace "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP" 1>&/dev/null
+  log "INFO" "Adding route for private network subnet $PRIVATE_NETWORK_SUBNET via $GATEWAY_IP."
+  sudo ip route replace "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP" >/dev/null
 
   # Check if the WireGuard interface is already up
-  if sudo wg show "$WG_INTERFACE" 1>&/dev/null; then
-    echo "[INFO] WireGuard interface $WG_INTERFACE is already running. Restarting it."
-    sudo wg-quick down "$WG_INTERFACE" 1>&/dev/null
+  if sudo wg show "$WG_INTERFACE" >/dev/null 2>&1; then
+    log "INFO" "WireGuard interface $WG_INTERFACE is already running. Restarting it."
+    sudo wg-quick down "$WG_INTERFACE" >/dev/null
     sleep 2
   fi
 
-  echo "[INFO] Bringing up WireGuard interface $WG_INTERFACE."
+  log "INFO" "Bringing up WireGuard interface $WG_INTERFACE."
   if ! sudo wg-quick up "$WG_INTERFACE" >/dev/null 2>&1; then
-    echo "[ERROR] Failed to start WireGuard interface."
-    exit 1
+    exit_with_error "Failed to start WireGuard interface $WG_INTERFACE."
   fi
-  echo "[INFO] WireGuard interface $WG_INTERFACE is up."
+
+  log "INFO" "WireGuard interface $WG_INTERFACE is up."
 }
 
-# Function to set up a kill switch with UFW
+# Set up kill switch using UFW
 setup_kill_switch() {
-  echo -e "[INFO] Enabling UFW kill switch to prevent traffic leak.\n"
+  log "INFO" "Configuring UFW kill switch."
 
-  # Get WireGuard Endpoint IP and Port from config file
-  WG_ENDPOINT=$(sudo grep -E "^Endpoint" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2)
-  WG_ENDPOINT_IP=$(echo "$WG_ENDPOINT" | cut -d: -f1 | xargs)
-  WG_PORT=$(echo "$WG_ENDPOINT" | cut -d: -f2 | xargs)
+  # Extract endpoint details
+  WG_ENDPOINT=$(sudo grep -E "^Endpoint" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2 | xargs)
+  WG_ENDPOINT_IP=${WG_ENDPOINT%%:*}
+  WG_PORT=${WG_ENDPOINT##*:}
 
-  if [[ -z $WG_ENDPOINT_IP || -z $WG_PORT ]]; then
-    echo "[ERROR] No IP and PORT could be found in WG conf file!"
-    exit 1
-  fi
+  [[ -z "$WG_ENDPOINT_IP" || -z "$WG_PORT" ]] && exit_with_error "Invalid Endpoint in WireGuard config, missing IP or PORT."
 
   # Reset UFW and apply basic deny policies
-  sudo ufw disable 1>&/dev/null
-  sudo ufw --force reset 1>&/dev/null
+  sudo ufw disable >/dev/null
+  sudo ufw --force reset >/dev/null
 
-  sudo ufw default deny outgoing 1>&/dev/null
-  sudo ufw default deny incoming 1>&/dev/null
+  sudo ufw default deny outgoing >/dev/null
+  sudo ufw default deny incoming >/dev/null
   sudo ufw allow in on lo
   sudo ufw allow out on lo
   sudo ufw deny in from 127.0.0.0/8
-  sudo ufw deny in from ::1
+
+  if ip a | grep -q 'inet6'; then
+    sudo ufw deny in from ::1
+  fi
 
   # Allow UDP traffic to WireGuard endpoint IP and port
-  sudo ufw allow out to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp 1>&/dev/null
+  sudo ufw allow out to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp >/dev/null
   # sudo ufw allow out from any to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp
 
   # Allow traffic on WireGuard interface
-  sudo ufw allow out on "$WG_INTERFACE" from any to any 1>&/dev/null
+  sudo ufw allow out on "$WG_INTERFACE" from any to any >/dev/null
 
   # Allow SSH access over default interface for management
-  sudo ufw allow in on "$DEFAULT_IFACE" to any port 22 proto tcp 1>&/dev/null
+  sudo ufw allow in on "$DEFAULT_IFACE" to any port 22 proto tcp >/dev/null
   # Allow HTTPS access over default interface for management
-  sudo ufw allow in on "$DEFAULT_IFACE" to any port 443 proto tcp 1>&/dev/null
+  sudo ufw allow in on "$DEFAULT_IFACE" to any port 443 proto tcp >/dev/null
   # Allow caido proxy access over default interface for pentest
-  sudo ufw allow in on "$DEFAULT_IFACE" to any port "$SERVICE_PORT_CAIDO" proto tcp 1>&/dev/null
+  sudo ufw allow in on "$DEFAULT_IFACE" to any port "$SERVICE_PORT_CAIDO" proto tcp >/dev/null
 
   # Allow out to private subnet access over default interface
-  sudo ufw allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" 1>&/dev/null
+  [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]] && sudo ufw allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" >/dev/null
 
   # Allow DNS requests through the VPN
   VPN_DNS=$(sudo grep -E "^DNS" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2 | cut -d, -f1 | xargs)
   [[ -z "$VPN_DNS" ]] && VPN_DNS="9.9.9.9"
-  sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp 1>&/dev/null
+  sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp >/dev/null
 
   sudo ufw enable
-  echo -e "\n[INFO] Kill switch active. All traffic forced through VPN."
+  log "INFO" "Kill switch configured. All traffic is forced through VPN."
+}
+
+# ******************************************************************************
+
+setup_systemd() {
+  log "INFO" "Create symlink from '$0' as '/opt/vm-quick-wg-vpn.sh'"
+  sudo chmod 775 "$PWD/$0"
+  sudo chown root:root "$PWD/$0"
+  sudo ln -sf "$PWD/$0" /opt/vm-quick-wg-vpn.sh
+
+  log "INFO" "Create systemd entry as 'vm-quick-wg-vpn.service'"
+  sudo tee sudo nano /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<'EOF'
+[Unit]
+Description=Run WG VPN Startup Script
+Requires=systemd-networkd.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/vm-quick-wg-vpn.sh
+Type=simple
+User=root
+
+[Install]
+WantedBy=default.target
+
+EOF
+
+  log "INFO" "Enable systemd service"
+  sudo systemctl daemon-reload
+  sudo systemctl enable vm-quick-wg-vpn.service
+  log "INFO" "Systemd service created."
+
+  # log "INFO" "Start systemd service"
+  # sudo systemctl start vm-quick-wg-vpn.service
 }
 
 # ******************************************************************************
 
 usage() {
   echo "Usage: $0 [options]"
+  echo "Example:"
+  echo "  $0"
+  echo "  $0 -c NLFREE685133.conf"
+  echo "  $0 -ap -sd"
   echo "Options:"
-  echo "  -h, --help          Show this help message and exit"
-  echo "  -c, --conf          Provide path to wireguard .conf file"
-  echo "  -i, --interface     Define how to name wireguard interface"
-  echo "  -s, --subnet        Define private subnet to allow internal communication"
+  echo "  -h,  --help          Show this help message and exit"
+  echo "  -c,  --conf          Path to WireGuard .conf file (default: ./wg0.conf)"
+  echo "  -i,  --interface     Name of WireGuard interface (default: wg0)"
+  echo "  -s,  --subnet        Private subnet for internal communication (default: 192.168.0.0/16)"
+  echo "  -sc, --caido         Port for Caido service (default: 9999)"
+  echo "  -sd, --systemd       Setup as systemd service (default: disabled)"
+  echo "  -ap, --allow-private Allow access private subnet (default: disabled)"
 }
 
-# Function to parse command-line arguments
+# Parse command-line arguments
 parse_args() {
   while [[ $# -gt 0 ]]; do
-    key="$1"
-    case $key in
+    case "$1" in
     -h | --help)
       usage
       exit 0
@@ -172,20 +226,25 @@ parse_args() {
       SERVICE_PORT_CAIDO="$2"
       shift 2
       ;;
+    -sd | --systemd)
+      SETUP_SYSTEMD=1
+      shift
+      ;;
+    -ap | --allow-private)
+      ALLOW_ACCESS_PRIVATE=1
+      shift
+      ;;
     *)
-      echo "Unknown option: $key" >&2
       usage
-      exit 1
+      exit_with_error "Unknown option: $1"
       ;;
     esac
-    shift
   done
 }
 
 # ******************************************************************************
 
-# Parse command-line arguments
+# Parse arguments and run main script
 parse_args "$@"
-
 main
 exit 0

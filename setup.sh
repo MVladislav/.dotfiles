@@ -38,8 +38,6 @@ RUN_SETUP_FONTS=1
 
 RUN_SETUP_LOGSEQ=1
 
-RUN_SETUP_VPN=0
-
 # CONFS :: variables -------------------------------------------------------------------------------------------------------------
 FONTS_RELEASE_VERSION='v3.2.1'
 
@@ -90,8 +88,6 @@ main() {
   [[ $RUN_SETUP_FONTS -eq 1 ]] && setup_fonts
 
   [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
-
-  [[ $RUN_SETUP_VPN -eq 1 ]] && setup_vpn
 }
 
 # ******************************************************************************
@@ -364,40 +360,6 @@ setup_fonts() {
 
 # ******************************************************************************
 
-setup_vpn() {
-  echo -e "\n${BYELLOW}🚀 VPN :: Create symlink from './/bin/vm_quick_wg_vpn' as '/opt/startup-vpn.sh'${NC}"
-  sudo chmod 775 "$PWD/bin/vm_quick_wg_vpn"
-  sudo chown root:root "$PWD/bin/vm_quick_wg_vpn"
-  sudo ln -sf "$PWD/bin/vm_quick_wg_vpn" /opt/startup-vpn.sh
-
-  echo -e "\n${BYELLOW}🚀 VPN :: Create systemd entry as 'vm-startup-script.service'${NC}"
-  sudo tee sudo nano /etc/systemd/system/vm-startup-script.service >/dev/null <<'EOF'
-[Unit]
-Description=Run Startup Script
-Requires=systemd-networkd.service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-ExecStart=/opt/startup-vpn.sh
-Type=simple
-User=root
-
-[Install]
-WantedBy=default.target
-
-EOF
-
-  echo -e "\n${BYELLOW}🚀 VPN :: Enable systemd service${NC}"
-  sudo systemctl daemon-reload
-  sudo systemctl enable vm-startup-script.service
-  # sudo systemctl start vm-startup-script.service
-
-  echo -e "${BYELLOW}🚀 VPN :: Systemd service created.${NC}"
-}
-
-# ******************************************************************************
-
 # Function to show usage information
 usage() {
   echo -e "${BPURPLE}📑 Usage: $0 [options]${NC}"
@@ -422,7 +384,6 @@ usage() {
   echo -e "${BPURPLE}     -nsa,  --not-setup-adds                     Skip setup_adds${NC}"
   echo -e "${BPURPLE}     -nsf,  --not-setup-fonts                    Skip setup_fonts${NC}"
   echo -e "${BPURPLE}     -nsl,  --not-setup-logseq                   Skip setup_logseq${NC}"
-  echo -e "${BPURPLE}     -vpn,  --setup-vpn                          setup_vpn${NC}"
   echo -e "${BPURPLE}     -ds,   --disable-setups                     Skip all setup${NC}"
 }
 
@@ -470,9 +431,6 @@ parse_args() {
       ;;
     -nsl | --not-setup-logseq)
       RUN_SETUP_LOGSEQ=0
-      ;;
-    -vpn | --setup-vpn)
-      RUN_SETUP_VPN=1
       ;;
     -ds | --disable-setups)
       RUN_SETUP_BIN=0
