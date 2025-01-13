@@ -466,6 +466,7 @@
   "ruff.codeAction.fixViolation": {
     "enable": true
   },
+  "mypy-type-checker.importStrategy": "fromEnvironment",
   "mypy-type-checker.ignorePatterns": [
     "**/site-packages/**/*.py",
     ".vscode/*.py",
