@@ -28,6 +28,7 @@ RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
 RUN_INSTALL_DEPENDENCIES_TMUX=0
 RUN_INSTALL_DEPENDENCIES_NVIM=0
 RUN_INSTALL_DEPENDENCIES_ZSH=0
+RUN_INSTALL_DEPENDENCIES_GHOSTTY=0
 RUN_SETUP_BIN=1
 RUN_SETUP_TMUX=1
 RUN_SETUP_NVIM=1
@@ -80,6 +81,7 @@ main() {
   fi
 
   [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
+  [[ $RUN_INSTALL_DEPENDENCIES_GHOSTTY -eq 1 ]] && install_dependencies_ghostty
 
   [[ $RUN_SETUP_BIN -eq 1 ]] && setup_bin
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
@@ -251,6 +253,20 @@ install_dependencies_zsh() {
   fi
 
   print_info2 "🚀 ZSH :: zsh installed!"
+}
+
+install_dependencies_ghostty() {
+  print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
+
+  sudo snap install zig --classic --beta
+  sudo apt install libgtk-4-dev libadwaita-1-dev git
+
+  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
+  cd "$DEPS_INSTALL_PATH/ghostty"
+  zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast
+
+  print_info2 "🚀 GHOSTTY :: zsh installed!"
 }
 
 # BIN :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
@@ -467,6 +483,7 @@ usage() {
   print_info "     -idt,  --install-dependencies-tmux          Not Skip install/update services tmux (user based)"
   print_info "     -idn,  --install-dependencies-nvim          Not Skip install/update services nvim (user based)"
   print_info "     -idz,  --install-dependencies-zsh           Not Skip install/update service zsh"
+  print_info "     -idg,  --install-dependencies-ghostty       Not Skip install/update service ghostty"
   print_info "     -nsb,  --not-setup-bin                      Skip setup_bin"
   print_info "     -nst,  --not-setup-tmux                     Skip setup_tmux"
   print_info "     -nsn,  --not-setup-nvim                     Skip setup_nvim"
@@ -500,6 +517,9 @@ parse_args() {
       ;;
     -idz | --install-dependencies-zsh)
       RUN_INSTALL_DEPENDENCIES_ZSH=1
+      ;;
+    -idg | --install-dependencies-ghostty)
+      RUN_INSTALL_DEPENDENCIES_GHOSTTY=1
       ;;
     -nsb | --not-setup-bin)
       RUN_SETUP_BIN=0
