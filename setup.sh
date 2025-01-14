@@ -204,15 +204,16 @@ install_dependencies_zsh() {
 
   local ZSH_INSTALL_BIN_PATH
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
-    cd "$DEPS_INSTALL_PATH/zsh"
-    bash ./Util/preconfig 1>/dev/null
-    bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-    make 1>/dev/null
-    make install 1>/dev/null
-    ZSH_INSTALL_BIN_PATH="$USER_LOCAL_PREFIX/bin/zsh"
+    # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+    # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
+    # cd "$DEPS_INSTALL_PATH/zsh"
+    # bash ./Util/preconfig 1>/dev/null
+    # bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+    # make 1>/dev/null
+    # make install 1>/dev/null
+    # ZSH_INSTALL_BIN_PATH="$USER_LOCAL_PREFIX/bin/zsh"
 
-    # "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
+    "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
   else
     "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
     ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
