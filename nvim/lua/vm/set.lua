@@ -1,7 +1,7 @@
 vim.cmd("let g:netrw_liststyle = 3")
 
-vim.opt.guicursor = ""
 vim.opt.background = "dark"
+vim.opt.guicursor = ""
 -- vim.opt.guicursor = {
 --   "n-v-c:block",                                 -- Normal, visual, command-line: block cursor
 --   "i-ci-ve:ver25",                               -- Insert, command-line insert, visual-exclude: vertical bar cursor with 25% width

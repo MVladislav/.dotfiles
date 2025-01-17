@@ -1,6 +1,5 @@
 local keymap = vim.keymap
 
-
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
@@ -48,10 +47,6 @@ keymap.set("n", "<leader>s", [[:%s/\<<C-r><C-w>\>/<C-r><C-w>/gI<Left><Left><Left
 keymap.set("n", "<leader>x", "<cmd>!chmod +x %<CR>", { silent = true })
 
 keymap.set('n', '<leader>h', ':nohlsearch<CR>')
-
-keymap.set("n", "<leader><leader>", function()
-  vim.cmd("so")
-end)
 
 local function vimgrep_current_word()
   -- Get the current word under the cursor
