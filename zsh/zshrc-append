@@ -123,8 +123,8 @@ find-l() {
 ### DOCKER ###
 alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
-alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --compose-file -'
-alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=changed --with-registry-auth --compose-file -'
+alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
+alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
 docker-context() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: docker-context <CONTEXT-NAME> <SSH-HOST>"
@@ -418,7 +418,7 @@ vm_convert_gif() {
   local temp_video="${input%.*}.mp4"
   local palette="/tmp/palette.png"
 
-  local codec="libx265" # You can also try libx264 if you prefer
+  local codec="libx265" # libx264 | libx265
   local quality=32      # Lower quality for better file size
   local fps=10          # Reduce fps to optimize GIF size
   local scale=320       # Lower resolution for smaller GIF size
@@ -572,7 +572,6 @@ vm_shortcut_appimage() {
 ##
 ######################################################################
 vm_md_to_pdf() {
-  # Ensure the file path is provided
   if [ -z "$1" ]; then
     echo "Usage: $0 <input_file.md>"
     return 1
@@ -618,7 +617,7 @@ vm_md_to_pdf() {
 
   # Font list and checking for available fonts
   local main_font="DejaVu Sans Mono"
-  local font_list=("Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
+  local font_list=("FiraMono Nerd Font Mono" "Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
 
   for font_check in "${font_list[@]}"; do
     if fc-list | grep -iq "$font_check"; then
@@ -689,7 +688,6 @@ vm_extract() {
 ##
 ######################################################################
 vm_encrypt() {
-  # Ensure at least type and file_or_path parameters are provided
   if [ $# -lt 2 ]; then
     echo "Usage: $0 <rar|7z> <file_or_path> [keyword 'sec'|password]"
     return 1
