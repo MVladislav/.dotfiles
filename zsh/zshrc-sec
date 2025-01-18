@@ -169,7 +169,12 @@ vm_sec_ip_country() {
     return 1
   fi
 
-  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "http://ip-api.com/json/$1" | jq '[.query, .country, .city, .isp, .org] | join(" :: ")'
+  local service="http://ip-api.com/json/$1?fields=5254673"
+  local query='[.query, .continent, .country, .city, .isp, .org, .as, .asname] | join(" :: ")'
+  #local service="https://ipapi.co/$1/json"
+  #local query='[.country, .city, .asn, .org] | join(" :: ")'
+
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service" | jq "$query"
 }
 
 vm_sec_ip_country_batch() {
