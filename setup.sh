@@ -188,7 +188,8 @@ install_dependencies_nvim() {
   else
     git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
-    git switch -q stable
+    git checkout -q stable
+    # git switch -q release-0.10
   fi
 
   # Release | RelWithDebInfo
