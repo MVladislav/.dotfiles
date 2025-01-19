@@ -125,7 +125,7 @@ install_dependencies_needs() {
   print_info2 "\n📥 DEPS :: install build dependincies"
   local packages_tools=(git curl unzip libevent-dev)
   local packages_build=(ninja-build gettext cmake build-essential
-    automake pkg-config libevent-dev libncurses-dev bison)
+    automake pkg-config libncurses-dev bison)
 
   for pkg in "${packages_build[@]}"; do
     if ! "${PKG_CMD_LIST[@]}" "$pkg" 2>/dev/null | "${INSTALLED_CHECK_CMD[@]}"; then
@@ -207,16 +207,21 @@ install_dependencies_zsh() {
 
   local ZSH_INSTALL_BIN_PATH
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    # "${PKG_CMD_INSTALL[@]}" gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
     # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
-    # cd "$DEPS_INSTALL_PATH/zsh"
+    # cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     # bash ./Util/preconfig 1>/dev/null
     # bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
     # make 1>/dev/null
+    # # make check 1>/dev/null
     # make install 1>/dev/null
+    # # make install.info 1>/dev/null
+    # cd - 1>/dev/null
     # ZSH_INSTALL_BIN_PATH="$USER_LOCAL_PREFIX/bin/zsh"
 
     "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
+    ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
   else
     "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
     ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"

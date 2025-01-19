@@ -2,29 +2,29 @@
 	path = tmux/tmux/plugins/tpm
 	url = https://github.com/tmux-plugins/tpm
 	branch = master
-  ignore = dirty
+	ignore = dirty
 [submodule "zsh/themes/spaceship"]
 	path = zsh/themes/spaceship
 	url = https://github.com/denysdovhan/spaceship-prompt.git
 	branch = master
-  ignore = dirty
+	ignore = dirty
 [submodule "zsh/themes/headline"]
 	path = zsh/themes/headline
 	url = https://github.com/Moarram/headline.git
 	branch = main
-  ignore = dirty
+	ignore = dirty
 [submodule "zsh/plugins/zsh-autosuggestions"]
 	path = zsh/plugins/zsh-autosuggestions
 	url = https://github.com/zsh-users/zsh-autosuggestions.git
 	branch = master
-  ignore = dirty
+	ignore = dirty
 [submodule "zsh/plugins/zsh-syntax-highlighting"]
 	path = zsh/plugins/zsh-syntax-highlighting
 	url = https://github.com/zsh-users/zsh-syntax-highlighting.git
 	branch = master
-  ignore = dirty
+	ignore = dirty
 [submodule "zsh/oh-my-zsh"]
 	path = zsh/oh-my-zsh
 	url = https://github.com/robbyrussell/oh-my-zsh.git
 	branch = master
-  ignore = dirty
+	ignore = dirty

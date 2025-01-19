@@ -29,19 +29,22 @@ return {
 
     require("fidget").setup({})
     require("mason").setup()
+
+    -- nvim-lint:
+    -- - 'ansible_lint',
+    -- - "mypy",
+    -- - "ruff",
+    -- - "shellcheck"
+
     require("mason-lspconfig").setup({
       ensure_installed = {
-        "ansible-language-server",
-        "ansible-lint",
-        "bash-language-server",
+        "ansiblels",
+        "bashls",
         "docker-compose-language-service",
-        "dockerfile-language-server",
+        "dockerls",
         "lua_ls",
-        "mypy",
-        "ruff-lsp",
         "ruff",
-        "shellcheck",
-        "yaml-language-server",
+        "yamlls",
       },
       handlers = {
         function(server_name) -- default handler (optional)
