@@ -363,7 +363,7 @@ alias vm_my_country='curl -s ifconfig.io/country_code'
 alias vm_my_ua='curl -s ifconfig.io/ua'
 alias vm_my_all='curl -s ifconfig.io/all.json | jq'
 vm_my_bios() {
-  for d in system-manufacturer system-product-name bios-release-date bios-version; do
+  for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
     printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
   done
 }
