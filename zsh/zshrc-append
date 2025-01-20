@@ -318,16 +318,40 @@ vm_quick_android_emulator() {
 }
 
 ### TOOLS ###
-alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
-# https://github.com/R0GGER/public-iperf3-servers
-alias vm_speed_1='clear && iperf3 -c speedtest.serverius.net -p 5002 -Ts1 -4 -b0 -i3 -O1 -P1 -w128M -t0'
-alias vm_speed_2='clear && iperf3 -c ping.online.net -p 5200 -Ts2 -4 -b0 -i3 -O1 -P1 -w128M -t0'
-alias vm_speed_3='clear && iperf3 -c speedtest.shinternet.ch -p 5200 -Ts3 -4 -b0 -i3 -O1 -P1 -t0'
-alias vm_speed_4='clear && iperf3 -c paris.testdebit.info -p 9212 -Ts4 -4 -b0 -i3 -O1 -P1 -w32M -t0'
-
-alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -w128m -t0 -c'
-
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
+alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
+alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -w128m -t0 -c'
+# https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
+vm_speed_pub() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0)]"
+    return 1
+  fi
+
+  local servers=(
+    "a209.speedtest.wobcom.de:5201" # 1
+    "a205.speedtest.wobcom.de:5201" # 2
+    "speedtest.lu.buyvm.net:5201"   # 3
+    "iperf3.moji.fr:5201"           # 4
+    "ping.online.net:5001"          # 5 change
+    "speedtest.init7.net:5201"      # 6
+    "speedtest.shinternet.ch:5200"  # 7
+    "speedtest.serverius.net:5002"  # 8 change
+  )
+
+  local num="$1"
+  shift
+  if ! [[ "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt "${#servers[@]}" ]; then
+    num=1
+  fi
+
+  local entry="${servers[$((num))]}"
+  local server="${entry%%:*}" # Extract server name (before :)
+  local port="${entry##*:}"   # Extract port number (after :)
+
+  clear
+  iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+}
 
 ######################################################################
 ##
