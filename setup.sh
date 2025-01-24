@@ -109,7 +109,7 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]"
-  "${PKG_CMD_INSTALL[@]}" rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  sudo apt install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   print_info2 "📥 DEPS :: disable rsync systemd service"
   sudo systemctl disable rsync.service &>/dev/null
@@ -135,7 +135,7 @@ install_dependencies_needs() {
     automake pkg-config libncurses-dev bison)
 
   for pkg in "${packages_build[@]}"; do
-    if ! "${PKG_CMD_LIST[@]}" "$pkg" 2>/dev/null | "${INSTALLED_CHECK_CMD[@]}"; then
+    if ! sudo apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
       DEPS_INSTALL_PKGS+=("$pkg")
     fi
   done
@@ -144,17 +144,17 @@ install_dependencies_needs() {
   print_info2 "📥 DEPS :: following pkg's will be afterwards uninstalled: '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'"
   print_info2 "📥 DEPS :: installing..."
   if [[ ${#DEPS_INSTALL_PKGS[@]} -gt 0 || ${#packages_tools[@]} -gt 0 ]]; then
-    "${PKG_CMD_UPDATE[@]}" 1>/dev/null
-    "${PKG_CMD_INSTALL[@]}" "${packages_tools[@]}" "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
+    sudo apt update -qqq
+    sudo apt install -y "${packages_tools[@]}" "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
   fi
   print_info2 "📥 DEPS :: installed!"
 }
 
 install_dependencies_needs_rm() {
   print_info2 "\n📥 DEPS :: removing not needed build dependincies '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'..."
-  "${PKG_CMD_REMOVE[@]}" "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
-  # sudo apt-get -y autoremove 1>/dev/null
-  # sudo apt-get -y autoclean 1>/dev/null
+  sudo apt remove -y "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
+  sudo apt -y autoremove -qqq
+  sudo apt -y autoclean -qqq
   print_info2 "📥 DEPS :: removed!"
 }
 
@@ -214,7 +214,7 @@ install_dependencies_zsh() {
 
   local ZSH_INSTALL_BIN_PATH
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # "${PKG_CMD_INSTALL[@]}" gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
+    # sudo apt install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
     # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
     # cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
@@ -227,10 +227,10 @@ install_dependencies_zsh() {
     # cd - 1>/dev/null
     # ZSH_INSTALL_BIN_PATH="$USER_LOCAL_PREFIX/bin/zsh"
 
-    "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
+    sudo apt install -y zsh 1>/dev/null
     ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
   else
-    "${PKG_CMD_INSTALL[@]}" zsh 1>/dev/null
+    sudo apt install -y zsh 1>/dev/null
     ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
   fi
 
@@ -445,46 +445,6 @@ print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
 # ******************************************************************************
 
-# Detect OS and set variables
-set_os_variables() {
-  if [[ -f "/etc/os-release" ]]; then
-    # shellcheck source=/dev/null
-    . "/etc/os-release"
-    case $ID in
-    ubuntu | debian)
-      print_info "🤖 Detect '$ID' as running OS will use 'sudo' for further installations"
-      PKG_MANAGER=("sudo" "apt-get")
-      INSTALL_CMD=("install" "-y")
-      REMOVE_CMD=("remove" "-y")
-      UPDATE_CMD=("update" "-qq")
-      LIST_CMD=("list" "-qq")
-      INSTALLED_CHECK_CMD=("grep" "-q" "'installed'")
-      ;;
-    fedora)
-      print_info "🤖 Detect '$ID' as running OS will use 'dnf' for further installations"
-      PKG_MANAGER=("sudo" "dnf")
-      INSTALL_CMD=("install" "-y")
-      REMOVE_CMD=("remove" "-y")
-      UPDATE_CMD=("update" "-qq")
-      LIST_CMD=("info")
-      INSTALLED_CHECK_CMD=("grep" "-q" "'Installed Packages'")
-      ;;
-    *)
-      print_error "Unsupported OS: $ID"
-      exit 1
-      ;;
-    esac
-
-    PKG_CMD_INSTALL=("${PKG_MANAGER[@]}" "${INSTALL_CMD[@]}")
-    PKG_CMD_REMOVE=("${PKG_MANAGER[@]}" "${REMOVE_CMD[@]}")
-    PKG_CMD_UPDATE=("${PKG_MANAGER[@]}" "${UPDATE_CMD[@]}")
-    PKG_CMD_LIST=("${PKG_MANAGER[@]}" "${LIST_CMD[@]}")
-  else
-    print_error "/etc/os-release not found!"
-    exit 1
-  fi
-}
-
 # Function to show usage information
 usage() {
   print_info "📑 Usage: $0 [options]"
@@ -591,6 +551,5 @@ print_info2 "✅ Starting script $0 ..."
 # Parse command-line arguments
 parse_args "$@"
 
-set_os_variables
 main
 exit 0
