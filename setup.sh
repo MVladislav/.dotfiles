@@ -48,7 +48,7 @@ INSTALL_SOURCE_FROM=release # source | release
 FONTS_RELEASE_VERSION='v3.2.1'
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
-DEPS_INSTALL_PKGS=()
+DEPS_PACKAGES_TO_REMOVE=()
 
 USER_LOCAL_PREFIX="${HOME}/.local"
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
@@ -76,16 +76,16 @@ LN_LOGSEQ_PATH="${HOME}/.logseq"
 # ******************************************************************************
 
 main() {
+  if [[ "$INSTALL_SOURCE_FROM" != "source" && "$INSTALL_SOURCE_FROM" != "release" ]]; then
+    print_error "❌ Invalid value for INSTALL_SOURCE_FROM: $INSTALL_SOURCE_FROM"
+    exit 1
+  fi
+
   initialize_base
   [[ $RUN_INSTALL_DEPENDENCIES_ADDITIONAL -eq 1 ]] && install_dependencies_additional
 
-  if [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 || $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]]; then
-    install_dependencies_needs
-    [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
-    [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
-    install_dependencies_needs_rm
-  fi
-
+  [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
+  [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
   [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
   [[ $RUN_INSTALL_DEPENDENCIES_GHOSTTY -eq 1 ]] && install_dependencies_ghostty
 
@@ -103,6 +103,60 @@ main() {
 
 # ******************************************************************************
 
+install_dependencies_needs() {
+  print_notes "   📥 Installing build dependencies..."
+  DEPS_PACKAGES_TO_REMOVE=()
+  local packages_tools=("${!1}")
+  local packages_build=("${!2}")
+
+  # Check which build packages are already installed
+  for pkg in "${packages_build[@]}"; do
+    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+      DEPS_PACKAGES_TO_REMOVE+=("$pkg")
+    fi
+  done
+
+  # Combine tools and build packages for installation
+  local all_packages=("${packages_tools[@]}" "${packages_build[@]}")
+
+  # Print the list of packages to install and remove
+  print_notes "   📥 Packages to install: [$(echo "${all_packages[*]}" | tr '\n' ' ')]"
+  print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+
+  # Install the packages
+  if [[ ${#all_packages[@]} -gt 0 ]]; then
+    sudo apt-get update -qqq || {
+      print_error "Failed to update package list"
+      exit 1
+    }
+    sudo apt-get install -y "${all_packages[@]}" 1>/dev/null || {
+      print_error "Failed to install packages"
+      exit 1
+    }
+  fi
+
+  print_notes "   📥 build dependencies installed"
+}
+
+install_dependencies_needs_rm() {
+  if [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -eq 0 ]]; then
+    print_notes "   📥 No packages to remove."
+    return 0
+  fi
+
+  print_notes "   📥 Removing build dependencies..."
+  sudo apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
+    print_error "Failed to remove packages"
+    return 1
+  }
+  sudo apt-get -y autoremove -qqq 1>/dev/null
+  sudo apt-get -y autoclean -qqq 1>/dev/null
+
+  print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+}
+
+# ******************************************************************************
+
 # BASE :: some general needed prepares -----------------------------------------
 initialize_base() {
   mkdir -p "$HOME/.config" 1>/dev/null
@@ -110,8 +164,8 @@ initialize_base() {
 
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
-  print_info2 "\n📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]"
-  sudo apt install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  print_info2 "\n📥 DEPS :: install some base services :: [rsync fzf eza bat ripgrep fd-find xclip]"
+  sudo apt-get install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   print_info2 "📥 DEPS :: disable rsync systemd service"
   sudo systemctl disable rsync.service &>/dev/null
@@ -128,42 +182,16 @@ install_dependencies_additional() {
   # flatpak install flathub dev.zed.Zed
 }
 
-# TODO: improve by make a function to pass packages for install and remove by param to call in needed functions directly
-
-install_dependencies_needs() {
-  print_info2 "\n📥 DEPS :: install build dependincies"
-  local packages_tools=(git curl unzip libevent-dev)
-  local packages_build=(ninja-build gettext cmake build-essential
-    automake pkg-config libncurses-dev bison)
-
-  for pkg in "${packages_build[@]}"; do
-    if ! sudo apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
-      DEPS_INSTALL_PKGS+=("$pkg")
-    fi
-  done
-
-  print_info2 "📥 DEPS :: following pkg's will be installed: '[$(echo "${packages_tools[*]}" | tr '\n' ',')$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'"
-  print_info2 "📥 DEPS :: following pkg's will be afterwards uninstalled: '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'"
-  print_info2 "📥 DEPS :: installing..."
-  if [[ ${#DEPS_INSTALL_PKGS[@]} -gt 0 || ${#packages_tools[@]} -gt 0 ]]; then
-    sudo apt update -qqq
-    sudo apt install -y "${packages_tools[@]}" "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
-  fi
-  print_info2 "📥 DEPS :: installed!"
-}
-
-install_dependencies_needs_rm() {
-  print_info2 "\n📥 DEPS :: removing not needed build dependincies '[$(echo "${DEPS_INSTALL_PKGS[*]}" | tr '\n' ',')]'..."
-  sudo apt remove -y "${DEPS_INSTALL_PKGS[@]}" 1>/dev/null
-  sudo apt -y autoremove -qqq
-  sudo apt -y autoclean -qqq
-  print_info2 "📥 DEPS :: removed!"
-}
-
+# SERVICE :: install tmux ------------------------------------------------------
 install_dependencies_tmux() {
-  print_info2 "\n🚀 TMUX :: install tmux for user only..."
+  print_info2 "\n🚀 TMUX :: install tmux..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+
+  # Define packages needed for tmux and install
+  local packages_tools=(git curl unzip libevent-dev)
+  local packages_build=(automake pkg-config libncurses-dev bison)
+  install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
@@ -183,13 +211,23 @@ install_dependencies_tmux() {
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
-  print_info2 "🚀 TMUX :: tmux for user only installed!"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 TMUX :: tmux installed!"
 }
 
+# SERVICE :: install nvim ------------------------------------------------------
 install_dependencies_nvim() {
-  print_info2 "\n🚀 NVIM :: install nvim for user only..."
+  print_info2 "\n🚀 NVIM :: install nvim..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+
+  # Define packages needed for nvim and install
+  local packages_tools=(git curl unzip libevent-dev)
+  local packages_build=(ninja-build gettext cmake build-essential)
+  install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
@@ -201,22 +239,27 @@ install_dependencies_nvim() {
     # git switch -q release-0.10
   fi
 
-  # Release | RelWithDebInfo
+  # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
   make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
-  print_info2 "🚀 NVIM :: nvim for user only installed!"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 NVIM :: nvim installed!"
 }
 
+# SERVICE :: install zsh -------------------------------------------------------
 install_dependencies_zsh() {
   print_info2 "\n🚀 ZSH :: install zsh ..."
   print_notes "   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
 
-  local ZSH_INSTALL_BIN_PATH
+  local zsh_install_bin_path
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # sudo apt install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
+    # sudo apt-get install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
     # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
     # cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
@@ -227,17 +270,17 @@ install_dependencies_zsh() {
     # make install 1>/dev/null
     # # make install.info 1>/dev/null
     # cd - 1>/dev/null
-    # ZSH_INSTALL_BIN_PATH="$USER_LOCAL_PREFIX/bin/zsh"
+    # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
-    sudo apt install -y zsh 1>/dev/null
-    ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
+    sudo apt-get install -y zsh 1>/dev/null
+    zsh_install_bin_path="/usr/bin/zsh"
   else
-    sudo apt install -y zsh 1>/dev/null
-    ZSH_INSTALL_BIN_PATH="/usr/bin/zsh"
+    sudo apt-get install -y zsh 1>/dev/null
+    zsh_install_bin_path="/usr/bin/zsh"
   fi
 
   print_info2 "🚀 ZSH :: Load git submodules"
-  git submodule -q update --init --remote \
+  git submodule update -q --init --remote \
     zsh/oh-my-zsh \
     zsh/themes/spaceship \
     zsh/themes/headline \
@@ -262,7 +305,7 @@ install_dependencies_zsh() {
   if [[ "$(basename "$SHELL")" != "zsh" ]]; then
     print_info2 "🚀 ZSH :: Set 'zsh' as new shell für user '$USER'"
     # sudo chsh -s "$(which zsh)" "$USER"
-    sudo chsh -s "$ZSH_INSTALL_BIN_PATH" "$USER" || {
+    sudo chsh -s "$zsh_install_bin_path" "$USER" || {
       print_error "  ❌ Failed to change default shell to ZSH. Please run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
     }
   fi
@@ -270,21 +313,32 @@ install_dependencies_zsh() {
   print_info2 "🚀 ZSH :: zsh installed!"
 }
 
+# SERVICE :: install ghostty ---------------------------------------------------
 install_dependencies_ghostty() {
   print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
-
-  sudo snap install zig --classic --beta 1>/dev/null
-  sudo apt install libgtk-4-dev libadwaita-1-dev git 1>/dev/null
-
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+
+  # Define packages needed for tmux and install
+  local packages_tools=(git)
+  local packages_build=(libgtk-4-dev libadwaita-1-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+  sudo snap install zig --classic --beta 1>/dev/null
+
   git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
   cd "$DEPS_INSTALL_PATH/ghostty"
   zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+  cd - 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
 
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
   ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
 
-  print_info2 "🚀 GHOSTTY :: zsh installed!"
+  print_info2 "🚀 GHOSTTY :: ghostty installed!"
 }
 
 # ******************************************************************************
@@ -302,7 +356,7 @@ setup_bin() {
 # TMUX :: CREATE LINKS ---------------------------------------------------------
 setup_tmux() {
   print_info2 "\n🚀 TMUX :: Load git submodules"
-  git submodule -q update --init --remote tmux/tmux/plugins/tpm
+  git submodule update -q --init --remote tmux/tmux/plugins/tpm
 
   print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
   rm -f "${LN_TMUX_ORIG_BASE}"
@@ -431,10 +485,19 @@ install_fonts() {
 
   for url in "${FONTS_URLS[@]}"; do
     file_name=$(basename "$url")
-    print_info2 "🚀 FONTS :: Downloading $file_name..."
-    curl -sL -o "/tmp/$file_name" "$url"
-    print_info2 "🚀 FONTS :: Extracting $file_name..."
-    tar -xf "/tmp/$file_name" -C "$FONTS_DIR"
+
+    print_info2 "  - ⬇️ Downloading $file_name..."
+    curl -sL -o "/tmp/$file_name" "$url" || {
+      print_error "Failed to download $file_name"
+      return 1
+    }
+
+    print_info2 "  - ⬇️ Extracting $file_name..."
+    tar -xf "/tmp/$file_name" -C "$FONTS_DIR" || {
+      print_error "Failed to extract $file_name"
+      return 1
+    }
+
     rm "/tmp/$file_name"
   done
 
@@ -538,6 +601,9 @@ parse_args() {
       ;;
     -if | --install-fonts)
       RUN_INSTALL_FONTS=1
+      ;;
+    -d | --debug)
+      set -x # Enable debug mode
       ;;
     *)
       print_error "❌ Unknown option: $key"
