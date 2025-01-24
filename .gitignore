@@ -38,6 +38,10 @@ zsh/plugins/zsh-autosuggestions/**
 !zsh/plugins/zsh-syntax-highlighting
 zsh/plugins/zsh-syntax-highlighting/**
 
+!ghostty/
+ghostty/**
+!ghostty/config
+
 !bin/
 !bin/*
 

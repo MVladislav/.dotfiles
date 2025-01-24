@@ -63,6 +63,8 @@ LN_ZSHRC="${HOME}/.zshrc"
 LN_ADDS_01="${HOME}/.zshrc-append"
 LN_ADDS_02="${HOME}/.zshrc-sec"
 
+: "${LN_GHOSTTY_FOLDER=${HOME}/.config/ghostty}"
+
 : "${LN_VS_CODE=${HOME}/.config/Code/User}"
 
 LN_ZED_FLATPAK="${HOME}/.var/app/dev.zed.Zed/config/zed"
@@ -271,13 +273,16 @@ install_dependencies_zsh() {
 install_dependencies_ghostty() {
   print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
 
-  sudo snap install zig --classic --beta
-  sudo apt install libgtk-4-dev libadwaita-1-dev git
+  sudo snap install zig --classic --beta 1>/dev/null
+  sudo apt install libgtk-4-dev libadwaita-1-dev git 1>/dev/null
 
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
   cd "$DEPS_INSTALL_PATH/ghostty"
-  zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast
+  zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+
+  print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
+  ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
 
   print_info2 "🚀 GHOSTTY :: zsh installed!"
 }
