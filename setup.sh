@@ -15,31 +15,35 @@ cat <<'EOF'
 
 EOF
 
-### COLOR ### (https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
-NC='\033[0m' # No Color
-# Bold
+# ******************************************************************************
+
+# COLOR ------------------------------------------------------------------------
+# https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
+NC='\033[0m'         # No Color
 BRED='\033[1;31m'    # Red
 BPURPLE='\033[1;35m' # Purple
 BYELLOW='\033[1;33m' # Yellow
 BCYAN='\033[1;36m'   # Cyan
 
-# CONFS :: variables -------------------------------------------------------------------------------------------------------------
+# CONFS :: variables -----------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
 RUN_INSTALL_DEPENDENCIES_TMUX=0
 RUN_INSTALL_DEPENDENCIES_NVIM=0
 RUN_INSTALL_DEPENDENCIES_ZSH=0
 RUN_INSTALL_DEPENDENCIES_GHOSTTY=0
+
 RUN_SETUP_BIN=1
 RUN_SETUP_TMUX=1
 RUN_SETUP_NVIM=1
 RUN_SETUP_CODE=1
-RUN_SETUP_CODE_EXT=1
 RUN_SETUP_ZED=1
 RUN_SETUP_ADDS=1
-RUN_SETUP_FONTS=1
 RUN_SETUP_LOGSEQ=1
 
-# CONFS :: variables -------------------------------------------------------------------------------------------------------------
+RUN_INSTALL_CODE_EXT=0
+RUN_INSTALL_FONTS=0
+
+# CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
 FONTS_RELEASE_VERSION='v3.2.1'
 
@@ -87,21 +91,22 @@ main() {
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
-  [[ $RUN_SETUP_CODE_EXT -eq 1 ]] && setup_code_ext
   [[ $RUN_SETUP_ZED -eq 1 ]] && setup_zed
   [[ $RUN_SETUP_ADDS -eq 1 ]] && setup_adds
-  [[ $RUN_SETUP_FONTS -eq 1 ]] && setup_fonts
   [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
+
+  [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
+  [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
 }
 
 # ******************************************************************************
 
-# GIT :: init recursive --------------------------------------------------------------------------------------------------------
+# BASE :: some general needed prepares -----------------------------------------
 initialize_base() {
   mkdir -p "$HOME/.config" 1>/dev/null
 }
 
-# DEPS :: install dependencies -------------------------------------------------------------------------------------------------
+# DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n📥 DEPS :: install some base services :: [rsync,fzf,eza,bat,ripgrep,fd-find,xclip]"
   "${PKG_CMD_INSTALL[@]}" rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
@@ -120,6 +125,8 @@ install_dependencies_additional() {
   # echo "DEPS :: install zed over flatpak"
   # flatpak install flathub dev.zed.Zed
 }
+
+# TODO: improve by make a function to pass packages for install and remove by param to call in needed functions directly
 
 install_dependencies_needs() {
   print_info2 "\n📥 DEPS :: install build dependincies"
@@ -275,7 +282,9 @@ install_dependencies_ghostty() {
   print_info2 "🚀 GHOSTTY :: zsh installed!"
 }
 
-# BIN :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+# ******************************************************************************
+
+# BIN :: CREATE LINKS ----------------------------------------------------------
 setup_bin() {
   print_info2 "\n🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/'"
   mkdir -p "$USER_LOCAL_PREFIX_BIN"
@@ -285,7 +294,7 @@ setup_bin() {
   print_info2 "🚀 BIN :: All symlinks created."
 }
 
-# TMUX :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+# TMUX :: CREATE LINKS ---------------------------------------------------------
 setup_tmux() {
   print_info2 "\n🚀 TMUX :: Load git submodules"
   git submodule -q update --init --remote tmux/tmux/plugins/tpm
@@ -303,7 +312,7 @@ setup_tmux() {
   print_info2 "🚀 TMUX :: All symlinks created."
 }
 
-# NVIM :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
+# NVIM :: CREATE LINKS ---------------------------------------------------------
 setup_nvim() {
   print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
   rm -f "${LN_NVIM_ORIG_BASE}"
@@ -311,7 +320,7 @@ setup_nvim() {
   print_info2 "🚀 NVIM :: All symlinks created."
 }
 
-# CODE :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
+# CODE :: CREATE LINKS ---------------------------------------------------------
 setup_code() {
   mkdir -p "$LN_VS_CODE"
   print_info2 "\n🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
@@ -326,7 +335,58 @@ setup_code() {
   print_info2 "🚀 CODE :: All symlinks created."
 }
 
-setup_code_ext() {
+# ZED :: CREATE LINKS ----------------------------------------------------------
+setup_zed() {
+  mkdir -p "$LN_ZED"
+  print_info2 "\n🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
+  rm -f "${LN_ZED}/keymap.json"
+  ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
+  print_info2 "🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
+  rm -f "${LN_ZED}/settings.json"
+  ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
+  print_info2 "🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'"
+  rm -f "${LN_ZED}/snippets"
+  ln -sf "${PWD}/zed/snippets" "${LN_ZED}/snippets"
+  print_info2 "🚀 ZED :: All symlinks created."
+}
+
+# ADDS :: CREATE LINKS ---------------------------------------------------------
+setup_adds() {
+  print_info2 "\n🚀 ADDS :: Create symlink from './zsh/zshrc' as '$LN_ZSHRC'"
+  rm -f "${LN_ZSHRC}"
+  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
+
+  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'"
+  rm -f "${LN_ADDS_01}"
+  ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
+  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-sec' as '$LN_ADDS_02'"
+  rm -f "${LN_ADDS_02}"
+  ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
+
+  print_info2 "🚀 ADDS :: All symlinks created."
+}
+
+# LOGSEQ :: CREATE LINKS -------------------------------------------------------
+setup_logseq() {
+  mkdir -p "${LN_LOGSEQ_PATH}/config/"
+
+  print_info2 "\n🚀 LOGSEQ :: Create symlink from './logseq/preferences.json' as '$LN_LOGSEQ_PATH/preferences.json'"
+  rm -f "${LN_LOGSEQ_PATH}/preferences.json"
+  ln -sf "${PWD}/logseq/preferences.json" "${LN_LOGSEQ_PATH}/preferences.json"
+  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/config.edn' as '$LN_LOGSEQ_PATH/config/config.edn'"
+  rm -f "${LN_LOGSEQ_PATH}/config/config.edn"
+  ln -sf "${PWD}/logseq/config.edn" "${LN_LOGSEQ_PATH}/config/config.edn"
+  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/plugins.edn' as '$LN_LOGSEQ_PATH/config/plugins.edn'"
+  rm -f "${LN_LOGSEQ_PATH}/config/plugins.edn"
+  ln -sf "${PWD}/logseq/plugins.edn" "${LN_LOGSEQ_PATH}/config/plugins.edn"
+
+  print_info2 "🚀 LOGSEQ :: All symlinks created."
+}
+
+# ******************************************************************************
+
+# CODE :: install ext ----------------------------------------------------------
+install_code_ext() {
   if command -v code &>/dev/null; then
     print_info2 "\n🚀 CODE :: installing code extensions"
 
@@ -349,56 +409,8 @@ setup_code_ext() {
   fi
 }
 
-# ZED :: CREATE LINKS -----------------------------------------------------------------------------------------------------------
-setup_zed() {
-  mkdir -p "$LN_ZED"
-  print_info2 "\n🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
-  rm -f "${LN_ZED}/keymap.json"
-  ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
-  print_info2 "🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
-  rm -f "${LN_ZED}/settings.json"
-  ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
-  print_info2 "🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'"
-  rm -f "${LN_ZED}/snippets"
-  ln -sf "${PWD}/zed/snippets" "${LN_ZED}/snippets"
-  print_info2 "🚀 ZED :: All symlinks created."
-}
-
-# ADDS :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
-setup_adds() {
-  print_info2 "\n🚀 ADDS :: Create symlink from './zsh/zshrc' as '$LN_ZSHRC'"
-  rm -f "${LN_ZSHRC}"
-  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-
-  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'"
-  rm -f "${LN_ADDS_01}"
-  ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
-  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-sec' as '$LN_ADDS_02'"
-  rm -f "${LN_ADDS_02}"
-  ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
-
-  print_info2 "🚀 ADDS :: All symlinks created."
-}
-
-# LOGSEQ :: CREATE LINKS ----------------------------------------------------------------------------------------------------------
-setup_logseq() {
-  mkdir -p "${LN_LOGSEQ_PATH}/config/"
-
-  print_info2 "\n🚀 LOGSEQ :: Create symlink from './logseq/preferences.json' as '$LN_LOGSEQ_PATH/preferences.json'"
-  rm -f "${LN_LOGSEQ_PATH}/preferences.json"
-  ln -sf "${PWD}/logseq/preferences.json" "${LN_LOGSEQ_PATH}/preferences.json"
-  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/config.edn' as '$LN_LOGSEQ_PATH/config/config.edn'"
-  rm -f "${LN_LOGSEQ_PATH}/config/config.edn"
-  ln -sf "${PWD}/logseq/config.edn" "${LN_LOGSEQ_PATH}/config/config.edn"
-  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/plugins.edn' as '$LN_LOGSEQ_PATH/config/plugins.edn'"
-  rm -f "${LN_LOGSEQ_PATH}/config/plugins.edn"
-  ln -sf "${PWD}/logseq/plugins.edn" "${LN_LOGSEQ_PATH}/config/plugins.edn"
-
-  print_info2 "🚀 LOGSEQ :: All symlinks created."
-}
-
-# FONTS :: ADD FONTS ------------------------------------------------------------------------------------------------------------
-setup_fonts() {
+# FONTS :: add fonts -----------------------------------------------------------
+install_fonts() {
   print_info2 "\n🚀 FONTS :: Download some nerd fonts"
   FONTS_URLS=(
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
@@ -477,30 +489,29 @@ set_os_variables() {
 usage() {
   print_info "📑 Usage: $0 [options]"
   print_info "   Examples:"
-  print_info "     $0                                         Run all setups"
-  print_info "     $0 -nsce -nsf                              Run all setups without vscode ext and fonts"
-  print_info "     $0 -ds -ida                                Install only additional tools"
-  print_info "     $0 -ds -idt -idn                           Install only tmux and nvim"
-  print_info "     $0 -ds -idz                                Install only zsh"
-  print_info "     $0 -nsce -nsf -ida -idt -idn -idz          Full setup and install"
+  print_info "     $0                                       Run only config setups without installations"
+  print_info "     $0 -if                                   Run config setups with fonts install"
+  print_info "     $0 -ds -it                               Install only additional tools"
+  print_info "     $0 -ds -itmux -invim                     Install only tmux and nvim"
+  print_info "     $0 -ds -izsh                             Install only zsh"
+  print_info "     $0 -it -itmux -invim -izsh               Full setup and install"
   print_info "   Options:"
-  print_info "     -h,    --help                               Show this help message and exit"
-  print_info "     -ida,  --install-dependencies-additional    Not Skip install additional tools [rsync fzf eza bat ripgrep fd-find]"
-  print_info "     -idt,  --install-dependencies-tmux          Not Skip install/update services tmux (user based)"
-  print_info "     -idn,  --install-dependencies-nvim          Not Skip install/update services nvim (user based)"
-  print_info "     -idz,  --install-dependencies-zsh           Not Skip install/update service zsh"
-  print_info "     -idg,  --install-dependencies-ghostty       Not Skip install/update service ghostty"
-  print_info "     -nsb,  --not-setup-bin                      Skip setup_bin"
-  print_info "     -nst,  --not-setup-tmux                     Skip setup_tmux"
-  print_info "     -nsn,  --not-setup-nvim                     Skip setup_nvim"
-  print_info "     -nsc,  --not-setup-code                     Skip setup_code"
-  print_info "     -nsce, --not-setup-code-ext                 Skip setup_code_ext"
-  print_info "     -nsz,  --not-setup-zed                      Skip setup_zed"
-  print_info "     -nsa,  --not-setup-adds                     Skip setup_adds"
-  print_info "     -nsf,  --not-setup-fonts                    Skip setup_fonts"
-  print_info "     -nsl,  --not-setup-logseq                   Skip setup_logseq"
-  print_info "     -vpn,  --setup-vpn                          setup_vpn"
-  print_info "     -ds,   --disable-setups                     Skip all setup"
+  print_info "     -h,      --help                          Show this help message and exit"
+  print_info "     -it,     --install-additional-tools      install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  print_info "     -itmux,  --install-dependencies-tmux     install/update service tmux"
+  print_info "     -invim,  --install-dependencies-nvim     install/update service nvim"
+  print_info "     -izsh,   --install-dependencies-zsh      install/update service zsh"
+  print_info "     -ighost, --install-dependencies-ghostty  install/update service ghostty"
+  print_info "     -nsb,    --not-setup-bin                 Skip setup_bin"
+  print_info "     -nst,    --not-setup-tmux                Skip setup_tmux"
+  print_info "     -nsv,    --not-setup-nvim                Skip setup_nvim"
+  print_info "     -nsc,    --not-setup-code                Skip setup_code"
+  print_info "     -nsz,    --not-setup-zed                 Skip setup_zed"
+  print_info "     -nsa,    --not-setup-adds                Skip setup_adds"
+  print_info "     -nsl,    --not-setup-logseq              Skip setup_logseq"
+  print_info "     -ds,     --disable-setups                Skip all setup"
+  print_info "     -ice,    --install-code-ext              run install install_code_ext"
+  print_info "     -if,     --install-fonts                 run install install_fonts"
 }
 
 # Function to parse command-line arguments
@@ -512,19 +523,19 @@ parse_args() {
       usage
       exit 0
       ;;
-    -ida | --install-dependencies-additional)
+    -it | --install-additional-tools)
       RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
       ;;
-    -idt | --install-dependencies-tmux)
+    -itmux | --install-dependencies-tmux)
       RUN_INSTALL_DEPENDENCIES_TMUX=1
       ;;
-    -idn | --install-dependencies-nvim)
+    -invim | --install-dependencies-nvim)
       RUN_INSTALL_DEPENDENCIES_NVIM=1
       ;;
-    -idz | --install-dependencies-zsh)
+    -izsh | --install-dependencies-zsh)
       RUN_INSTALL_DEPENDENCIES_ZSH=1
       ;;
-    -idg | --install-dependencies-ghostty)
+    -ighost | --install-dependencies-ghostty)
       RUN_INSTALL_DEPENDENCIES_GHOSTTY=1
       ;;
     -nsb | --not-setup-bin)
@@ -533,23 +544,17 @@ parse_args() {
     -nst | --not-setup-tmux)
       RUN_SETUP_TMUX=0
       ;;
-    -nsn | --not-setup-nvim)
+    -nsv | --not-setup-nvim)
       RUN_SETUP_NVIM=0
       ;;
     -nsc | --not-setup-code)
       RUN_SETUP_CODE=0
-      ;;
-    -nsce | --not-setup-code-ext)
-      RUN_SETUP_CODE_EXT=0
       ;;
     -nsz | --not-setup-zed)
       RUN_SETUP_ZED=0
       ;;
     -nsa | --not-setup-adds)
       RUN_SETUP_ADDS=0
-      ;;
-    -nsf | --not-setup-fonts)
-      RUN_SETUP_FONTS=0
       ;;
     -nsl | --not-setup-logseq)
       RUN_SETUP_LOGSEQ=0
@@ -559,11 +564,15 @@ parse_args() {
       RUN_SETUP_TMUX=0
       RUN_SETUP_NVIM=0
       RUN_SETUP_CODE=0
-      RUN_SETUP_CODE_EXT=0
       RUN_SETUP_ZED=0
       RUN_SETUP_ADDS=0
-      RUN_SETUP_FONTS=0
       RUN_SETUP_LOGSEQ=0
+      ;;
+    -ice | --install-code-ext)
+      RUN_INSTALL_CODE_EXT=1
+      ;;
+    -if | --install-fonts)
+      RUN_INSTALL_FONTS=1
       ;;
     *)
       print_error "❌ Unknown option: $key"
