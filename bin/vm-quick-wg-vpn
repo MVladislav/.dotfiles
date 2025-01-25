@@ -121,6 +121,7 @@ setup_kill_switch() {
 
   if ip a | grep -q 'inet6'; then
     sudo ufw deny in from ::1
+    sudo ufw deny out from ::1
   fi
 
   # Allow UDP traffic to WireGuard endpoint IP and port
@@ -152,13 +153,13 @@ setup_kill_switch() {
 # ******************************************************************************
 
 setup_systemd() {
-  log "INFO" "Create symlink from '$0' as '/opt/vm-quick-wg-vpn.sh'"
+  log "INFO" "Creating symlink from '$0' as '/opt/vm-quick-wg-vpn.sh'"
   sudo chmod 775 "$PWD/$0"
   sudo chown root:root "$PWD/$0"
   sudo ln -sf "$PWD/$0" /opt/vm-quick-wg-vpn.sh
 
-  log "INFO" "Create systemd entry as 'vm-quick-wg-vpn.service'"
-  sudo tee sudo nano /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<'EOF'
+  log "INFO" "Creating systemd entry as 'vm-quick-wg-vpn.service'"
+  sudo tee /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<'EOF'
 [Unit]
 Description=Run WG VPN Startup Script
 Requires=systemd-networkd.service
@@ -175,7 +176,7 @@ WantedBy=default.target
 
 EOF
 
-  log "INFO" "Enable systemd service"
+  log "INFO" "Enabling systemd service"
   sudo systemctl daemon-reload
   sudo systemctl enable vm-quick-wg-vpn.service
   log "INFO" "Systemd service created."
