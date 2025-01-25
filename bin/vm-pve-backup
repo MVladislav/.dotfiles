@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin/
+PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 IFS=$'\n\t'
 
+# Trap SIGINT (Ctrl+C) to exit the script and stop the rsync loop
+trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT
+
 # ******************************************************************************
 
-REMOTE_HOST="your_proxmox_server_alias"
-BACKUP_DIR=""
-
-# List of files and directories to back up
-FILES_TO_BACKUP_PVE=(
+# Constants
+# shellcheck disable=SC2034
+readonly FILES_TO_BACKUP_PVE=(
   "/etc/systemd/system/mnt-*.mount"
   "/etc/pve/storage.cfg"
   "/etc/systemd/network/*.link"
@@ -25,7 +26,8 @@ FILES_TO_BACKUP_PVE=(
   "/etc/pve/mapping/usb.cfg"
   "/etc/pve/notifications.cfg"
 )
-FILES_TO_BACKUP_PBS=(
+# shellcheck disable=SC2034
+readonly FILES_TO_BACKUP_PBS=(
   "/etc/proxmox-backup/notifications.cfg"
   "/etc/fstab"
   "/etc/proxmox-backup/node.cfg"
@@ -34,17 +36,113 @@ FILES_TO_BACKUP_PBS=(
   "/etc/proxmox-backup/prune.cfg"
 )
 
-export FILES_TO_BACKUP_PVE
-export FILES_TO_BACKUP_PBS
+# Variables
+REMOTE_HOST=""
+BACKUP_DIR=""
+DRY_RUN=false
+BACKUP_PVE=false
+BACKUP_PBS=false
 
 # ******************************************************************************
 
+main() {
+  # Ensure the backup directory exists and is writable
+  BACKUP_DIR="${BACKUP_DIR:-/tmp/backup-pve-${REMOTE_HOST}}" # -$(date +%Y%m%d%H%M%S)
+  mkdir -p "$BACKUP_DIR" || {
+    print_error1 "Error: Unable to create backup directory '$BACKUP_DIR'"
+    exit 1
+  }
+
+  print_info1 "💡 Backup started at $(date)\n"
+
+  # Sync files
+  [[ $BACKUP_PVE == true ]] && sync_files FILES_TO_BACKUP_PVE[@] "pve"
+  [[ $BACKUP_PBS == true ]] && sync_files FILES_TO_BACKUP_PBS[@] "pbs"
+
+  [[ $BACKUP_PBS == false && $BACKUP_PVE == false ]] && {
+    print_error2 "Nothing will backup, you should choose '-pve' or '-pbs' as args!"
+    usage
+  }
+
+  # Print completion message
+  print_info1 "💡 Backup completed. Files saved to $BACKUP_DIR."
+}
+
+# ******************************************************************************
+
+# Function to sync files using rsync
+sync_files() {
+  local files_list=("${!1}")
+  local type="$2"
+
+  local total_files=0
+  local total_errors=0
+  local total_size=0
+
+  local start_time
+  start_time=$(date +%s)
+
+  for FILE_PATTERN in "${files_list[@]}"; do
+    if [[ -z "$FILE_PATTERN" ]]; then
+      print_error2 "Empty file pattern encountered. Skipping..."
+      continue
+    fi
+
+    # Construct local target directory
+    local local_dir
+    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
+
+    if [[ "$DRY_RUN" == true ]]; then
+      print_info1 "🧁 [Dry Run] Would back up: '$FILE_PATTERN' into '$local_dir'"
+      continue
+    fi
+
+    print_info1 "💡 Backing up: $FILE_PATTERN"
+    mkdir -p "$local_dir"
+
+    # Sync files with rsync
+    if ! rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x" \
+      --include="$(basename "$FILE_PATTERN")" --exclude="*" \
+      "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$local_dir/"; then
+      print_error2 "Error backing up $FILE_PATTERN"
+      total_errors=$((total_errors + 1))
+      continue
+    fi
+
+    total_files=$((total_files + 1))
+    local size
+    size=$(du -sb "$local_dir" | cut -f1)
+    total_size=$((total_size + size))
+  done
+
+  local end_time
+  end_time=$(date +%s)
+  local elapsed_time
+  elapsed_time=$((end_time - start_time))
+
+  print_info2 "Total files backed up: $total_files"
+  print_info2 "Total size transferred: $((total_size / 1024)) KB"
+  print_info2 "Total errors encountered: $total_errors"
+  print_info2 "Elapsed time: ${elapsed_time}s\n"
+}
+
+# ******************************************************************************
+
+print_info1() { echo -e "$1"; }
+print_info2() { echo -e "🔭 $1"; }
+print_info3() { echo -e "$1"; }
+print_error1() { echo -e "🔴 $1" >&2; }
+print_error2() { echo -e "⚠️ $1" >&2; }
+
 usage() {
-  echo "Usage: $0 [options]"
-  echo "Options:"
-  echo "  -h, --help          Show this help message and exit"
-  echo "  -r, --remote-host   Remote server alias (default: your_proxmox_server_alias)"
-  echo "  -b, --backup-dir    Local backup directory (default: /tmp/backup-pve-${REMOTE_HOST})"
+  print_info3 "📖 Usage: $0 -r <REMOTE_HOST> [options]"
+  print_info3 "📖 Options:"
+  print_info3 "   -h, --help          Show this help message and exit"
+  print_info3 "   -r, --remote-host   Remote server alias from .ssh/config (mandatory)"
+  print_info3 "   -b, --backup-dir    Local backup directory (default: /tmp/backup-pve-<REMOTE_HOST>)"
+  print_info3 "   -pve                Create backups from proxmox Virtual Environment"
+  print_info3 "   -pbs                Create backups from proxmox Backup Server"
+  print_info3 "   -t, --dry-run       Simulate the backup process without actually transferring files"
 }
 
 parse_args() {
@@ -57,86 +155,66 @@ parse_args() {
       ;;
     -r | --remote-host)
       REMOTE_HOST="$2"
-      BACKUP_DIR="/tmp/backup-pve-${REMOTE_HOST}"
       shift 2
       ;;
     -b | --backup-dir)
       BACKUP_DIR="$2"
       shift 2
       ;;
+    -pve)
+      BACKUP_PVE=true
+      shift
+      ;;
+    -pbs)
+      BACKUP_PBS=true
+      shift
+      ;;
+    -t | --dry-run)
+      DRY_RUN=true
+      shift
+      ;;
     *)
-      echo "Unknown option: $key" >&2
+      print_error1 "Unknown option: $key"
       usage
       exit 1
       ;;
     esac
   done
 
-  if [[ -z "$BACKUP_DIR" ]]; then
-    BACKUP_DIR="/tmp/backup-pve-${REMOTE_HOST}"
+  # Validate mandatory arguments
+  if [[ -z "$REMOTE_HOST" ]]; then
+    print_error1 "Error: --remote-host is a mandatory argument."
+    usage
+    exit 1
   fi
 }
 
 # ******************************************************************************
 
-# Parse command-line arguments
-parse_args "$@"
-
-# Ensure the backup directory exists
-mkdir -p "$BACKUP_DIR"
-
-# Trap SIGINT (Ctrl+C) to exit the script and stop the rsync loop
-trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT
-
-# Function to sync files using rsync
-sync_files() {
-  local -n files_list=$1
-  local type="$2"
-
-  local total_files=0
-  local total_errors=0
-  local total_size=0
-
-  local start_time
-  start_time=$(date +%s)
-
-  for FILE_PATTERN in "${files_list[@]}"; do
-    echo "Backing up: $FILE_PATTERN"
-
-    # Validate and construct local target directory
-    local local_dir
-    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
-    mkdir -p "$local_dir"
-
-    # Sync files with rsync, using tested compatibility options
-    if rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x" --include="$(basename "$FILE_PATTERN")" --exclude="*" \
-      "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$local_dir/"; then
-      total_files=$((total_files + 1))
-      # Calculate size of transferred files
-      local size
-      size=$(du -sb "$local_dir" | cut -f1)
-      total_size=$((total_size + size))
-    else
-      echo "Error backing up $FILE_PATTERN" >&2
-      total_errors=$((total_errors + 1))
+# Validate required commands are available
+check_dependencies() {
+  local commands=("rsync" "ssh" "du" "mkdir")
+  for cmd in "${commands[@]}"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      print_error1 "Error: Required command '$cmd' not found."
+      exit 1
     fi
   done
-
-  local end_time
-  end_time=$(date +%s)
-  local elapsed_time
-  elapsed_time=$((end_time - start_time))
-
-  echo "Total files backed up: $total_files"
-  echo "Total size transferred: $((total_size / 1024)) KB"
-  echo "Total errors encountered: $total_errors"
-  echo "Elapsed time: ${elapsed_time}s"
-  echo ""
 }
 
-# Sync files
-sync_files "FILES_TO_BACKUP_PVE" "pve"
-sync_files "FILES_TO_BACKUP_PBS" "pbs"
+# Validate remote host connectivity
+validate_remote_host() {
+  if ! ssh -q -o ConnectTimeout=5 "$REMOTE_HOST" exit; then
+    print_error1 "Error: Unable to connect to remote host '$REMOTE_HOST'"
+    exit 1
+  fi
+}
 
-# Print completion message
-echo "Backup completed. Files saved to $BACKUP_DIR."
+# ******************************************************************************
+
+# Parse arguments and run main script
+parse_args "$@"
+check_dependencies
+validate_remote_host
+main
+exit 0
