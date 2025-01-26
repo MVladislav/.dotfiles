@@ -11,12 +11,18 @@ background-blur-radius = 20
 # run: `ghostty +list-fonts`
 font-family = FiraCode Nerd Font
 font-size = 13
+adjust-cell-width = 0
+adjust-cell-height = 20%
 
 window-width = 130
 window-height = 32
 
-window-decoration = true
+window-decoration = false
 mouse-hide-while-typing = true
+gtk-titlebar = false
+
+clipboard-read = "allow"
+clipboard-paste-protection = false
 
 shell-integration-features = no-cursor,no-sudo,title
 
