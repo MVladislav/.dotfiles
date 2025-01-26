@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
+PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -189,8 +189,8 @@ install_dependencies_tmux() {
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
 
   # Define packages needed for tmux and install
-  local packages_tools=(git curl unzip libevent-dev)
-  local packages_build=(automake pkg-config libncurses-dev bison)
+  local packages_tools=(libevent-dev)
+  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
@@ -198,8 +198,8 @@ install_dependencies_tmux() {
     cd "$DEPS_INSTALL_PATH/tmux"
     bash ./autogen.sh 1>/dev/null
   else
-    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
     mkdir -p "$DEPS_INSTALL_PATH/tmux"
+    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
     tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
     rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
     cd "$DEPS_INSTALL_PATH/tmux"
@@ -225,8 +225,8 @@ install_dependencies_nvim() {
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
 
   # Define packages needed for nvim and install
-  local packages_tools=(git curl unzip libevent-dev)
-  local packages_build=(ninja-build gettext cmake build-essential)
+  local packages_tools=()
+  local packages_build=(git curl ninja-build gettext cmake build-essential)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
@@ -320,8 +320,8 @@ install_dependencies_ghostty() {
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
 
   # Define packages needed for tmux and install
-  local packages_tools=(git)
-  local packages_build=(libgtk-4-dev libadwaita-1-dev)
+  local packages_tools=()
+  local packages_build=(git libgtk-4-dev libadwaita-1-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
   sudo snap install zig --classic --beta 1>/dev/null
 
@@ -336,6 +336,7 @@ install_dependencies_ghostty() {
   install_dependencies_needs_rm
 
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
+  mkdir -p "${LN_GHOSTTY_FOLDER}"
   ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
 
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
@@ -355,9 +356,6 @@ setup_bin() {
 
 # TMUX :: CREATE LINKS ---------------------------------------------------------
 setup_tmux() {
-  print_info2 "\n🚀 TMUX :: Load git submodules"
-  git submodule update -q --init --remote tmux/tmux/plugins/tpm
-
   print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
   rm -f "${LN_TMUX_ORIG_BASE}"
   ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
@@ -365,8 +363,12 @@ setup_tmux() {
   rm -f "${LN_TMUX_ORIG_TMUX}"
   ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
 
-  print_info2 "🚀 TMUX :: Run tpm to install plugins"
-  PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
+  print_info2 "🚀 TMUX :: Load git submodules"
+  git submodule update -q --init --remote tmux/tmux/plugins/tpm
+  if command -v tmux &>/dev/null; then
+    print_info2 "🚀 TMUX :: Run tpm to install plugins"
+    PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
+  fi
 
   print_info2 "🚀 TMUX :: All symlinks created."
 }
@@ -471,6 +473,11 @@ install_code_ext() {
 # FONTS :: add fonts -----------------------------------------------------------
 install_fonts() {
   print_info2 "\n🚀 FONTS :: Download some nerd fonts"
+
+  local packages_tools=()
+  local packages_build=(curl)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
   FONTS_URLS=(
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
     "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraCode.tar.xz"
@@ -500,6 +507,8 @@ install_fonts() {
 
     rm "/tmp/$file_name"
   done
+
+  install_dependencies_needs_rm
 
   print_info2 "🚀 FONTS :: All fonts are downloaded and extracted"
 }
