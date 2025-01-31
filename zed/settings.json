@@ -7,7 +7,13 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  "wrap_guides": [80, 130],
+  "features": {
+    "inline_completion_provider": "none"
+  },
+  "wrap_guides": [
+    80,
+    130
+  ],
   "show_wrap_guides": true,
   "soft_wrap": "editor_width",
   "cursor_blink": false,
@@ -18,7 +24,9 @@
   "buffer_font_family": "Hack Nerd Font Mono",
   "buffer_font_size": 16,
   "buffer_font_weight": 400,
-  "buffer_line_height": { "custom": 1.25 },
+  "buffer_line_height": {
+    "custom": 1.25
+  },
   "tab_size": 2,
   "terminal": {
     "dock": "bottom",
@@ -37,16 +45,20 @@
     "file_icons": true,
     "git_status": true
   },
-
   // "vim_mode": true,
   "base_keymap": "VSCode",
   "use_autoclose": true,
   "current_line_highlight": "all",
-  "indent_guides": { "enabled": true },
-  "inlay_hints": { "enabled": true },
-  "scrollbar": { "show": "auto" },
+  "indent_guides": {
+    "enabled": true
+  },
+  "inlay_hints": {
+    "enabled": true
+  },
+  "scrollbar": {
+    "show": "auto"
+  },
   "hour_format": "hour24",
-
   "assistant": {
     "default_model": {
       "provider": "zed.dev",
@@ -54,7 +66,6 @@
     },
     "version": "2"
   },
-
   "git": {
     "git_gutter": "tracked_files",
     "inline_blame": {
@@ -62,7 +73,6 @@
       "delay_ms": 200
     }
   },
-
   "use_on_type_format": false,
   "format_on_save": "on",
   "languages": {
@@ -88,7 +98,6 @@
       "use_on_type_format": false
     }
   },
-
   "file_types": {
     "ansible": [
       "**/defaults/**/*",
@@ -101,13 +110,25 @@
       "**/vars/**/*.yml",
       "**/inventory/*/*"
     ],
-    "Docker Compose": ["docker-compose*"],
-    "Dockerfile": ["Dockerfile*"],
-    "env": [".env"],
-    "Git Ignore": [".gitignore", ".dockerignore", ".gitattributes"],
-    "YAML": ["*.yaml", ".yamllint"]
+    "Docker Compose": [
+      "docker-compose*"
+    ],
+    "Dockerfile": [
+      "Dockerfile*"
+    ],
+    "env": [
+      ".env"
+    ],
+    "Git Ignore": [
+      ".gitignore",
+      ".dockerignore",
+      ".gitattributes"
+    ],
+    "YAML": [
+      "*.yaml",
+      ".yamllint"
+    ]
   },
-
   "file_scan_exclusions": [
     "**/.git",
     "**/.svn",
@@ -118,7 +139,6 @@
     "**/.classpath",
     "**/.settings"
   ],
-
   "telemetry": {
     "diagnostics": false,
     "metrics": false
