@@ -197,7 +197,7 @@ install_dependencies_tmux() {
     git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
     cd "$DEPS_INSTALL_PATH/tmux"
     bash ./autogen.sh 1>/dev/null
-  else
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     mkdir -p "$DEPS_INSTALL_PATH/tmux"
     curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
     tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
@@ -232,7 +232,7 @@ install_dependencies_nvim() {
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
-  else
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
     git checkout -q stable
@@ -274,7 +274,7 @@ install_dependencies_zsh() {
 
     sudo apt-get install -y zsh 1>/dev/null
     zsh_install_bin_path="/usr/bin/zsh"
-  else
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     sudo apt-get install -y zsh 1>/dev/null
     zsh_install_bin_path="/usr/bin/zsh"
   fi
@@ -324,20 +324,37 @@ install_dependencies_ghostty() {
   local packages_build=(git libgtk-4-dev libadwaita-1-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
   sudo snap install zig --classic --beta 1>/dev/null
+  # sudo snap install zig --classic --edge 1>/dev/null
 
-  git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
-  cd "$DEPS_INSTALL_PATH/ghostty"
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
+    cd "$DEPS_INSTALL_PATH/ghostty"
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+    git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
+    cd "$DEPS_INSTALL_PATH/ghostty"
+    git checkout -q v1.1.0
+  fi
+
   zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  update-desktop-database ~/.local/share/applications/ -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
+  # sudo snap remove zig 1>/dev/null
 
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
   mkdir -p "${LN_GHOSTTY_FOLDER}"
   ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
+
+  print_info2 "🚀 GHOSTTY :: Switch default keybind to open terminal ('<Ctrl><Alt>T')"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
 }

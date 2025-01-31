@@ -3,7 +3,7 @@
 
 # run: `ghostty +list-themes`
 theme = rose-pine
-# theme =  dark:catppuccin-mocha,light:catppuccin-latte
+#theme =  dark:catppuccin-mocha,light:catppuccin-latte
 background = 000000
 background-opacity = 0.7
 background-blur-radius = 20
@@ -19,12 +19,31 @@ window-height = 32
 
 window-decoration = false
 mouse-hide-while-typing = true
-gtk-titlebar = false
+#gtk-titlebar = false
 
 clipboard-read = "allow"
 clipboard-paste-protection = false
 
 shell-integration-features = no-cursor,no-sudo,title
+
+# run: `ghostty +list-keybinds`
+keybind = alt+r=reload_config
+
+keybind = ctrl+alt+-=new_split:down
+keybind = ctrl+alt+_=new_split:right
+
+keybind = super+ctrl+alt+up=resize_split:up,10
+keybind = super+ctrl+alt+down=resize_split:down,10
+keybind = super+ctrl+alt+right=resize_split:right,10
+keybind = super+ctrl+alt+left=resize_split:left,10
+
+keybind = super+ctrl+up=goto_split:up
+keybind = super+ctrl+down=goto_split:down
+keybind = super+ctrl+right=goto_split:right
+keybind = super+ctrl+left=goto_split:left
+
+keybind = ctrl+x=close_surface
+keybind = ctrl+y=clear_screen
 
 # keybind = global:ctrl+t=toggle_quick_terminal
 
