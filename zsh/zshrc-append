@@ -127,7 +127,7 @@ alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cp
 alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
 docker-context() {
   if [ "$#" -lt 2 ]; then
-    echo "Usage: docker-context <CONTEXT-NAME> <SSH-HOST>"
+    echo "Usage: $0 <CONTEXT-NAME> <SSH-HOST>"
     return 1
   fi
   docker context create "$1" --docker "host=ssh://$2"
@@ -180,6 +180,21 @@ alias vm_git_log2="git log --graph --abbrev-commit --decorate --format=format:'%
 alias vm_git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
 alias vm_git_diff='git difftool --tool=nvimdiff'
 alias vm_git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
+
+vm_git_commit_search() {
+  # shellcheck disable=SC2016
+  git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
+    fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --preview \
+      'f() { set -- $(echo -- "$@" | grep -o "[a-f0-9]\{7\}"); [ $# -eq 0 ] || git show --color=always $1 ; }; f {}' \
+      --header "enter to view, ctrl-o to checkout" \
+      --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
+      --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
+      --bind "ctrl-m:execute:
+                (grep -o '[a-f0-9]\{7\}' | head -1 |
+                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
+                {}
+FZF-EOF" --preview-window=right:60%
+}
 
 ### TMUX ###
 alias vm_tl='tmux ls'
@@ -268,27 +283,38 @@ alias sgrep='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 alias pigz='pigz -k -p$(nproc)'
 tar-p() {
   if [ "$#" -lt 1 ]; then
-    echo "Usage: tar-p <directory> [<password>]"
+    echo "Usage: $0 <directory> [<password | 'pw'>]"
     return 1
   fi
 
   PATH_TO_ENC="$1"
   if [ $# -eq 1 ]; then
+    echo "disabled"
     tar --use-compress-program="pigz " -cpf "$(basename "$PATH_TO_ENC").tar.gz" -C "$PATH_TO_ENC" .
   elif [ $# -eq 2 ]; then
     PASSWORD_FOR_ENC="$2"
+    [[ "$PASSWORD_FOR_ENC" == "pw" ]] && { # pragma: allowlist secret
+      echo "Password: "
+      read -rs PASSWORD_FOR_ENC
+    }
     tar --use-compress-program="pigz " -cpf - -C "$PATH_TO_ENC" . | gpg -c --cipher-algo AES256 --batch --passphrase "$PASSWORD_FOR_ENC" -o "$(basename "$PATH_TO_ENC").tar.gz.gpg.enc"
   fi
 }
-
 untar-p() {
   if [ "$#" -lt 2 ]; then
-    echo "Usage: untar-p <encrypted_file> <password>"
+    echo "Usage: $0 <encrypted_file> <password | 'pw'>"
     return 1
   fi
 
-  mkdir -p "$(dirname "$1")/${1%%.*}"
-  gpg -d --batch --passphrase "$2" "$1" | tar --use-compress-program="pigz " -xpf - -C "$(dirname "$1")/${1%%.*}"
+  PATH_TO_DEC="$1"
+  PASSWORD_FOR_DEC="$2"
+  [[ "$PASSWORD_FOR_DEC" == "pw" ]] && { # pragma: allowlist secret
+    echo "Password: "
+    read -rs PASSWORD_FOR_DEC
+  }
+
+  mkdir -p "$(dirname "$PATH_TO_DEC")/${PATH_TO_DEC%%.*}"
+  gpg -d --batch --passphrase "$PASSWORD_FOR_DEC" "$PATH_TO_DEC" | tar --use-compress-program="pigz " -xpf - -C "$(dirname "$PATH_TO_DEC")/${PATH_TO_DEC%%.*}"
 }
 
 alias vm_mem_free='free -h && sudo /usr/bin/sysctl -w vm.drop_caches=3 && sudo /usr/bin/sync && echo 3 | sudo /usr/bin/tee /proc/sys/vm/drop_caches && free -h'
@@ -355,29 +381,6 @@ vm_speed_pub() {
 
 ######################################################################
 ##
-## markdown to csv: converts a markdown table to csv
-##
-######################################################################
-vm_markdown_to_csv() {
-  if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <MARKDOWN_FILE>"
-    return 1
-  fi
-
-  sed '2d' "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
-    awk -F, '{
-      for (i=1; i<=NF; i++) {
-        gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
-        if (i > 1) printf ",";
-          #$i = "\"" $i "\"";     # Sourund with double quote
-          printf "%s", $i;
-        }
-        printf "\n";
-      }' >"$(basename "$1" | cut -d. -f1).csv"
-}
-
-######################################################################
-##
 ## ii: display useful host related information
 ##
 ######################################################################
@@ -417,6 +420,12 @@ vm_ii() {
 
   echo -e "\\n${BRED}Machine BIOS:$NC"
   vm_my_bios
+  echo -e "\\n${BRED}CPU:$NC"
+  # https://github.com/platomav/CPUMicrocodes/tree/master/AMD
+  echo -e "  - microcode : $(grep microcode /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
+  echo -e "  - family    : $(grep 'cpu family' /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
+  echo -e "  - model     : $(grep -oP 'model\s*:\s*\K\d+' /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
+  echo -e "  - stepping  : $(grep stepping /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
 
   echo -e "\\n${BRED}Public facing IP Address:$NC"
   echo "  $(vm_my_ip)"
@@ -424,6 +433,29 @@ vm_ii() {
   echo "  $(vm_my_country)"
   echo "  $(vm_my_ua)"
   echo
+}
+
+######################################################################
+##
+## markdown to csv: converts a markdown table to csv
+##
+######################################################################
+vm_markdown_to_csv() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    return 1
+  fi
+
+  sed '2d' "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
+    awk -F, '{
+      for (i=1; i<=NF; i++) {
+        gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
+        if (i > 1) printf ",";
+          #$i = "\"" $i "\"";     # Sourund with double quote
+          printf "%s", $i;
+        }
+        printf "\n";
+      }' >"$(basename "$1" | cut -d. -f1).csv"
 }
 
 ######################################################################
@@ -471,7 +503,7 @@ vm_convert_gif() {
 ######################################################################
 vm_quick_ubuntu() {
   if [[ -z "$1" ]]; then
-    echo "Usage: vm_quick_ubuntu <VM_NAME_VERSION> [<optional post-creation command>]"
+    echo "Usage: $0 <VM_NAME_VERSION> [<optional post-creation command>]"
     return 1
   fi
 
@@ -506,7 +538,7 @@ vm_quick_ubuntu() {
 
 vm_quick_ubuntu_rm() {
   if [[ -z "$1" ]]; then
-    echo "Usage: vm_quick_ubuntu_rm <VM_NAME_VERSION>"
+    echo "Usage: $0 <VM_NAME_VERSION>"
     return 1
   fi
 
