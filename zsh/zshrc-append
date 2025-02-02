@@ -10,7 +10,7 @@ export PY_COLOR=1
 export ANSIBLE_FORCE_COLOR=1
 
 ### ZSH ###
-if command -v zsh &>/dev/null; then
+if command -v zsh &>/dev/null && [ -n "$ZSH_NAME" ]; then
   setopt NO_NOMATCH
 fi
 
@@ -29,15 +29,30 @@ fi
 
 ######################################################################
 ##
+## HELPER
+##
+######################################################################
+addToPath() {
+  # if [ -d "$1" ]; then
+  if [[ ":$PATH:" != *":$1:"* ]]; then
+    export PATH="$PATH:$1"
+  fi
+  # fi
+}
+addToPathFront() {
+  # if [ -d "$1" ]; then
+  if [[ ":$PATH:" != *":$1:"* ]]; then
+    export PATH="$1:$PATH"
+  fi
+  # fi
+}
+
+######################################################################
+##
 ## set PATH so it includes user's private bin if it exists
 ##
 ######################################################################
-if [ -d "$HOME/.local/bin" ]; then
-  if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    export PATH="$HOME/.local/bin:$PATH"
-  fi
-fi
-
+addToPathFront "$HOME/.local/bin"
 if [ -d /etc/zsh/profile.d ]; then
   if ls /etc/zsh/profile.d/*.sh 1>/dev/null 2>&1; then
     for i in /etc/zsh/profile.d/*.sh; do
@@ -56,28 +71,18 @@ fi
 ##
 ######################################################################
 export GOPATH="$HOME/.go"
-if [[ ":$PATH:" != *":/usr/local/go/bin:"* ]]; then
-  export PATH="$PATH:/usr/local/go/bin"
-fi
-if [[ ":$PATH:" != *":$GOPATH/bin:"* ]]; then
-  export PATH="$PATH:$GOPATH/bin"
-fi
+addToPath "/usr/local/go/bin"
+addToPath "$GOPATH/bin"
 
 NPM_PACKAGES="${HOME}/.npm-packages"
 if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
   export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
 fi
-if [[ ":$PATH:" != *":/snap/node/current/bin:"* ]]; then
-  export PATH="/snap/node/current/bin:$PATH"
-fi
-if [[ ":$PATH:" != *":$NPM_PACKAGES/bin:"* ]]; then
-  export PATH="$PATH:$NPM_PACKAGES/bin"
-fi
+addToPathFront "/snap/node/current/bin"
+addToPath "$NPM_PACKAGES/bin"
 
 export GEM_HOME="$HOME/.gems"
-if [[ ":$PATH:" != *":$GEM_HOME/bin:"* ]]; then
-  export PATH="$PATH:$GEM_HOME/bin"
-fi
+addToPath "$GEM_HOME/bin"
 
 ### LS as EZA ###
 if command -v eza &>/dev/null; then
@@ -132,6 +137,7 @@ docker-context() {
   fi
   docker context create "$1" --docker "host=ssh://$2"
 }
+# alias docker-swarm-compose='docker compose --compatibility config --format json | jq '\''del(.name) | .services |= map_values(.deploy.resources.limits.cpus |= tostring | .deploy.resources.reservations.cpus |= tostring | if .ports then .ports |= map(.published |= tonumber) else . end | if .devices then .devices |= map("\(.source):\(.target)") else . end) | walk(if type == "object" then with_entries(select(.value != null)) else . end)'\'' | yq -P | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
 
 # shellcheck disable=SC2139
 alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:24.04"

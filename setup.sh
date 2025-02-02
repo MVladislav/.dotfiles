@@ -45,7 +45,9 @@ RUN_INSTALL_FONTS=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-FONTS_RELEASE_VERSION='v3.2.1'
+VERSION_ZIG=https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+VERSION_GHOSTTY=v1.1.0
+VERSION_FONTS_RELEASE='v3.2.1'
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_PACKAGES_TO_REMOVE=()
@@ -81,6 +83,7 @@ main() {
     exit 1
   fi
 
+  sudo -k
   initialize_base
   [[ $RUN_INSTALL_DEPENDENCIES_ADDITIONAL -eq 1 ]] && install_dependencies_additional
 
@@ -135,6 +138,7 @@ install_dependencies_needs() {
     }
   fi
 
+  sudo -k
   print_notes "   📥 build dependencies installed"
 }
 
@@ -152,6 +156,7 @@ install_dependencies_needs_rm() {
   sudo apt-get -y autoremove -qqq 1>/dev/null
   sudo apt-get -y autoclean -qqq 1>/dev/null
 
+  sudo -k
   print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
 }
 
@@ -180,6 +185,7 @@ install_dependencies_additional() {
 
   # echo "DEPS :: install zed over flatpak"
   # flatpak install flathub dev.zed.Zed
+  sudo -k
 }
 
 # SERVICE :: install tmux ------------------------------------------------------
@@ -278,6 +284,7 @@ install_dependencies_zsh() {
     sudo apt-get install -y zsh 1>/dev/null
     zsh_install_bin_path="/usr/bin/zsh"
   fi
+  sudo -k
 
   print_info2 "🚀 ZSH :: Load git submodules"
   git submodule update -q --init --remote \
@@ -308,6 +315,7 @@ install_dependencies_zsh() {
     sudo chsh -s "$zsh_install_bin_path" "$USER" || {
       print_error "  ❌ Failed to change default shell to ZSH. Please run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
     }
+    sudo -k
   fi
 
   print_info2 "🚀 ZSH :: zsh installed!"
@@ -321,10 +329,17 @@ install_dependencies_ghostty() {
 
   # Define packages needed for tmux and install
   local packages_tools=()
-  local packages_build=(git libgtk-4-dev libadwaita-1-dev)
+  local packages_build=(curl git libgtk-4-dev libadwaita-1-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
-  sudo snap install zig --classic --beta 1>/dev/null
-  # sudo snap install zig --classic --edge 1>/dev/null
+
+  local ZIG_COMMAND=zig
+  if ! command -v zig &>/dev/null; then
+    print_notes "   💡 Download binary zig..."
+    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG"
+    mkdir -p "$DEPS_INSTALL_PATH/zig"
+    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
+    ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
+  fi
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
@@ -332,10 +347,10 @@ install_dependencies_ghostty() {
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
     cd "$DEPS_INSTALL_PATH/ghostty"
-    git checkout -q v1.1.0
+    git checkout -q "$VERSION_GHOSTTY"
   fi
 
-  zig build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+  "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   update-desktop-database ~/.local/share/applications/ -q
@@ -343,7 +358,6 @@ install_dependencies_ghostty() {
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
-  # sudo snap remove zig 1>/dev/null
 
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
   mkdir -p "${LN_GHOSTTY_FOLDER}"
@@ -441,6 +455,18 @@ setup_adds() {
   rm -f "${LN_ADDS_02}"
   ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
 
+  local lines_to_add=(
+    'source ~/.zshrc-append'
+    'source ~/.zshrc-sec'
+    'touch ~/.zshrc-secrets'
+    'source ~/.zshrc-secrets'
+  )
+  for line in "${lines_to_add[@]}"; do
+    if ! grep -Fxq "$line" "${HOME}/.bashrc"; then
+      echo "$line" >>"${HOME}/.bashrc"
+    fi
+  done
+
   print_info2 "🚀 ADDS :: All symlinks created."
 }
 
@@ -496,13 +522,13 @@ install_fonts() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   FONTS_URLS=(
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/NerdFontsSymbolsOnly.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraCode.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/Hack.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/UbuntuMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/FiraMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/RobotoMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${FONTS_RELEASE_VERSION}/ProggyClean.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/NerdFontsSymbolsOnly.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/FiraCode.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/Hack.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/UbuntuMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
   )
   FONTS_DIR="${HOME}/.local/share/fonts/nerd-fonts"
   mkdir -p "$FONTS_DIR"
@@ -591,6 +617,18 @@ parse_args() {
       ;;
     -ighost | --install-dependencies-ghostty)
       RUN_INSTALL_DEPENDENCIES_GHOSTTY=1
+      ;;
+    -ioall | --install-dependencies-old-all)
+      RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
+      RUN_INSTALL_DEPENDENCIES_TMUX=1
+      RUN_INSTALL_DEPENDENCIES_NVIM=1
+      RUN_INSTALL_DEPENDENCIES_ZSH=1
+      ;;
+    -inall | --install-dependencies-new-all)
+      RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
+      RUN_INSTALL_DEPENDENCIES_NVIM=1
+      RUN_INSTALL_DEPENDENCIES_GHOSTTY=1
+      RUN_SETUP_TMUX=0
       ;;
     -nsb | --not-setup-bin)
       RUN_SETUP_BIN=0
