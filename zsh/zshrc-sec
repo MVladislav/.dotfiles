@@ -2,6 +2,7 @@
 
 VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
+VM_SEC_LISTS_SECFILES=~'/opt/sec/SecFiles'
 
 : ${VM_SEC_USER_AGENT:='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
 
@@ -32,8 +33,8 @@ vm_sec_install_tools() {
   # saving complete web pages as a single HTML file
   sudo apt install monolith
 
-  go_github_commit_date_and_download(){
-    IFS='/' read -r owner repo addition <<< "$1"
+  go_github_commit_date_and_download() {
+    IFS='/' read -r owner repo addition <<<"$1"
     echo 'LAST COMMIT' "[${repo}] ::" "$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')"
     package_path="${owner}/${repo}"
     if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
@@ -92,8 +93,8 @@ vm_sec_fuzz_path() {
   fi
 
   ffuf -u "${protocol}://${domain}/FUZZ" \
-  -w "${VM_SEC_LISTS_SECLISTS}/Discovery/Web-Content/common.txt" \
-  -c -ac -recursion
+    -w "${VM_SEC_LISTS_SECLISTS}/Discovery/Web-Content/common.txt" \
+    -c -ac -recursion
 }
 vm_sec_fuzz_dns() {
   if [ "$#" -lt 1 ]; then
@@ -113,8 +114,8 @@ vm_sec_fuzz_dns() {
   fi
 
   ffuf -u "${protocol}://${domain}" \
-  -w "${VM_SEC_LISTS_SECLISTS}/Discovery/DNS/namelist.txt" \
-  -H "Host: ${protocol}://FUZZ.${domain}"
+    -w "${VM_SEC_LISTS_SECLISTS}/Discovery/DNS/namelist.txt" \
+    -H "Host: ${protocol}://FUZZ.${domain}"
 }
 
 vm_sec_katana() {
@@ -200,46 +201,223 @@ vm_sec_ip_country_batch() {
 
 vm_sec_apt() {
   if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <[name|tool|location|raw|save]> <NAME>"
+    echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
     return 1
   fi
 
-  VM_S_TYPE="$1"
-  VM_APT_S="$2"
-  VM_APT_JSON_LIST="https://raw.githubusercontent.com/andreacristaldi/APTmap/master/apt.json"
+  local vm_s_type="$1"
+  local vm_apt_s="$2"
+  local vm_apt_json_list='https://raw.githubusercontent.com/andreacristaldi/APTmap/master/apt.json'
+  local vm_apt_file="$VM_SEC_LISTS_SECFILES/apt.json"
 
-  case $VM_S_TYPE in
+  # Create the directory if it doesn't exist
+  mkdir -p "$VM_SEC_LISTS_SECFILES"
+
+  # Check if the file doesn't exist or is older than 1 day (86400 seconds)
+  if [ ! -f "$vm_apt_file" ] || [ "$(stat -c %Y "$vm_apt_file")" -lt "$(($(date +%s) - 86400))" ]; then
+    echo "Downloading apt.json (file missing or older than one day)..."
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_apt_file" "$vm_apt_json_list"
+  fi
+
+  case $vm_s_type in
   "name")
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
-      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
       | select( \
-      (.name | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase)) \
+      (.name | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase)) \
       or \
-      (.[\"other-names\"][] | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase)) \
-      )]"
+      (.[\"other-names\"][] | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase)) \
+      )]" "$vm_apt_file"
     ;;
   "tool")
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
-      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets, \
-      tools: (.tools[] | select(.value | ascii_downcase | contains(\"$VM_APT_S\" | ascii_downcase))) \
-      }]"
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets, \
+      tools: (.tools[] | select(.value | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase))) \
+      }]" "$vm_apt_file"
     ;;
   "location")
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST" |
-      jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
       | select( \
-      ((.location | ascii_downcase) | contains(\"$VM_APT_S\" | ascii_downcase)) and (.location | length > 0) \
-      )]"
+      ((.location | ascii_downcase) | contains(\"$vm_apt_s\" | ascii_downcase)) and (.location | length > 0) \
+      )]" "$vm_apt_file"
     ;;
   "raw")
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$VM_APT_JSON_LIST"
-    ;;
-  "save")
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -O "$VM_APT_JSON_LIST"
+    cat "$vm_apt_file"
     ;;
   *)
     echo "Type to search is not known"
-    echo "Usage: $0 <[name|tool|location|raw|save]> <NAME>"
+    echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
     ;;
   esac
+}
+
+######################################################################
+##
+## FUNCTIONS:: MITRE technique search
+##
+######################################################################
+
+vm_sec_mitre() {
+  local USAGE="Usage: $0 <[short|detail|tactics|intrusion|malware]> (<SEARCH>)"
+  local vm_s_type="$1"
+
+  if [ "$vm_s_type" = "tactics" ]; then
+    [ "$#" -lt 1 ] && {
+      echo "$USAGE"
+      return 1
+    }
+  else
+    [ "$#" -lt 2 ] && {
+      echo "$USAGE"
+      return 1
+    }
+  fi
+
+  local vm_mitre_s="$2"
+  # local vm_mitre_json_list='https://raw.githubusercontent.com/mitre/cti/refs/heads/master/enterprise-attack/enterprise-attack.json'
+  local vm_mitre_json_list='https://raw.githubusercontent.com/mitre-attack/attack-stix-data/refs/heads/master/enterprise-attack/enterprise-attack.json'
+  local vm_mitre_file="$VM_SEC_LISTS_SECFILES/enterprise-attack.json"
+
+  mkdir -p "$VM_SEC_LISTS_SECFILES"
+  if [ ! -f "$vm_mitre_file" ] || [ "$(stat -c %Y "$vm_mitre_file")" -lt "$(($(date +%s) - 86400))" ]; then
+    echo "Downloading enterprise-attack.json (file missing or older than one day)..."
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_mitre_file" "$vm_mitre_json_list"
+  fi
+
+  local output
+  case "$vm_s_type" in
+  detail | tactics | intrusion | malware)
+    output='{
+        name: .name,
+        type: .type,
+        description: .description,
+        ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+        ref_urls: ([.external_references[]? | select(has("url")) | .url]),
+        ref_names: ([.external_references[]? | select(has("source_name")) | .source_name]),
+        ref_descriptions: ([.external_references[]? | select(has("description")) | .description])
+      }'
+    ;;
+  short)
+    output='{
+        name: .name,
+        type: .type,
+        ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+        ref_urls: ([.external_references[]? | select(has("url")) | .url] | .[0])
+      }'
+    ;;
+  *)
+    echo "Type to search is not known"
+    echo "$USAGE"
+    return 1
+    ;;
+  esac
+
+  # Additional type filters for some modes.
+  local type_filter=''
+  local type_filter_reverse=''
+  local type_filter_relation1=''
+  local type_filter_relation2=''
+  case "$vm_s_type" in
+  tactics) type_filter=' and (.type | IN("x-mitre-tactic"))' ;;
+  intrusion)
+    type_filter=' and (.type | IN("intrusion-set"))'
+    type_filter_reverse='"malware","tool"'
+    type_filter_relation1='source_ref'
+    type_filter_relation2='target_ref'
+    ;;
+  malware)
+    type_filter=' and (.type | IN("malware"))'
+    type_filter_reverse='"intrusion-set"'
+    type_filter_relation1='target_ref'
+    type_filter_relation2='source_ref'
+    ;;
+  esac
+
+  # Build a common search filter (search across name, description, external descriptions, and external IDs).
+  # shellcheck disable=SC2016
+  local common_filter='
+    .objects[]
+    | select(
+        (
+          ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+        )
+        and (.name != null)
+        '$type_filter'
+      )
+  '
+
+  jq --arg s "$vm_mitre_s" "$common_filter | $output" "$vm_mitre_file"
+
+  # ---
+
+  # shellcheck disable=SC2016
+  # local output_extended='{
+  #       base_ids: $base_ids,
+  #       relation: $relation,
+  #       final: ($final | map({
+  #         name: .name,
+  #         ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+  #       }))
+  #     }'
+  local output_extended='($final | map('$output'))'
+
+  # shellcheck disable=SC2016
+  local common_filter_extended='
+    . as $root
+    |
+    # Base search: get IDs of objects matching the query.
+    ($root.objects
+      | map(select(
+          (
+            ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
+            or
+            ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+            or
+            ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
+            or
+            ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+          )
+          and (.name != null)
+          '$type_filter'
+        ))
+      | map(.id)
+      | unique
+    ) as $base_ids
+
+    |
+    # First hop: find relationship objects whose source_ref is in the base IDs.
+    ($root.objects
+      | map(select(
+          .type=="relationship"
+          and has($r1)
+          and (getpath([$r1]) | type=="string")
+          and ( (getpath([$r1])) as $sr | ($base_ids | index($sr)) != null )
+          # and (getpath([$r2]) | startswith($r))
+        ))
+      | map(getpath([$r2]))
+      | unique
+    ) as $relation
+
+    |
+    # Final lookup: get objects whose id is in the final IDs.
+    ($root.objects
+      | map(select(
+          ( (.type) as $tt | ($r | index($tt)) != null )
+          and has("id")
+          and (.id | type=="string")
+          and ( (.id) as $fid | ($relation | index($fid)) != null )
+        ))
+    ) as $final
+  '
+
+  jq \
+    --arg s "$vm_mitre_s" \
+    --arg r "$type_filter_reverse" \
+    --arg r1 "$type_filter_relation1" \
+    --arg r2 "$type_filter_relation2" \
+    "$common_filter_extended | $output_extended" "$vm_mitre_file"
 }
