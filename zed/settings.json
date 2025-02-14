@@ -7,6 +7,29 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  // "assistant": {
+  //   "default_model": {
+  //     "provider": "openai",
+  //     "model": "gpt-4o"
+  //   },
+  //   "version": "2"
+  // },
+  // "language_models": {
+  //   "openai": {
+  //     "version": "1",
+  //     "api_url": "http://ollama.home.local:11434/v1",
+  //     "available_models": [
+  //       {
+  //         "name": "gpt-4o",
+  //         "display_name": "deepseek-r1:14b",
+  //         "max_tokens": 32768
+  //       }
+  //     ]
+  //   },
+  //   "ollama": {
+  //     "api_url": "http://ollama.home.local:11434"
+  //   }
+  // },
   "features": {
     "inline_completion_provider": "none"
   },
@@ -22,7 +45,7 @@
   "ui_font_size": 16,
   "ui_font_weight": 400,
   "buffer_font_family": "Hack Nerd Font Mono",
-  "buffer_font_size": 16,
+  "buffer_font_size": 16.0,
   "buffer_font_weight": 400,
   "buffer_line_height": {
     "custom": 1.25
@@ -40,6 +63,11 @@
     "mode": "system",
     "light": "Rosé Pine Dawn",
     "dark": "Rosé Pine Moon"
+  },
+  "icon_theme": {
+    "mode": "system",
+    "light": "Zed (Default)",
+    "dark": "Zed (Default)"
   },
   "tabs": {
     "file_icons": true,
@@ -59,13 +87,6 @@
     "show": "auto"
   },
   "hour_format": "hour24",
-  "assistant": {
-    "default_model": {
-      "provider": "zed.dev",
-      "model": "claude-3-5-sonnet-latest"
-    },
-    "version": "2"
-  },
   "git": {
     "git_gutter": "tracked_files",
     "inline_blame": {
