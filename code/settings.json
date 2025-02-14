@@ -462,7 +462,6 @@
   "ruff.importStrategy": "useBundled",
   "ruff.organizeImports": true,
   "ruff.fixAll": true,
-  "ruff.lint.run": "onSave",
   "ruff.codeAction.fixViolation": {
     "enable": true
   },
@@ -664,10 +663,11 @@
     "Sophos",
     "traefik"
   ],
-  "cSpell.enableFiletypes": [
-    "!yaml",
-    "*"
-  ],
+  "cSpell.enabledFileTypes": {
+    "*": true,
+    "markdown": true,
+    "yaml": false
+  },
   "redhat.telemetry.enabled": false,
   "telemetry.telemetryLevel": "off"
 }
