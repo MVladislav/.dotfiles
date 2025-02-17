@@ -130,6 +130,22 @@ alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
 alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
 alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
+
+docker-swarm-compose2() {
+  local COMPOSE_FILE="docker-compose.yaml"
+  if [ $# -gt 1 ]; then
+    COMPOSE_FILE="$1"
+    shift
+  fi
+
+  echo "Using compose file: $COMPOSE_FILE"
+  docker compose --file "$COMPOSE_FILE" --compatibility config |
+    sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' |
+    sed '1{/^name:/d}' |
+    sed 's/published: "\(.*\)"/published: \1/' |
+    docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file - "$@"
+}
+
 docker-context() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <CONTEXT-NAME> <SSH-HOST>"
@@ -178,29 +194,6 @@ alias vm_hun_to_min="python3 -c 'import sys;x = sys.argv[1].split(\":\");x3 = (i
 # $sudo apt install xclip
 # $pip3 install pyperclip
 alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
-
-### GIT ###
-alias vm_git_log1="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all"
-alias vm_git_log2="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all"
-
-alias vm_git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
-alias vm_git_diff='git difftool --tool=nvimdiff'
-alias vm_git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
-
-vm_git_commit_search() {
-  # shellcheck disable=SC2016
-  git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
-    fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --preview \
-      'f() { set -- $(echo -- "$@" | grep -o "[a-f0-9]\{7\}"); [ $# -eq 0 ] || git show --color=always $1 ; }; f {}' \
-      --header "enter to view, ctrl-o to checkout" \
-      --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
-      --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
-      --bind "ctrl-m:execute:
-                (grep -o '[a-f0-9]\{7\}' | head -1 |
-                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
-                {}
-FZF-EOF" --preview-window=right:60%
-}
 
 ### TMUX ###
 alias vm_tl='tmux ls'
@@ -396,7 +389,7 @@ alias vm_my_country='curl -s ifconfig.io/country_code'
 alias vm_my_ua='curl -s ifconfig.io/ua'
 alias vm_my_all='curl -s ifconfig.io/all.json | jq'
 vm_my_bios() {
-  for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
+  for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family system-serial-number baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
     printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
   done
 }
@@ -439,6 +432,121 @@ vm_ii() {
   echo "  $(vm_my_country)"
   echo "  $(vm_my_ua)"
   echo
+}
+
+######################################################################
+##
+## git:
+## - some aliases :: pretty logs, pre-commit, diff, re-init for changed .gitignore
+## - search in git commits
+## - check outdated git repos
+##
+######################################################################
+alias vm_git_log1="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all"
+alias vm_git_log2="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all"
+
+alias vm_git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
+alias vm_git_diff='git difftool --tool=nvimdiff'
+alias vm_git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
+
+vm_git_commit_search() {
+  # shellcheck disable=SC2016
+  git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
+    fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --preview \
+      'f() { set -- $(echo -- "$@" | grep -o "[a-f0-9]\{7\}"); [ $# -eq 0 ] || git show --color=always $1 ; }; f {}' \
+      --header "enter to view, ctrl-o to checkout" \
+      --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
+      --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
+      --bind "ctrl-m:execute:
+                (grep -o '[a-f0-9]\{7\}' | head -1 |
+                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
+                {}
+FZF-EOF" --preview-window=right:60%
+}
+
+vm_git_check_updates() {
+  # Counter for outdated repositories
+  local outdated_found=0
+  local only_relevant=1
+
+  # Use process substitution to avoid subshell issues with while-read loops
+  while IFS= read -r git_dir; do
+    # Get the repository root directory (parent directory of .git)
+    local repo_dir=""
+    repo_dir=$(dirname "$git_dir")
+    [ "$only_relevant" == 0 ] && echo ""
+    [ "$only_relevant" == 0 ] && echo "🔍 Checking repository: $repo_dir"
+
+    # Change into the repository directory safely.
+    pushd "$repo_dir" >/dev/null || {
+      echo "  🔴 Failed to enter directory: $repo_dir"
+      continue
+    }
+
+    # Check if the current branch has an upstream configured.
+    if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+      # Update remote tracking information quietly.
+      git fetch --quiet
+
+      # Count commits that the local branch is behind its upstream.
+      local behind=0
+      behind=$(git rev-list --count HEAD.."@{u}" 2>/dev/null)
+      if [ "$behind" -gt 0 ]; then
+        local remote_commit_info=""
+        local repo_part=""
+        local remote_url=""
+        local commit_link=""
+
+        # Get a one-line summary (hash and message) from the upstream tip commit.
+        remote_commit_info=$(git log -1 --pretty=format:"%h %s" "@{u}")
+
+        # Determine a link to the latest commit if the remote is on GitHub.
+        remote_url=$(git remote get-url origin 2>/dev/null)
+
+        if [[ $remote_url == *"github.com"* ]]; then
+          # Extract the "user/repo" part using parameter expansion.
+          if [[ $remote_url == git@github.com:* ]]; then
+            repo_part=${remote_url#git@github.com:}
+          elif [[ $remote_url == https://github.com/* ]]; then
+            repo_part=${remote_url#https://github.com/}
+          else
+            repo_part=""
+          fi
+
+          # Remove a trailing ".git" or slash if present.
+          repo_part=${repo_part%.git}
+          repo_part=${repo_part%/}
+
+          if [[ -n "$repo_part" ]]; then
+            commit_link="https://github.com/${repo_part}/commit/$(git log -1 --pretty=format:"%H" "@{u}")"
+          else
+            commit_link="N/A"
+          fi
+        else
+          commit_link="N/A"
+        fi
+
+        echo "  🔺 $repo_dir: $remote_commit_info (behind by $behind commit(s))"
+        echo "    🔗 Latest commit link: $commit_link"
+        outdated_found=$((outdated_found + 1))
+      fi
+    else
+      echo "  ⛔ No upstream branch configured for $repo_dir"
+    fi
+
+    # Return to the previous directory; exit/return if popd fails.
+    popd >/dev/null || {
+      echo "  🔴 popd failed for $repo_dir, exiting." >&2
+      return 1
+    }
+  done < <(find . -type d -name ".git" -prune)
+
+  echo ""
+  if [ "$outdated_found" -eq 0 ]; then
+    echo "✅ No outdated projects found."
+  else
+    echo "🛠️ Total outdated projects: $outdated_found"
+  fi
 }
 
 ######################################################################
@@ -642,8 +750,9 @@ vm_md_to_pdf() {
   local input_file="$1"
   local cur_date
   local filename
-  local template_path="${2:-$HOME/.config/templates/pandoc-latex-eisvogel.tex}"
-  local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/eisvogel.tex"
+  local template_path="${2:-$HOME/.config/templates/eisvogel.latex}"
+  # local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/template-multi-file/eisvogel.latex"
+  local template_url="https://github.com/Wandmalfarbe/pandoc-latex-template/releases/download/v3.1.0/Eisvogel.tar.gz"
 
   # Check if the template file exists, if not, download it
   if [ ! -f "$template_path" ]; then
