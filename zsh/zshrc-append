@@ -446,22 +446,30 @@ alias vm_git_log1="git log --graph --abbrev-commit --decorate --format=format:'%
 alias vm_git_log2="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all"
 
 alias vm_git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
-alias vm_git_diff='git difftool --tool=nvimdiff'
 alias vm_git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
 
-vm_git_commit_search() {
+vm_git_diff() {
+  if command -v delta >/dev/null 2>&1; then
+    git diff --color=always "$@" | delta --dark --line-numbers
+  else
+    git difftool --tool=nvimdiff "$@"
+  fi
+}
+
+vm_git_commit_search2() {
   # shellcheck disable=SC2016
   git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
-    fzf --ansi --no-sort --reverse --tiebreak=index --bind=ctrl-s:toggle-sort --preview \
-      'f() { set -- $(echo -- "$@" | grep -o "[a-f0-9]\{7\}"); [ $# -eq 0 ] || git show --color=always $1 ; }; f {}' \
+    fzf --ansi --no-sort --reverse --tiebreak=index \
+      --bind=ctrl-s:toggle-sort \
+      --preview 'git show --color=always $(echo {} | grep -o "[a-f0-9]\{7\}" | head -1)' \
       --header "enter to view, ctrl-o to checkout" \
       --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
       --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
-      --bind "ctrl-m:execute:
-                (grep -o '[a-f0-9]\{7\}' | head -1 |
-                xargs -I % sh -c 'git show --color=always % | less -R') << 'FZF-EOF'
-                {}
-FZF-EOF" --preview-window=right:60%
+      --bind "ctrl-m:execute:(
+          echo {} | grep -o '[a-f0-9]\{7\}' | head -1 |
+          xargs -I % sh -c 'git show --color=always % | less -R'
+      )" \
+      --preview-window=right:60%
 }
 
 vm_git_check_updates() {
@@ -547,6 +555,119 @@ vm_git_check_updates() {
   else
     echo "🛠️ Total outdated projects: $outdated_found"
   fi
+}
+
+######################################################################
+##
+## OpenShift: (oc) Helper Functions
+##
+######################################################################
+
+# Alias to quickly view the current project
+alias ocp='oc project'
+
+# Switch projects interactively using fzf
+vm_oc_switch() {
+  local project
+  project=$(oc projects -q | fzf --prompt="Select project: ")
+  if [ -z "$project" ]; then
+    echo "No project selected."
+    return 1
+  fi
+  oc project "$project"
+}
+
+# Follow logs for a selected pod (interactive selection via fzf)
+vm_oc_logs() {
+  local pod
+  pod=$(oc get pods --no-headers 2>/dev/null | fzf --prompt="Select pod for logs: " | awk '{print $1}')
+  if [ -z "$pod" ]; then
+    echo "No pod selected."
+    return 1
+  fi
+  oc logs -f "$pod"
+}
+
+vm_oc_logs_search() {
+  local pod container containers
+
+  # Select a pod using fzf
+  pod=$(oc get pods --no-headers 2>/dev/null | fzf --prompt="Select pod for logs: " | awk '{print $1}')
+  if [ -z "$pod" ]; then
+    echo "No pod selected."
+    return 1
+  fi
+
+  # Check if the selected pod has multiple containers and prompt for one if so.
+  containers=$(oc get pod "$pod" -o jsonpath='{.spec.containers[*].name}' 2>/dev/null)
+  if [ "$(echo "$containers" | wc -w)" -gt 1 ]; then
+    container=$(echo "$containers" | tr ' ' '\n' | fzf --prompt="Select container: ")
+  fi
+
+  echo "Streaming logs for pod '$pod'${container:+ (container: $container)}. Press Ctrl-C to exit."
+
+  # Tail the logs and pipe them to fzf for interactive searching.
+  if [ -n "$container" ]; then
+    oc logs -f "$pod" -c "$container" 2>&1 | fzf --ansi --cycle
+  else
+    oc logs -f "$pod" 2>&1 | fzf --ansi --cycle
+  fi
+}
+
+# Open an interactive shell in a selected pod's container
+vm_oc_shell() {
+  local pod container containers
+  pod=$(oc get pods --no-headers 2>/dev/null | fzf --prompt="Select pod for shell: " | awk '{print $1}')
+  if [ -z "$pod" ]; then
+    echo "No pod selected."
+    return 1
+  fi
+
+  # Retrieve container names for the pod
+  containers=$(oc get pod "$pod" -o jsonpath='{.spec.containers[*].name}')
+  if [[ $(echo "$containers" | wc -w) -gt 1 ]]; then
+    container=$(echo "$containers" | tr ' ' '\n' | fzf --prompt="Select container: ")
+  fi
+
+  # Try bash first, fallback to sh if bash is unavailable
+  if [ -n "$container" ]; then
+    oc exec -it "$pod" -c "$container" -- bash 2>/dev/null || oc exec -it "$pod" -c "$container" -- sh
+  else
+    oc exec -it "$pod" -- bash 2>/dev/null || oc exec -it "$pod" -- sh
+  fi
+}
+
+# Describe a resource interactively.
+vm_oc_describe() {
+  local resource_type resource
+
+  # List of common resource types. Extend this list as needed.
+  local resource_types=("pods" "svc" "deployment" "dc" "route" "configmap" "secret" "pvc" "buildconfig")
+
+  resource_type=$(printf "%s\n" "${resource_types[@]}" | fzf --prompt="Select resource type: ")
+  if [ -z "$resource_type" ]; then
+    echo "No resource type selected."
+    return 1
+  fi
+
+  resource=$(oc get "$resource_type" --no-headers 2>/dev/null | fzf --prompt="Select $resource_type: " | awk '{print $1}')
+  if [ -z "$resource" ]; then
+    echo "No $resource_type selected."
+    return 1
+  fi
+
+  oc describe "$resource_type" "$resource"
+}
+
+# Additional example: Follow logs for a deployment config (dc)
+vm_oc_dc_logs() {
+  local dc
+  dc=$(oc get dc --no-headers 2>/dev/null | fzf --prompt="Select deployment config: " | awk '{print $1}')
+  if [ -z "$dc" ]; then
+    echo "No deployment config selected."
+    return 1
+  fi
+  oc logs -f dc/"$dc"
 }
 
 ######################################################################
