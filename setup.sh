@@ -111,6 +111,8 @@ main() {
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
+
+  print_info2 "\n✅ All finished!"
 }
 
 # ******************************************************************************
