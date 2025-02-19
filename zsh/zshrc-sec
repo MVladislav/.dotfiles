@@ -4,7 +4,7 @@ VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
 VM_SEC_LISTS_SECFILES=~'/opt/sec/SecFiles'
 
-: ${VM_SEC_USER_AGENT:='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
 
 ######################################################################
 ##
@@ -59,7 +59,24 @@ vm_sec_install_tools() {
 alias vm_sec_nm1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
 alias vm_sec_nm2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
 
-alias vm_sec_what="whatweb -v -U='${VM_SEC_USER_AGENT}'"
+xsltproc() {
+  local NMAP_REPORT_ID="${1:-1}"
+  mkdir -p /var/log/nmap
+  xsltproc \
+    -o "/var/log/nmap/report-$(date +%Y-%m-%d)-${NMAP_REPORT_ID}.html" \
+    /opt/nmap/nmap-bootstrap.xsl \
+    "/var/log/nmap/report-$(date +%Y-%m-%d)-${NMAP_REPORT_ID}.xml" \
+    "$@"
+}
+nmap-report() {
+  local NMAP_REPORT_ID="${1:-1}"
+  mkdir -p /var/log/nmap
+  nmap -oA /var/log/nmap/report-"$(date +%Y-%m-%d)"-"${NMAP_REPORT_ID}" "$@"
+  xsltproc
+}
+
+alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
+alias vm_sec_what="whatweb -v"
 
 vm_sec_xssall() {
   gum input --placeholder='Input Target IP/DOMAIN' |
@@ -72,9 +89,9 @@ vm_sec_xssall() {
 # echo https://192.168.111.41 | katana -jc -d 5 -c 50 -ef css,woff,woff2,eot,ttf,tiff,tif -kf robotstxt,sitemapxml | grep -v -e "="
 # subfinder -d https://192.168.111.41 -silent -all | httpx -silent | katana -d 5 silent -em js,jsp,json | grep -P "(?i).+\.js(?:on|p)?$"
 
-alias vm_sec_gobuster="gobuster dir --wordlist ${VM_SEC_LISTS_SECLISTS}/diccnoext.txt --wildcard --url"
+alias vm_sec_gobuster="gobuster dir --wordlist '${VM_SEC_LISTS_SECLISTS}/diccnoext.txt' --wildcard --url"
 
-alias vm_sec_fuzz="ffuf -w ${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt -mc all -u"
+alias vm_sec_fuzz="ffuf -w '${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt' -mc all -u"
 vm_sec_fuzz_path() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <[http(s)://]HOST>"
@@ -122,12 +139,15 @@ vm_sec_katana() {
   echo "$1" | katana -headless -fs rdn -d 1 -ct 1 -rl 10 -o result.txt -jsonl
 }
 
-alias vm_sec_massdns="massdns -r ${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt -t A -o S targets.txt -w hosts.txt -s 4000"
+alias vm_sec_massdns="massdns -r '${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt' -t A -o S targets.txt -w hosts.txt -s 4000"
 
 alias vm_sec_server='python3 -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
 
-alias vm_sec_sj="sj -a ${VM_SEC_USER_AGENT} -i"
+alias sj="sj -a '${VM_SEC_USER_AGENT}'"
+alias vm_sec_sj="sj -i"
+
+alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
 
 ######################################################################
 ##
@@ -163,7 +183,6 @@ vm_sec_encode_base64() {
 ## FUNCTIONS:: base
 ##
 ######################################################################
-
 vm_sec_ip_country() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <IP>"
@@ -198,7 +217,6 @@ vm_sec_ip_country_batch() {
 ## FUNCTIONS:: APT search
 ##
 ######################################################################
-
 vm_sec_apt() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
@@ -254,7 +272,6 @@ vm_sec_apt() {
 ## FUNCTIONS:: MITRE technique search
 ##
 ######################################################################
-
 vm_sec_mitre() {
   local USAGE="Usage: $0 <[short|detail|tactics|intrusion|malware]> (<SEARCH>)"
   local vm_s_type="$1"
