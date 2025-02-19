@@ -5,7 +5,7 @@
 repos:
   # Codespell for spelling corrections
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.0
+    rev: v2.4.1
     hooks:
       - id: codespell
         args:
@@ -54,10 +54,10 @@ repos:
     hooks:
       - id: detect-secrets
         args: [--exclude-files=tests/*]
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.23.2
-    hooks:
-      - id: gitleaks
+  # - repo: https://github.com/gitleaks/gitleaks
+  #   rev: v8.23.3
+  #   hooks:
+  #     - id: gitleaks
 
   # YAML Linting
   - repo: https://github.com/adrienverge/yamllint.git

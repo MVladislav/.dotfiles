@@ -17,6 +17,15 @@ EOF
 
 # ******************************************************************************
 
+RUN_WITH_SUDO=''
+IS_SUDO_INSTALL=0
+if command -v sudo &>/dev/null; then
+  RUN_WITH_SUDO=sudo
+  IS_SUDO_INSTALL=1
+fi
+
+# ******************************************************************************
+
 # COLOR ------------------------------------------------------------------------
 # https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
 NC='\033[0m'         # No Color
@@ -46,7 +55,7 @@ RUN_INSTALL_FONTS=0
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
 VERSION_ZIG=https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
-VERSION_GHOSTTY=v1.1.0
+VERSION_GHOSTTY=v1.1.2
 VERSION_FONTS_RELEASE='v3.2.1'
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
@@ -83,7 +92,7 @@ main() {
     exit 1
   fi
 
-  sudo -k
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   initialize_base
   [[ $RUN_INSTALL_DEPENDENCIES_ADDITIONAL -eq 1 ]] && install_dependencies_additional
 
@@ -128,17 +137,17 @@ install_dependencies_needs() {
 
   # Install the packages
   if [[ ${#all_packages[@]} -gt 0 ]]; then
-    sudo apt-get update -qqq || {
+    $RUN_WITH_SUDO apt-get update -qqq || {
       print_error "Failed to update package list"
       exit 1
     }
-    sudo apt-get install -y "${all_packages[@]}" 1>/dev/null || {
+    $RUN_WITH_SUDO apt-get install -y "${all_packages[@]}" 1>/dev/null || {
       print_error "Failed to install packages"
       exit 1
     }
   fi
 
-  sudo -k
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_notes "   📥 build dependencies installed"
 }
 
@@ -149,14 +158,14 @@ install_dependencies_needs_rm() {
   fi
 
   print_notes "   📥 Removing build dependencies..."
-  sudo apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
+  $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
     print_error "Failed to remove packages"
     return 1
   }
-  sudo apt-get -y autoremove -qqq 1>/dev/null
-  sudo apt-get -y autoclean -qqq 1>/dev/null
+  $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
+  $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
 
-  sudo -k
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
 }
 
@@ -170,22 +179,22 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n📥 DEPS :: install some base services :: [rsync fzf eza bat ripgrep fd-find xclip]"
-  sudo apt-get install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  $RUN_WITH_SUDO apt-get install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   print_info2 "📥 DEPS :: disable rsync systemd service"
-  sudo systemctl disable rsync.service &>/dev/null
-  sudo systemctl mask rsync.service &>/dev/null
+  $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
+  $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
 
   # echo "DEPS :: install npm"
-  # sudo snap install node --classic
+  # $RUN_WITH_SUDO snap install node --classic
 
   # echo "DEPS :: install lazygit with go"
-  # sudo snap install go --classic
+  # $RUN_WITH_SUDO snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
 
   # echo "DEPS :: install zed over flatpak"
   # flatpak install flathub dev.zed.Zed
-  sudo -k
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 }
 
 # SERVICE :: install tmux ------------------------------------------------------
@@ -265,7 +274,7 @@ install_dependencies_zsh() {
 
   local zsh_install_bin_path
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # sudo apt-get install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
+    # $RUN_WITH_SUDO apt-get install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
     # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
     # cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
@@ -278,13 +287,13 @@ install_dependencies_zsh() {
     # cd - 1>/dev/null
     # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
-    sudo apt-get install -y zsh 1>/dev/null
+    $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
     zsh_install_bin_path="/usr/bin/zsh"
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    sudo apt-get install -y zsh 1>/dev/null
+    $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
     zsh_install_bin_path="/usr/bin/zsh"
   fi
-  sudo -k
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   print_info2 "🚀 ZSH :: Load git submodules"
   git submodule update -q --init --remote \
@@ -312,10 +321,10 @@ install_dependencies_zsh() {
   if [[ "$(basename "$SHELL")" != "zsh" ]]; then
     print_info2 "🚀 ZSH :: Set 'zsh' as new shell für user '$USER'"
     # sudo chsh -s "$(which zsh)" "$USER"
-    sudo chsh -s "$zsh_install_bin_path" "$USER" || {
+    $RUN_WITH_SUDO chsh -s "$zsh_install_bin_path" "$USER" || {
       print_error "  ❌ Failed to change default shell to ZSH. Please run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
     }
-    sudo -k
+    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   fi
 
   print_info2 "🚀 ZSH :: zsh installed!"
