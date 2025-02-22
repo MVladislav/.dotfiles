@@ -3,8 +3,8 @@ PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 IFS=$'\n\t'
 
-# Trap SIGINT (Ctrl+C) to exit the script and stop the rsync loop
-trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT
+# Trap SIGINT and SIGTERM to exit the script gracefully
+trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT SIGTERM
 
 # ******************************************************************************
 
@@ -42,12 +42,14 @@ BACKUP_DIR=""
 DRY_RUN=false
 BACKUP_PVE=false
 BACKUP_PBS=false
+RESTORE_MODE=false
 
 # ******************************************************************************
 
-main() {
-  # Ensure the backup directory exists and is writable
-  BACKUP_DIR="${BACKUP_DIR:-/tmp/backup-pve-${REMOTE_HOST}}" # -$(date +%Y%m%d%H%M%S)
+# Backup mode: Pull files from remote host to local backup directory
+main_backup() {
+  # Set default backup directory if not provided (includes a timestamp)
+  BACKUP_DIR="${BACKUP_DIR:-/tmp/backup-pve-${REMOTE_HOST}-$(date +%Y%m%d%H%M%S)}"
   mkdir -p "$BACKUP_DIR" || {
     print_error1 "Error: Unable to create backup directory '$BACKUP_DIR'"
     exit 1
@@ -55,31 +57,50 @@ main() {
 
   print_info1 "💡 Backup started at $(date)\n"
 
-  # Sync files
+  # Sync files based on chosen backup options
   [[ $BACKUP_PVE == true ]] && sync_files FILES_TO_BACKUP_PVE[@] "pve"
   [[ $BACKUP_PBS == true ]] && sync_files FILES_TO_BACKUP_PBS[@] "pbs"
 
-  [[ $BACKUP_PBS == false && $BACKUP_PVE == false ]] && {
-    print_error2 "Nothing will backup, you should choose '-pve' or '-pbs' as args!"
+  if [[ $BACKUP_PVE == false && $BACKUP_PBS == false ]]; then
+    print_error2 "Nothing to backup. Please choose '-pve' or '-pbs'."
     usage
-  }
+    exit 1
+  fi
 
-  # Print completion message
   print_info1 "💡 Backup completed. Files saved to $BACKUP_DIR."
+}
+
+# Restore mode: Push files from local backup directory to remote host
+main_restore() {
+  # In restore mode the backup directory must exist
+  if [[ ! -d "$BACKUP_DIR" ]]; then
+    print_error1 "Error: Backup directory '$BACKUP_DIR' does not exist."
+    exit 1
+  fi
+
+  print_info1 "💡 Restore started at $(date)\n"
+
+  [[ $BACKUP_PVE == true ]] && restore_files FILES_TO_BACKUP_PVE[@] "pve"
+  [[ $BACKUP_PBS == true ]] && restore_files FILES_TO_BACKUP_PBS[@] "pbs"
+
+  if [[ $BACKUP_PVE == false && $BACKUP_PBS == false ]]; then
+    print_error2 "Nothing to restore. Please choose '-pve' or '-pbs'."
+    usage
+    exit 1
+  fi
+
+  print_info1 "💡 Restore completed. Files from $BACKUP_DIR restored to $REMOTE_HOST."
 }
 
 # ******************************************************************************
 
-# Function to sync files using rsync
+# Function to sync files using rsync (Backup direction: Remote -> Local)
 sync_files() {
   local files_list=("${!1}")
   local type="$2"
+  local total_files=0 total_errors=0 total_size=0
+  local start_time end_time elapsed_time
 
-  local total_files=0
-  local total_errors=0
-  local total_size=0
-
-  local start_time
   start_time=$(date +%s)
 
   for FILE_PATTERN in "${files_list[@]}"; do
@@ -98,9 +119,12 @@ sync_files() {
     fi
 
     print_info1 "💡 Backing up: $FILE_PATTERN"
-    mkdir -p "$local_dir"
+    mkdir -p "$local_dir" || {
+      print_error2 "Unable to create directory $local_dir"
+      continue
+    }
 
-    # Sync files with rsync
+    # Sync files with rsync from remote host to local backup directory
     if ! rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x" \
       --include="$(basename "$FILE_PATTERN")" --exclude="*" \
       "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$local_dir/"; then
@@ -115,9 +139,7 @@ sync_files() {
     total_size=$((total_size + size))
   done
 
-  local end_time
   end_time=$(date +%s)
-  local elapsed_time
   elapsed_time=$((end_time - start_time))
 
   print_info2 "Total files backed up: $total_files"
@@ -126,8 +148,80 @@ sync_files() {
   print_info2 "Elapsed time: ${elapsed_time}s\n"
 }
 
+# Function to restore files using rsync (Restore direction: Local -> Remote)
+restore_files() {
+  local files_list=("${!1}")
+  local type="$2"
+  local total_files=0 total_errors=0 total_size=0
+  local start_time end_time elapsed_time
+
+  start_time=$(date +%s)
+
+  for FILE_PATTERN in "${files_list[@]}"; do
+    if [[ -z "$FILE_PATTERN" ]]; then
+      print_error2 "Empty file pattern encountered. Skipping..."
+      continue
+    fi
+
+    # Local directory holding the backup
+    local local_dir
+    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
+
+    if [[ "$DRY_RUN" == true ]]; then
+      print_info1 "🧁 [Dry Run] Would restore: '$local_dir/$(basename "$FILE_PATTERN")' to '$REMOTE_HOST:$(dirname "$FILE_PATTERN")/'"
+      continue
+    fi
+
+    print_info1 "💡 Restoring: $local_dir/$(basename "$FILE_PATTERN") to $REMOTE_HOST:$(dirname "$FILE_PATTERN")/"
+    # Upload files from local backup directory to remote host # --rsync-path="sudo -S rsync" \
+    if ! rsync --info=progress2 -auz -e "ssh -tt -T -o Compression=no -x" \
+      --include="$(basename "$FILE_PATTERN")" --exclude="*" \
+      "$local_dir/" "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/"; then
+      print_error2 "Error restoring $FILE_PATTERN"
+      total_errors=$((total_errors + 1))
+      continue
+    fi
+
+    total_files=$((total_files + 1))
+    local size
+    size=$(du -sb "$local_dir" | cut -f1)
+    total_size=$((total_size + size))
+  done
+
+  end_time=$(date +%s)
+  elapsed_time=$((end_time - start_time))
+
+  print_info2 "Total files restored: $total_files"
+  print_info2 "Total size transferred: $((total_size / 1024)) KB"
+  print_info2 "Total errors encountered: $total_errors"
+  print_info2 "Elapsed time: ${elapsed_time}s\n"
+}
+
 # ******************************************************************************
 
+# Function to list SSH hosts from ~/.ssh/config using fzf
+choose_remote_host() {
+  local ssh_config=~/.ssh/config
+  if [[ ! -f "$ssh_config" ]]; then
+    echo "No SSH config found at $ssh_config" >&2
+    exit 1
+  fi
+
+  # Extract host names from SSH config, ignoring wildcards
+  local host
+  host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
+
+  if [[ -z "$host" ]]; then
+    echo "No remote host selected. Exiting." >&2
+    exit 1
+  fi
+
+  REMOTE_HOST="$host"
+}
+
+# ******************************************************************************
+
+# Logging functions
 print_info1() { echo -e "$1"; }
 print_info2() { echo -e "🔭 $1"; }
 print_info3() { echo -e "$1"; }
@@ -138,17 +232,17 @@ usage() {
   print_info3 "📖 Usage: $0 -r <REMOTE_HOST> [options]"
   print_info3 "📖 Options:"
   print_info3 "   -h, --help          Show this help message and exit"
-  print_info3 "   -r, --remote-host   Remote server alias from .ssh/config (mandatory)"
-  print_info3 "   -b, --backup-dir    Local backup directory (default: /tmp/backup-pve-<REMOTE_HOST>)"
-  print_info3 "   -pve                Create backups from proxmox Virtual Environment"
-  print_info3 "   -pbs                Create backups from proxmox Backup Server"
-  print_info3 "   -t, --dry-run       Simulate the backup process without actually transferring files"
+  print_info3 "   -r, --remote-host   Remote server alias from .ssh/config. If not provided, you'll be prompted via fzf."
+  print_info3 "   -b, --backup-dir    Local backup directory (for backup, a default is created; for restore, it must exist)"
+  print_info3 "   -R, --restore       Restore mode: upload files from backup directory back to remote host"
+  print_info3 "   -pve                Backup/restore from Proxmox Virtual Environment"
+  print_info3 "   -pbs                Backup/restore from Proxmox Backup Server"
+  print_info3 "   -t, --dry-run       Simulate the backup/restore process without transferring files"
 }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
-    key="$1"
-    case $key in
+    case "$1" in
     -h | --help)
       usage
       exit 0
@@ -160,6 +254,10 @@ parse_args() {
     -b | --backup-dir)
       BACKUP_DIR="$2"
       shift 2
+      ;;
+    -R | --restore)
+      RESTORE_MODE=true
+      shift
       ;;
     -pve)
       BACKUP_PVE=true
@@ -174,18 +272,16 @@ parse_args() {
       shift
       ;;
     *)
-      print_error1 "Unknown option: $key"
+      print_error1 "Unknown option: $1"
       usage
       exit 1
       ;;
     esac
   done
 
-  # Validate mandatory arguments
+  # If REMOTE_HOST was not provided, prompt via fzf
   if [[ -z "$REMOTE_HOST" ]]; then
-    print_error1 "Error: --remote-host is a mandatory argument."
-    usage
-    exit 1
+    choose_remote_host
   fi
 }
 
@@ -193,7 +289,7 @@ parse_args() {
 
 # Validate required commands are available
 check_dependencies() {
-  local commands=("rsync" "ssh" "du" "mkdir")
+  local commands=(rsync ssh du mkdir fzf)
   for cmd in "${commands[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
       print_error1 "Error: Required command '$cmd' not found."
@@ -210,11 +306,26 @@ validate_remote_host() {
   fi
 }
 
+# Check if rsync is installed on the remote host
+check_remote_rsync() {
+  if ! ssh -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v rsync" >/dev/null 2>&1; then
+    print_error1 "Error: 'rsync' is not installed on remote host '$REMOTE_HOST'"
+    exit 1
+  fi
+}
+
 # ******************************************************************************
 
-# Parse arguments and run main script
+# Main execution
 parse_args "$@"
 check_dependencies
+
 validate_remote_host
-main
+check_remote_rsync
+
+if [[ "$RESTORE_MODE" == true ]]; then
+  main_restore
+else
+  main_backup
+fi
 exit 0
