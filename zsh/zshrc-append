@@ -339,7 +339,7 @@ vm_quick_android_emulator() {
   if [[ -z $selected_emulator ]]; then
     return 1
   fi
-  "${VM_ANDROID_PATH}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator"
+  "${VM_ANDROID_PATH}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator" $@
 }
 
 ### TOOLS ###
