@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
+set -euo pipefail
+IFS=$'\n\t'
+
+# Error handling: print a message and exit on any error
+trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" ERR
+
+# Check if the script is run with sudo
+if [[ "$EUID" -ne 0 ]]; then
+  echo "-> This script must be run with sudo."
+  exit 1
+fi
+
+# Determine the current user
+CURRENT_USER="${SUDO_USER:-$(logname)}"
+
+BACKUP_DATE=$(date +'%Y-%m-%d-%H-%M')
+BACKUP_SRC="/var/lib/docker/volumes"
+BACKUP_DEST="."
+VERBOSE="v"
+
+DOCKER_RUNNING_SERVICE=""
+DOCKER_ORIGINAL_SCALES=()
+
+# ------------------------------------------------------------------------------
+
+main() {
+  echo "-> Starting backup for script '$0' on $BACKUP_DATE ..."
+  check_dependencies
+
+  # Get a list of running services in Docker Swarm
+  DOCKER_RUNNING_SERVICE=$(docker service ls --format "{{.ID}}")
+
+  service_scale_down
+  service_backup
+  service_scale_up
+
+  echo "-> Backup and scaling operations completed for script '$0'."
+}
+
+service_backup() {
+  # Perform the backup operation
+  echo "-> Starting backup of Docker volumes..."
+  #tar zcp"$VERBOSE"f "docker-backup-${BACKUP_DATE}.tar.gz" "$BACKUP_SRC"
+  tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz" -C "$BACKUP_SRC" .
+  chown "$CURRENT_USER:$CURRENT_USER" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
+}
+
+# ------------------------------------------------------------------------------
+
+service_scale_down() {
+  if [[ -z "$DOCKER_RUNNING_SERVICE" ]]; then
+    echo "-> No running services found, nothing will be scaled down."
+  else
+    # Collect the original scale (replicas) of services with replicas > 0
+    for service in $DOCKER_RUNNING_SERVICE; do
+      local replicas=0
+      replicas=$(docker service inspect --format "{{.Spec.Mode.Replicated.Replicas}}" "$service")
+      if [[ "$replicas" -gt 0 ]]; then
+        local service_name=""
+        service_name=$(docker service inspect --format "{{.Spec.Name}}" "$service")
+        DOCKER_ORIGINAL_SCALES+=("$service_name:$replicas")
+      fi
+    done
+
+    if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
+      echo "-> No services with replicas > 0 found, nothing to scale down."
+    else
+      echo "-> Scaling down services to 0..."
+      for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
+        local service_name replicas
+        service_name=$(echo "$original_scale" | cut -d ':' -f 1)
+        replicas=$(echo "$original_scale" | cut -d ':' -f 2)
+        echo "-> Scaling down '$service_name' from '$replicas' replica(s)"
+        docker service scale "$service_name"=0
+      done
+    fi
+  fi
+}
+
+service_scale_up() {
+  # Scale services back to their original replicas
+  if [[ -z "$DOCKER_RUNNING_SERVICE" ]]; then
+    echo "-> No running services found before, nothing to scale back up."
+  else
+    if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
+      echo "-> No services with replicas > 0 found before, nothing to scale back up."
+    else
+      echo "-> Restoring services to their original scale..."
+      for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
+        local service_name replicas
+        service_name=$(echo "$original_scale" | cut -d ':' -f 1)
+        replicas=$(echo "$original_scale" | cut -d ':' -f 2)
+        echo "-> Scaling up '$service_name' back to '$replicas' replica(s)"
+        docker service scale "$service_name"="$replicas"
+      done
+    fi
+  fi
+}
+
+# ------------------------------------------------------------------------------
+
+# Check for required dependencies before proceeding
+check_dependencies() {
+  local deps=(docker tar pigz)
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" &>/dev/null; then
+      echo "ERROR: Required dependency '$dep' is not installed or not in PATH."
+      exit 1
+    fi
+  done
+}
+
+# ------------------------------------------------------------------------------
+
+main
+exit 0
