@@ -51,6 +51,7 @@ RUN_SETUP_LOGSEQ=1
 
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
+RUN_INSTALL_BTOP=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
@@ -111,6 +112,7 @@ main() {
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
+  [[ $RUN_INSTALL_BTOP -eq 1 ]] && install_btop
 
   print_info2 "\n✅ All finished!"
 }
@@ -123,34 +125,41 @@ install_dependencies_needs() {
   local packages_tools=("${!1}")
   local packages_build=("${!2}")
 
-  # Check which build packages are already installed
+  local packages_to_install=()
+
+  # Check packages_tools: install if missing, but never mark for removal.
+  for pkg in "${packages_tools[@]}"; do
+    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+      packages_to_install+=("$pkg")
+    fi
+  done
+
+  # Check packages_build: install if missing and add to removal list.
   for pkg in "${packages_build[@]}"; do
     if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+      packages_to_install+=("$pkg")
       DEPS_PACKAGES_TO_REMOVE+=("$pkg")
     fi
   done
 
-  # Combine tools and build packages for installation
-  local all_packages=("${packages_tools[@]}" "${packages_build[@]}")
-
-  # Print the list of packages to install and remove
-  print_notes "   📥 Packages to install: [$(echo "${all_packages[*]}" | tr '\n' ' ')]"
+  print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
   print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
 
-  # Install the packages
-  if [[ ${#all_packages[@]} -gt 0 ]]; then
+  # Only run sudo update and install if any package is missing.
+  if [[ ${#packages_to_install[@]} -gt 0 ]]; then
     $RUN_WITH_SUDO apt-get update -qqq || {
       print_error "Failed to update package list"
       exit 1
     }
-    $RUN_WITH_SUDO apt-get install -y "${all_packages[@]}" 1>/dev/null || {
+    $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
       print_error "Failed to install packages"
       exit 1
     }
+    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+    print_notes "   📥 Build dependencies installed"
+  else
+    print_notes "   📥 All dependencies already installed. Skipping dependencies installation."
   fi
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_notes "   📥 build dependencies installed"
 }
 
 install_dependencies_needs_rm() {
@@ -567,6 +576,42 @@ install_fonts() {
   print_info2 "🚀 FONTS :: All fonts are downloaded and extracted"
 }
 
+install_btop() {
+  print_info2 "\n🚀 BTOP :: install btop..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+
+  # Define packages needed for btop and install
+  local packages_tools=()
+  local packages_build=(git build-essential)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
+    cd "$DEPS_INSTALL_PATH/btop"
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+    git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
+    cd "$DEPS_INSTALL_PATH/btop"
+    git checkout -q v1.4.0
+  fi
+
+  make GPU_SUPPORT=true ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
+  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
+
+  cd - 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
+
+  print_notes "   💡 configure btop with 'setcap' for 'GPU' access without 'sudo'"
+  $RUN_WITH_SUDO setcap cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 BTOP :: btop installed!"
+}
+
 # ******************************************************************************
 
 print_info() { echo -e "${BPURPLE}$1${NC}"; }
@@ -585,14 +630,17 @@ usage() {
   print_info "     $0 -ds -it                               Install only additional tools"
   print_info "     $0 -ds -itmux -invim                     Install only tmux and nvim"
   print_info "     $0 -ds -izsh                             Install only zsh"
-  print_info "     $0 -it -itmux -invim -izsh               Full setup and install"
+  print_info "     $0 -ds -ighost                           Install only ghostty"
+  print_info "     $0 -ds -ibtop                            Install only btop"
+  print_info "     $0 -it -invim -izsh -itmux               Install nvim, zsh and tmux with additional tools + config setup"
+  print_info "     $0 -it -invim -ighost                    Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
   print_info "     -h,      --help                          Show this help message and exit"
-  print_info "     -it,     --install-additional-tools      install additional tools [rsync fzf eza bat ripgrep fd-find]"
-  print_info "     -itmux,  --install-dependencies-tmux     install/update service tmux"
-  print_info "     -invim,  --install-dependencies-nvim     install/update service nvim"
-  print_info "     -izsh,   --install-dependencies-zsh      install/update service zsh"
-  print_info "     -ighost, --install-dependencies-ghostty  install/update service ghostty"
+  print_info "     -it,     --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  print_info "     -itmux,  --install-dependencies-tmux     Install/update service tmux"
+  print_info "     -invim,  --install-dependencies-nvim     Install/update service nvim"
+  print_info "     -izsh,   --install-dependencies-zsh      Install/update service zsh"
+  print_info "     -ighost, --install-dependencies-ghostty  Install/update service ghostty"
   print_info "     -nsb,    --not-setup-bin                 Skip setup_bin"
   print_info "     -nst,    --not-setup-tmux                Skip setup_tmux"
   print_info "     -nsv,    --not-setup-nvim                Skip setup_nvim"
@@ -601,8 +649,10 @@ usage() {
   print_info "     -nsa,    --not-setup-adds                Skip setup_adds"
   print_info "     -nsl,    --not-setup-logseq              Skip setup_logseq"
   print_info "     -ds,     --disable-setups                Skip all setup"
-  print_info "     -ice,    --install-code-ext              run install install_code_ext"
-  print_info "     -if,     --install-fonts                 run install install_fonts"
+  print_info "     -ice,    --install-code-ext              Run install install_code_ext"
+  print_info "     -ifont,  --install-fonts                 Run install install_fonts"
+  print_info "     -ibtop,  --install-btop                  Run install install_btop"
+  print_info "     -s                                       Use 'source' instead 'release' for install services"
 }
 
 # Function to parse command-line arguments
@@ -674,8 +724,14 @@ parse_args() {
     -ice | --install-code-ext)
       RUN_INSTALL_CODE_EXT=1
       ;;
-    -if | --install-fonts)
+    -ifont | --install-fonts)
       RUN_INSTALL_FONTS=1
+      ;;
+    -ibtop | --install-btop)
+      RUN_INSTALL_BTOP=1
+      ;;
+    -s)
+      INSTALL_SOURCE_FROM=source
       ;;
     -d | --debug)
       set -x # Enable debug mode
