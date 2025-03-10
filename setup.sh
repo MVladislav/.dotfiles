@@ -55,9 +55,13 @@ RUN_INSTALL_BTOP=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-VERSION_ZIG=https://ziglang.org/download/0.13.0/zig-linux-x86_64-0.13.0.tar.xz
+VERSION_ZIG=https://ziglang.org/builds/zig-linux-x86_64-0.14.0.tar.xz
 VERSION_GHOSTTY=v1.1.2
 VERSION_FONTS_RELEASE='v3.2.1'
+
+VERSION_BTOP='v1.4.0'
+RSMI_STATIC='true'
+RSMI_VERSION='rocm-6.3.3'
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_PACKAGES_TO_REMOVE=()
@@ -583,22 +587,34 @@ install_btop() {
 
   # Define packages needed for btop and install
   local packages_tools=()
-  local packages_build=(git build-essential)
+  local packages_build=(git build-essential cmake)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
-    cd "$DEPS_INSTALL_PATH/btop"
+    pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
-    cd "$DEPS_INSTALL_PATH/btop"
-    git checkout -q v1.4.0
+    pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+    git checkout -q "${VERSION_BTOP}"
   fi
 
-  make GPU_SUPPORT=true ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
+  # Handle ROCm SMI if needed
+  if [[ $RSMI_STATIC == 'true' ]]; then
+    git clone -q --depth 1 -b "$RSMI_VERSION" https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
+    pushd lib/rocm_smi_lib 1>/dev/null
+    mkdir -p build 1>/dev/null
+    cd build 1>/dev/null
+    cmake .. 1>/dev/null
+    make -j "$(nproc)" 1>/dev/null
+    popd 1>/dev/null
+  fi
+
+  # Build and install btop
+  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="${RSMI_STATIC:-false}" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
-  cd - 1>/dev/null
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
 
