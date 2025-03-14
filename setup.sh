@@ -52,16 +52,16 @@ RUN_SETUP_LOGSEQ=1
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
 RUN_INSTALL_BTOP=0
+RUN_INSTALL_BTOP_AMD=0
+RUN_INSTALL_BTOP_INTEL=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
 VERSION_ZIG=https://ziglang.org/builds/zig-linux-x86_64-0.14.0.tar.xz
 VERSION_GHOSTTY=v1.1.2
 VERSION_FONTS_RELEASE='v3.2.1'
-
 VERSION_BTOP='v1.4.0'
-RSMI_STATIC='true'
-RSMI_VERSION='rocm-6.3.3'
+VERSION_RSMI='rocm-6.3.3'
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_PACKAGES_TO_REMOVE=()
@@ -587,7 +587,7 @@ install_btop() {
 
   # Define packages needed for btop and install
   local packages_tools=()
-  local packages_build=(git build-essential cmake)
+  local packages_build=(git build-essential cmake libdrm-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
@@ -600,27 +600,31 @@ install_btop() {
   fi
 
   # Handle ROCm SMI if needed
-  if [[ $RSMI_STATIC == 'true' ]]; then
-    git clone -q --depth 1 -b "$RSMI_VERSION" https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
+  local RSMI_STATIC='false'
+  if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
+    git clone -q --depth 1 -b "$VERSION_RSMI" https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
     pushd lib/rocm_smi_lib 1>/dev/null
     mkdir -p build 1>/dev/null
     cd build 1>/dev/null
     cmake .. 1>/dev/null
     make -j "$(nproc)" 1>/dev/null
     popd 1>/dev/null
+    RSMI_STATIC='true'
   fi
 
   # Build and install btop
-  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="${RSMI_STATIC:-false}" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
+  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
 
-  print_notes "   💡 configure btop with 'setcap' for 'GPU' access without 'sudo'"
-  $RUN_WITH_SUDO setcap cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
+    print_notes "   💡 configure btop with 'setcap' for 'GPU' access without 'sudo'"
+    $RUN_WITH_SUDO setcap cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
+    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  fi
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
@@ -641,34 +645,36 @@ print_error() { echo -e "${BRED}$1${NC}" >&2; }
 usage() {
   print_info "📑 Usage: $0 [options]"
   print_info "   Examples:"
-  print_info "     $0                                       Run only config setups without installations"
-  print_info "     $0 -if                                   Run config setups with fonts install"
-  print_info "     $0 -ds -it                               Install only additional tools"
-  print_info "     $0 -ds -itmux -invim                     Install only tmux and nvim"
-  print_info "     $0 -ds -izsh                             Install only zsh"
-  print_info "     $0 -ds -ighost                           Install only ghostty"
-  print_info "     $0 -ds -ibtop                            Install only btop"
-  print_info "     $0 -it -invim -izsh -itmux               Install nvim, zsh and tmux with additional tools + config setup"
-  print_info "     $0 -it -invim -ighost                    Install nvim and ghostty with additional tools + config setup"
+  print_info "     $0                                             Run only config setups without installations"
+  print_info "     $0 -if                                         Run config setups with fonts install"
+  print_info "     $0 -ds -it                                     Install only additional tools"
+  print_info "     $0 -ds -itmux -invim                           Install only tmux and nvim"
+  print_info "     $0 -ds -izsh                                   Install only zsh"
+  print_info "     $0 -ds -ighost                                 Install only ghostty"
+  print_info "     $0 -ds -ibtop                                  Install only btop"
+  print_info "     $0 -it -invim -izsh -itmux                     Install nvim, zsh and tmux with additional tools + config setup"
+  print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
-  print_info "     -h,      --help                          Show this help message and exit"
-  print_info "     -it,     --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
-  print_info "     -itmux,  --install-dependencies-tmux     Install/update service tmux"
-  print_info "     -invim,  --install-dependencies-nvim     Install/update service nvim"
-  print_info "     -izsh,   --install-dependencies-zsh      Install/update service zsh"
-  print_info "     -ighost, --install-dependencies-ghostty  Install/update service ghostty"
-  print_info "     -nsb,    --not-setup-bin                 Skip setup_bin"
-  print_info "     -nst,    --not-setup-tmux                Skip setup_tmux"
-  print_info "     -nsv,    --not-setup-nvim                Skip setup_nvim"
-  print_info "     -nsc,    --not-setup-code                Skip setup_code"
-  print_info "     -nsz,    --not-setup-zed                 Skip setup_zed"
-  print_info "     -nsa,    --not-setup-adds                Skip setup_adds"
-  print_info "     -nsl,    --not-setup-logseq              Skip setup_logseq"
-  print_info "     -ds,     --disable-setups                Skip all setup"
-  print_info "     -ice,    --install-code-ext              Run install install_code_ext"
-  print_info "     -ifont,  --install-fonts                 Run install install_fonts"
-  print_info "     -ibtop,  --install-btop                  Run install install_btop"
-  print_info "     -s                                       Use 'source' instead 'release' for install services"
+  print_info "     -h,            --help                          Show this help message and exit"
+  print_info "     -it,           --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  print_info "     -itmux,        --install-dependencies-tmux     Install/update service tmux"
+  print_info "     -invim,        --install-dependencies-nvim     Install/update service nvim"
+  print_info "     -izsh,         --install-dependencies-zsh      Install/update service zsh"
+  print_info "     -ighost,       --install-dependencies-ghostty  Install/update service ghostty"
+  print_info "     -nsb,          --not-setup-bin                 Skip setup_bin"
+  print_info "     -nst,          --not-setup-tmux                Skip setup_tmux"
+  print_info "     -nsv,          --not-setup-nvim                Skip setup_nvim"
+  print_info "     -nsc,          --not-setup-code                Skip setup_code"
+  print_info "     -nsz,          --not-setup-zed                 Skip setup_zed"
+  print_info "     -nsa,          --not-setup-adds                Skip setup_adds"
+  print_info "     -nsl,          --not-setup-logseq              Skip setup_logseq"
+  print_info "     -ds,           --disable-setups                Skip all setup"
+  print_info "     -ice,          --install-code-ext              Run install install_code_ext"
+  print_info "     -ifont,        --install-fonts                 Run install install_fonts"
+  print_info "     -ibtop,        --install-btop                  Run install install_btop"
+  print_info "     -ibtop-amd,    --install-btop-amd              Run install install_btop with AMD GPU support"
+  print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
+  print_info "     -s                                             Use 'source' instead 'release' for install services"
 }
 
 # Function to parse command-line arguments
@@ -745,6 +751,14 @@ parse_args() {
       ;;
     -ibtop | --install-btop)
       RUN_INSTALL_BTOP=1
+      ;;
+    -ibtop-amd | --install-btop-amd)
+      RUN_INSTALL_BTOP=1
+      RUN_INSTALL_BTOP_AMD=1
+      ;;
+    -ibtop-intel | --install-btop-intel)
+      RUN_INSTALL_BTOP=1
+      RUN_INSTALL_BTOP_INTEL=1
       ;;
     -s)
       INSTALL_SOURCE_FROM=source

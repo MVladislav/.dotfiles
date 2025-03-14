@@ -1,54 +1,10 @@
 #!/usr/bin/env bash
 
 VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
-VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
+# VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
 VM_SEC_LISTS_SECFILES=~'/opt/sec/SecFiles'
 
 VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
-
-######################################################################
-##
-## HELPER:: loader
-##
-######################################################################
-vm_sec_load_lists() {
-  git clone https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
-  git clone https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
-}
-
-vm_sec_nmap_scripts() {
-  git clone https://github.com/vulnersCom/nmap-vulners /usr/share/nmap/scripts/nmap-vulners
-  git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
-
-  nmap --script-updatedb
-}
-
-vm_sec_install_base() {
-  sudo apt install jq
-
-  go install github.com/charmbracelet/gum@latest
-}
-
-vm_sec_install_tools() {
-  # saving complete web pages as a single HTML file
-  sudo apt install monolith
-
-  go_github_commit_date_and_download() {
-    IFS='/' read -r owner repo addition <<<"$1"
-    echo 'LAST COMMIT' "[${repo}] ::" "$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')"
-    package_path="${owner}/${repo}"
-    if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
-    go install "github.com/${package_path}@${2:-latest}"
-  }
-
-  go_github_commit_date_and_download 'projectdiscovery/httpx/cmd/httpx'
-  go_github_commit_date_and_download 'projectdiscovery/katana/cmd/katana'
-  go_github_commit_date_and_download 'hahwul/dalfox/v2'
-  go_github_commit_date_and_download 'OJ/gobuster/v3'
-  go_github_commit_date_and_download 'ffuf/ffuf/vm'
-  go_github_commit_date_and_download 'dwisiswant0/unew'
-  go_github_commit_date_and_download 'BishopFox/sj'
-}
 
 ######################################################################
 ##
@@ -56,8 +12,8 @@ vm_sec_install_tools() {
 ##
 ######################################################################
 # -Pn -sS -T4
-alias vm_sec_nm1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
-alias vm_sec_nm2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
+alias vm_sec_nmap1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
+alias vm_sec_nmap2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
 
 xsltproc() {
   local NMAP_REPORT_ID="${1:-1}"
@@ -217,7 +173,7 @@ vm_sec_ip_country_batch() {
 ## FUNCTIONS:: APT search
 ##
 ######################################################################
-vm_sec_apt() {
+vm_sec_search_apt() {
   if [ "$#" -lt 2 ]; then
     echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
     return 1
@@ -272,11 +228,11 @@ vm_sec_apt() {
 ## FUNCTIONS:: MITRE technique search
 ##
 ######################################################################
-vm_sec_mitre() {
-  local USAGE="Usage: $0 <[short|detail|tactics|intrusion|malware]> (<SEARCH>)"
+vm_sec_search_mitre() {
+  local USAGE="Usage: $0 <[short|detail|tactics|attacks|intrusion|malware]> (<SEARCH>)"
   local vm_s_type="$1"
 
-  if [ "$vm_s_type" = "tactics" ]; then
+  if [[ "$vm_s_type" == "tactics" ]]; then
     [ "$#" -lt 1 ] && {
       echo "$USAGE"
       return 1
@@ -312,7 +268,7 @@ vm_sec_mitre() {
         ref_descriptions: ([.external_references[]? | select(has("description")) | .description])
       }'
     ;;
-  short)
+  short | attacks)
     output='{
         name: .name,
         type: .type,
@@ -334,15 +290,22 @@ vm_sec_mitre() {
   local type_filter_relation2=''
   case "$vm_s_type" in
   tactics) type_filter=' and (.type | IN("x-mitre-tactic"))' ;;
+  # attacks) type_filter=' and (.type | IN("attack-pattern"))' ;;
+  attacks)
+    type_filter=' and (.type | IN("attack-pattern"))'
+    type_filter_reverse='"malware","tool","intrusion-set","course-of-action"'
+    type_filter_relation1='target_ref'
+    type_filter_relation2='source_ref'
+    ;;
   intrusion)
     type_filter=' and (.type | IN("intrusion-set"))'
-    type_filter_reverse='"malware","tool"'
+    type_filter_reverse='"malware","tool","course-of-action"'
     type_filter_relation1='source_ref'
     type_filter_relation2='target_ref'
     ;;
   malware)
     type_filter=' and (.type | IN("malware"))'
-    type_filter_reverse='"intrusion-set"'
+    type_filter_reverse='"intrusion-set","course-of-action"'
     type_filter_relation1='target_ref'
     type_filter_relation2='source_ref'
     ;;
@@ -371,70 +334,73 @@ vm_sec_mitre() {
 
   # ---
 
-  # shellcheck disable=SC2016
-  # local output_extended='{
-  #       base_ids: $base_ids,
-  #       relation: $relation,
-  #       final: ($final | map({
-  #         name: .name,
-  #         ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
-  #       }))
-  #     }'
-  local output_extended='($final | map('$output'))'
+  if [ -n "$type_filter_reverse" ]; then
 
-  # shellcheck disable=SC2016
-  local common_filter_extended='
-    . as $root
-    |
-    # Base search: get IDs of objects matching the query.
-    ($root.objects
-      | map(select(
-          (
-            ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
-            or
-            ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
-            or
-            ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
-            or
-            ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
-          )
-          and (.name != null)
-          '$type_filter'
-        ))
-      | map(.id)
-      | unique
-    ) as $base_ids
+    # shellcheck disable=SC2016
+    # local output_extended='{
+    #       base_ids: $base_ids,
+    #       relation: $relation,
+    #       final: ($final | map({
+    #         name: .name,
+    #         ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+    #       }))
+    #     }'
+    local output_extended='($final | map('$output'))'
 
-    |
-    # First hop: find relationship objects whose source_ref is in the base IDs.
-    ($root.objects
-      | map(select(
-          .type=="relationship"
-          and has($r1)
-          and (getpath([$r1]) | type=="string")
-          and ( (getpath([$r1])) as $sr | ($base_ids | index($sr)) != null )
-          # and (getpath([$r2]) | startswith($r))
-        ))
-      | map(getpath([$r2]))
-      | unique
-    ) as $relation
+    # shellcheck disable=SC2016
+    local common_filter_extended='
+      . as $root
+      |
+      # Base search: get IDs of objects matching the query.
+      ($root.objects
+        | map(select(
+            (
+              ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+            )
+            and (.name != null)
+            '$type_filter'
+          ))
+        | map(.id)
+        | unique
+      ) as $base_ids
 
-    |
-    # Final lookup: get objects whose id is in the final IDs.
-    ($root.objects
-      | map(select(
-          ( (.type) as $tt | ($r | index($tt)) != null )
-          and has("id")
-          and (.id | type=="string")
-          and ( (.id) as $fid | ($relation | index($fid)) != null )
-        ))
-    ) as $final
-  '
+      |
+      # First hop: find relationship objects whose source_ref is in the base IDs.
+      ($root.objects
+        | map(select(
+            .type=="relationship"
+            and has($r1)
+            and (getpath([$r1]) | type=="string")
+            and ( (getpath([$r1])) as $sr | ($base_ids | index($sr)) != null )
+            # and (getpath([$r2]) | startswith($r))
+          ))
+        | map(getpath([$r2]))
+        | unique
+      ) as $relation
 
-  jq \
-    --arg s "$vm_mitre_s" \
-    --arg r "$type_filter_reverse" \
-    --arg r1 "$type_filter_relation1" \
-    --arg r2 "$type_filter_relation2" \
-    "$common_filter_extended | $output_extended" "$vm_mitre_file"
+      |
+      # Final lookup: get objects whose id is in the final IDs.
+      ($root.objects
+        | map(select(
+            ( (.type) as $tt | ($r | index($tt)) != null )
+            and has("id")
+            and (.id | type=="string")
+            and ( (.id) as $fid | ($relation | index($fid)) != null )
+          ))
+      ) as $final
+    '
+
+    jq \
+      --arg s "$vm_mitre_s" \
+      --arg r "$type_filter_reverse" \
+      --arg r1 "$type_filter_relation1" \
+      --arg r2 "$type_filter_relation2" \
+      "$common_filter_extended | $output_extended" "$vm_mitre_file"
+  fi
 }
