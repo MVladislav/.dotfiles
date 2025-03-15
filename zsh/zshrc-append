@@ -699,6 +699,31 @@ vm_markdown_to_csv() {
 ##
 ##
 ######################################################################
+vm_convert_video() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <VIDEO>"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${input%.*}.mp4"
+
+  local codec="libx265" # libx264 | libx265
+  local quality=32      # Lower quality for better file size
+  local fps=60
+
+  ffmpeg -y -i "$input" \
+    -vaapi_device /dev/dri/renderD128 \
+    -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
+    -map 0:0 -c:v "$codec" \
+    -map 0:a? -c:a copy \
+    -crf "$quality" \
+    -pix_fmt yuv420p \
+    -preset fast \
+    -r "$fps" \
+    "$output"
+}
+
 vm_convert_gif() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <VIDEO>"
