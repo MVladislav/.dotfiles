@@ -31,12 +31,9 @@
   //   }
   // },
   "features": {
-    "inline_completion_provider": "none"
+    "edit_prediction_provider": "none"
   },
-  "wrap_guides": [
-    80,
-    130
-  ],
+  "wrap_guides": [80, 130],
   "show_wrap_guides": true,
   "soft_wrap": "editor_width",
   "cursor_blink": false,
@@ -61,13 +58,13 @@
   },
   "theme": {
     "mode": "system",
-    "light": "Rosé Pine Dawn",
-    "dark": "Rosé Pine Moon"
+    "light": "Catppuccin Latte - No Italics",
+    "dark": "Catppuccin Macchiato - No Italics"
   },
   "icon_theme": {
     "mode": "system",
-    "light": "Zed (Default)",
-    "dark": "Zed (Default)"
+    "light": "Catppuccin Latte",
+    "dark": "Catppuccin Macchiato"
   },
   "tabs": {
     "file_icons": true,
@@ -99,7 +96,8 @@
   "languages": {
     "Markdown": {
       "preferred_line_length": 130,
-      "format_on_save": "on"
+      "format_on_save": "on",
+      "use_on_type_format": false
     },
     "SQL": {
       "formatter": "prettier"
@@ -116,6 +114,13 @@
       }
     },
     "Rust": {
+      "preferred_line_length": 130,
+      "format_on_save": "on",
+      "use_on_type_format": false
+    },
+    "Shell Script": {
+      "preferred_line_length": 130,
+      "format_on_save": "on",
       "use_on_type_format": false
     }
   },
@@ -131,24 +136,11 @@
       "**/vars/**/*.yml",
       "**/inventory/*/*"
     ],
-    "Docker Compose": [
-      "docker-compose*"
-    ],
-    "Dockerfile": [
-      "Dockerfile*"
-    ],
-    "env": [
-      ".env"
-    ],
-    "Git Ignore": [
-      ".gitignore",
-      ".dockerignore",
-      ".gitattributes"
-    ],
-    "YAML": [
-      "*.yaml",
-      ".yamllint"
-    ]
+    "Docker Compose": ["docker-compose*"],
+    "Dockerfile": ["Dockerfile*"],
+    "env": [".env"],
+    "Git Ignore": [".gitignore", ".dockerignore", ".gitattributes"],
+    "YAML": ["*.yaml", ".yamllint"]
   },
   "file_scan_exclusions": [
     "**/.git",
