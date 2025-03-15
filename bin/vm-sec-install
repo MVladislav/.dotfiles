@@ -43,7 +43,9 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
 
+RUN_INSTALL_ROCM=0
 RUN_INSTALL_JOHN=0
+RUN_INSTALL_HASHCAT=0
 RUN_INSTALL_TOOLS=0
 RUN_LOAD_LISTS=0
 RUN_LOAD_NMAP_SCRIPTS=0
@@ -53,7 +55,9 @@ RUN_LOAD_NMAP_SCRIPTS=0
 main() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
+  [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
   [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
+  [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
   [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
   [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
   [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
@@ -63,6 +67,19 @@ main() {
 
 # ******************************************************************************
 
+install_rocm() {
+  print_info "\n🚀 ROCM :: Installing AMD ROCm support..."
+
+  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_6.3.60304-1_all.deb \
+    -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  sudo apt-get install "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  sudo apt-get update
+  sudo apt-get install rocm
+  sudo amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
+
+  print_info2 "🚀 ROCM :: AMD ROCm support installed!"
+}
+
 install_john() {
   print_info "\n🚀 JTR :: Installing John the Ripper with AMD ROCm support..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
@@ -70,39 +87,26 @@ install_john() {
   # Define packages needed for john, including ROCm build requirements and install
   local packages_tools=()
   local packages_build=(
-    build-essential git pkg-config libssl-dev libz-dev libbz2-dev
-    libgmp-dev libnss3-dev libkrb5-dev libpcap-dev ocl-icd-opencl-dev
-    opencl-headers cmake g++-multilib libnuma-dev libpci-dev
+    build-essential git pkg-config libssl-dev
+    libnss3-dev libkrb5-dev libgmp-dev libz-dev libbz2-dev
     # rocm-dev hip-dev
+    ## libpcap-dev ocl-icd-opencl-dev
+    ## opencl-headers cmake g++-multilib libnuma-dev libpci-dev rocm-llvm-dev
   )
   install_dependencies_needs packages_tools[@] packages_build[@]
-
-  # Build ROCm OpenCL runtime from source
-  local ROCM_SRC="$DEPS_INSTALL_PATH/rocm-opencl"
-  if [ ! -d "$ROCM_SRC" ]; then
-    git clone -q https://github.com/RadeonOpenCompute/ROCm-OpenCL-Runtime "$ROCM_SRC"
-    mkdir -p "$ROCM_SRC/build"
-    cd "$ROCM_SRC/build"
-    cmake -DCMAKE_INSTALL_PREFIX="$ROCM_SRC/install" \
-      -DLLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm \
-      -DClang_DIR=/opt/rocm/llvm/lib/cmake/clang \
-      .. \
-      1>/dev/null
-    make -sj"$(nproc)" 1>/dev/null
-    cd -
-  fi
 
   # Build John the Ripper
   rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
   git clone -q https://github.com/openwall/john.git -b bleeding-jumbo "$DEPS_INSTALL_PATH/john"
-  cd "$DEPS_INSTALL_PATH/john/src"
+  pushd "$DEPS_INSTALL_PATH/john/src" 1>/dev/null
 
   # Configure with local ROCm OpenCL
-  ./configure --prefix="$USER_LOCAL_PREFIX" \
-    --exec_prefix="$USER_LOCAL_PREFIX/bin" \
+  ./configure \
+    LDFLAGS="-L/opt/rocm/lib" \
+    CPPFLAGS="-I/opt/rocm/include" \
+    --prefix="$USER_LOCAL_PREFIX" \
+    --exec_prefix="$USER_LOCAL_PREFIX_BIN" \
     --enable-opencl \
-    CFLAGS="-O2 -I$ROCM_SRC/api/opencl/khronos -I$ROCM_SRC/api/opencl -I$ROCM_SRC/build/api/opencl/khronos" \
-    LDFLAGS="-L$ROCM_SRC/build/api/opencl -L$ROCM_SRC/build/runtime" \
     1>/dev/null
 
   make -s clean 1>/dev/null
@@ -112,25 +116,16 @@ install_john() {
   # Copy the "run" directory (which contains additional tools) to a persistent location.
   if [ -d "$DEPS_INSTALL_PATH/john/run" ]; then
     rm -rf ../run/*.dSYM
-    mkdir -p "$USER_LOCAL_PREFIX/bin"
-    mv ../run/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} "$USER_LOCAL_PREFIX/bin"
+    mkdir -p "$USER_LOCAL_PREFIX_BIN"
+    mv ../run/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} "$USER_LOCAL_PREFIX_BIN"
     mkdir -p "$USER_LOCAL_PREFIX/share/john"
     cp -a ../run/* "$USER_LOCAL_PREFIX/share/john"
-    mv "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX/bin"
+    mv "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX_BIN"
   fi
 
-  cd - 1>/dev/null
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
-
-  # # Configure runtime library path for ROCm
-  # print_notes "   💡 Add ROCm libraries to LD_LIBRARY_PATH"
-  # echo "export LD_LIBRARY_PATH=\"$ROCM_SRC/build/api/opencl:$ROCM_SRC/build/runtime:\$LD_LIBRARY_PATH\"" >>~/.bashrc
-
-  # Set capabilities for GPU access
-  print_notes "   💡 Configuring john with 'setcap' for 'GPU' access without 'sudo'"
-  $RUN_WITH_SUDO setcap cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/john" 1>/dev/null
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   # Remove build dependencies if any were installed by this script
   install_dependencies_needs_rm
@@ -140,6 +135,32 @@ install_john() {
   print_info2 "🚀 JTR :: John the Ripper with AMD ROCm support installed!"
   print_notes "   💡 Verify OpenCL devices with: john --list=opencl-devices"
   print_notes "   💡 Use '--device=X' to select AMD GPU (check device numbers)"
+}
+
+install_hashcat() {
+  print_info "\n🚀 HC :: Installing HashCat..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
+
+  local packages_tools=()
+  local packages_build=(git build-essential)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+  git clone -q https://github.com/hashcat/hashcat.git "$DEPS_INSTALL_PATH/hashcat"
+  pushd "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+
+  make -s clean 1>/dev/null
+  make -sj"$(nproc)" 1>/dev/null
+  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
+
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any were installed by this script
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 HC :: HashCat installed!"
 }
 
 install_tools() {
@@ -275,7 +296,9 @@ usage() {
   print_info "📑 Usage: $0 [options]"
   print_info "   Options:"
   print_info "     -h,      --help                      Show this help message and exit"
+  print_info "     -irocm,  --install-rocm              Install RCOM"
   print_info "     -ijohn,  --install-john-the-ripper   Install John the Ripper"
+  print_info "     -ihashcat,  --install-hashcat        Install HastCat"
   print_info "     -itools, --install-additional-tools  Install additional tools"
   print_info "     -llists, --load-lists                Load/Clone lists"
   print_info "     -lnmap,  --load-nmap-scripts         Load/Clone more NMAP scripts"
@@ -290,9 +313,17 @@ parse_args() {
       usage
       exit 0
       ;;
+    -irocm | --install-rocm)
+      # RUN_INSTALL_ROCM=1
+      echo "ROCM installer is work in progress"
+      ;;
     -ijohn | --install-john-the-ripper)
       # RUN_INSTALL_JOHN=1
       echo "John installer is work in progress"
+      ;;
+    -ihashcat | --install-hashcat)
+      # RUN_INSTALL_HASHCAT=1
+      echo "Hashcat installer is work in progress"
       ;;
     -itools | --install-additional-tools)
       RUN_INSTALL_TOOLS=1
