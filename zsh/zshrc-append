@@ -334,13 +334,14 @@ vm_random2() {
 }
 alias vm_find_command='apropos'
 
-: "${VM_ANDROID_PATH=$HOME/Android}"
 vm_quick_android_emulator() {
-  selected_emulator=$("${VM_ANDROID_PATH}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
-  if [[ -z $selected_emulator ]]; then
+  local android_path="${VM_ANDROID_PATH:-$HOME/Android}"
+  selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
+  if [[ -z "$selected_emulator" ]]; then
+    echo "No emulator selected."
     return 1
   fi
-  "${VM_ANDROID_PATH}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator" $@
+  "${android_path}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator" "$@"
 }
 
 ### TOOLS ###
