@@ -1059,3 +1059,80 @@ vm_encrypt() {
     ;;
   esac
 }
+
+######################################################################
+##
+## ionos: ...
+##
+######################################################################
+vm_ionos_api() {
+  if [ $# -lt 0 ]; then
+    echo "Usage: $0"
+    return 1
+  fi
+
+  local prefix
+  local secret
+  echo -n "Prefix: "
+  read -rs prefix
+  if [ -z "$prefix" ]; then
+    echo "No prefix entered"
+    return 1
+  fi
+  echo -n "Secret: "
+  read -rs secret
+  if [ -z "$secret" ]; then
+    echo "No secret entered"
+    return 1
+  fi
+
+  local response
+  # local response_choose
+  # response=$(curl -f -s -S -k -X GET https://api.hosting.ionos.com/dns/v1/zones -H "X-API-Key: $prefix.$secret" || {
+  #   echo "ERROR: API request failed for URL: https://api.hosting.ionos.com/dns/v1/zones"
+  #   return 1
+  # })
+  # response_choose=$(echo "$response" | jq -r '.[] | "\(.name) :: \(.id)"' | fzf)
+
+  # local name
+  # local id
+  # if [ -z "$response_choose" ]; then
+  #   echo "No selection made"
+  #   return 0
+  # fi
+
+  # name=$(echo "$response_choose" | cut -d' ' -f1)
+  # id=$(echo "$response_choose" | cut -d' ' -f3)
+  # echo "You selected: name=$name, id=$id"
+
+  # response=$(curl -f -s -S -k -X GET "https://api.hosting.ionos.com/dns/v1/zones/$id" -H "X-API-Key: $prefix.$secret")
+  # echo "$response" | jq
+
+  local domains
+  echo "Please enter domain names separated by comma:"
+  read -r domains
+
+  domains=$(echo "$domains" | tr -s ' ' ',')
+  domains="${domains//,/\",\"}"
+  domains="\"$domains\""
+
+  response=$(curl -f -s -S -k -X DELETE "https://api.hosting.ionos.com/dns/v1/dyndns" \
+    -H "X-API-Key: $prefix.$secret" || {
+    echo "ERROR: API request failed for URL: DELETE https://api.hosting.ionos.com/dns/v1/dyndns"
+    return 1
+  })
+  echo "$response" | jq
+
+  response=$(curl -f -s -S -k -X POST "https://api.hosting.ionos.com/dns/v1/dyndns" \
+    -H "X-API-Key: $prefix.$secret" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"domains\":[$domains],
+      \"description\": \"My DynamicDns\"
+    }" || {
+    echo "ERROR: API request failed for URL: POST https://api.hosting.ionos.com/dns/v1/dyndns"
+    return 1
+  })
+  echo "$response" | jq
+}
