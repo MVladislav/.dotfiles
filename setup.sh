@@ -57,7 +57,8 @@ RUN_INSTALL_BTOP_INTEL=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-VERSION_ZIG=https://ziglang.org/builds/zig-linux-x86_64-0.14.0.tar.xz
+VERSION_ZIG_V=0.13.0
+VERSION_ZIG="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
 VERSION_GHOSTTY=v1.1.2
 VERSION_FONTS_RELEASE='v3.2.1'
 VERSION_BTOP='v1.4.0'
