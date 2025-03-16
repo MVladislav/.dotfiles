@@ -19,10 +19,3 @@ fi
 plugins=(colored-man-pages command-not-found docker git gitignore golang helm history kubectl lxd nmap npm oc pip httpie pylint rust sudo terraform tmux ubuntu ufw zsh-autosuggestions zsh-syntax-highlighting)
 
 source $ZSH/oh-my-zsh.sh
-
-# User configuration
-source ~/.zshrc-append
-source ~/.zshrc-sec
-
-touch ~/.zshrc-secrets
-source ~/.zshrc-secrets

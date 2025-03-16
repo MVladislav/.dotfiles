@@ -77,6 +77,7 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 : "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
 LN_ZSHRC="${HOME}/.zshrc"
+LN_ZSHENV="${HOME}/.zshenv"
 LN_ADDS_01="${HOME}/.zshrc-append"
 LN_ADDS_02="${HOME}/.zshrc-sec"
 
@@ -473,6 +474,10 @@ setup_adds() {
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
 
+  #print_info2 "\n🚀 ADDS :: Create symlink from './zsh/zshenv' as '$LN_ZSHENV'"
+  #rm -f "${LN_ZSHENV}"
+  #ln -sf "${PWD}/zsh/zshenv" "${LN_ZSHENV}"
+
   print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'"
   rm -f "${LN_ADDS_01}"
   ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
@@ -480,15 +485,21 @@ setup_adds() {
   rm -f "${LN_ADDS_02}"
   ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
 
+  print_info2 "🚀 ADDS :: Create '~/.zshenv' and '~/.profile'"
   local lines_to_add=(
-    'source ~/.zshrc-append'
-    'source ~/.zshrc-sec'
-    'touch ~/.zshrc-secrets'
-    'source ~/.zshrc-secrets'
+    'source "$HOME/.zshrc-append"'
+    'source "$HOME/.zshrc-sec"'
+    'touch "$HOME/.zshrc-secrets"'
+    'source "$HOME/.zshrc-secrets"'
   )
+  touch "${HOME}/.zshenv" 1>/dev/null
+  touch "${HOME}/.profile" 1>/dev/null
   for line in "${lines_to_add[@]}"; do
-    if ! grep -Fxq "$line" "${HOME}/.bashrc"; then
-      echo "$line" >>"${HOME}/.bashrc"
+    if ! grep -Fxq "$line" "${HOME}/.zshenv"; then
+      echo "$line" >>"${HOME}/.zshenv"
+    fi
+    if ! grep -Fxq "$line" "${HOME}/.profile"; then
+      echo "$line" >>"${HOME}/.profile"
     fi
   done
 
