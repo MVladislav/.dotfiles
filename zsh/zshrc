@@ -18,4 +18,7 @@ fi
 # Add wisely, as too many plugins slow down shell startup.
 plugins=(colored-man-pages command-not-found docker git gitignore golang helm history kubectl lxd nmap npm oc pip httpie pylint rust sudo terraform tmux ubuntu ufw zsh-autosuggestions zsh-syntax-highlighting)
 
+# disable aliases from oh-my-zsh
+zstyle ':omz:lib:directories' aliases no
+
 source $ZSH/oh-my-zsh.sh
