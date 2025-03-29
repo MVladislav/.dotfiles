@@ -57,12 +57,18 @@ RUN_INSTALL_BTOP_INTEL=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
+VERSION_NVIM=stable
+VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZIG_V=0.13.0
-VERSION_ZIG="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
-VERSION_GHOSTTY=v1.1.2
-VERSION_FONTS_RELEASE='v3.2.1'
-VERSION_BTOP='v1.4.0'
-VERSION_RSMI='rocm-6.3.3'
+VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
+VERSION_GHOSTTY=v1.1.3
+VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
+VERSION_FONTS_RELEASE=v3.3.0
+VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
+VERSION_BTOP=v1.4.0
+VERSION_BTOP_G=https://github.com/aristocratos/btop.git
+VERSION_RSMI=rocm-6.3.3
+VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_PACKAGES_TO_REMOVE=()
@@ -77,7 +83,6 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 : "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
 LN_ZSHRC="${HOME}/.zshrc"
-LN_ZSHENV="${HOME}/.zshenv"
 LN_ADDS_01="${HOME}/.zshrc-append"
 LN_ADDS_02="${HOME}/.zshrc-sec"
 
@@ -186,6 +191,48 @@ install_dependencies_needs_rm() {
   print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
 }
 
+check_for_newer_tag() {
+  local REPO_URL="$1"
+  local CURRENT_TAG="$2"
+
+  # Extract owner/repository name from URL, handling both .git and non-.git URLs
+  local REPO_NAME
+  REPO_NAME=$(echo "$REPO_URL" | sed -E 's|https://github\.com/||; s|\.git$||')
+
+  # Fetch the latest tags using GitHub API
+  local TAGS_JSON
+  TAGS_JSON=$(curl -Ls "https://api.github.com/repos/$REPO_NAME/tags")
+
+  # Handle API errors (empty response or rate limiting)
+  if [[ -z "$TAGS_JSON" || "$TAGS_JSON" == *"API rate limit exceeded"* ]]; then
+    print_error "⚠️ GitHub API rate limit exceeded or no response for $REPO_NAME."
+    return 0
+  fi
+
+  # Extract the latest tag, sort, and get the highest version
+  local LATEST_TAG
+  LATEST_TAG=$(echo "$TAGS_JSON" | jq -r '.[].name' | sort -V | tail -n1)
+
+  # Fallback: If no tags found, try the latest release
+  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+    LATEST_TAG=$(curl -Ls "https://api.github.com/repos/$REPO_NAME/releases/latest" | jq -r '.tag_name')
+  fi
+
+  # Final check if we got a valid latest tag
+  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+    print_error "⚠️ No tags or releases found for $REPO_NAME."
+    return 0
+  fi
+
+  # Compare versions
+  if [[ "$CURRENT_TAG" != "$LATEST_TAG" ]]; then
+    print_info2 "⬆️ A newer version for '$REPO_NAME' is available: $LATEST_TAG (current: $CURRENT_TAG)"
+    print_info2 "    https://github.com/$REPO_NAME/releases/$LATEST_TAG"
+  else
+    print_info2 "✅ You already have the latest version for '$REPO_NAME': $CURRENT_TAG"
+  fi
+}
+
 # ******************************************************************************
 
 # BASE :: some general needed prepares -----------------------------------------
@@ -262,12 +309,12 @@ install_dependencies_nvim() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
+    git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q https://github.com/neovim/neovim.git "$DEPS_INSTALL_PATH/nvim"
+    git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
-    git checkout -q stable
+    git checkout -q "$VERSION_NVIM"
     # git switch -q release-0.10
   fi
 
@@ -361,17 +408,17 @@ install_dependencies_ghostty() {
   local ZIG_COMMAND=zig
   if ! command -v zig &>/dev/null; then
     print_notes "   💡 Download binary zig..."
-    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG"
+    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_U"
     mkdir -p "$DEPS_INSTALL_PATH/zig"
     tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
     ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
   fi
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
+    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
     cd "$DEPS_INSTALL_PATH/ghostty"
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q https://github.com/ghostty-org/ghostty.git "$DEPS_INSTALL_PATH/ghostty"
+    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
     cd "$DEPS_INSTALL_PATH/ghostty"
     git checkout -q "$VERSION_GHOSTTY"
   fi
@@ -474,10 +521,6 @@ setup_adds() {
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
 
-  #print_info2 "\n🚀 ADDS :: Create symlink from './zsh/zshenv' as '$LN_ZSHENV'"
-  #rm -f "${LN_ZSHENV}"
-  #ln -sf "${PWD}/zsh/zshenv" "${LN_ZSHENV}"
-
   print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'"
   rm -f "${LN_ADDS_01}"
   ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
@@ -485,22 +528,26 @@ setup_adds() {
   rm -f "${LN_ADDS_02}"
   ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
 
-  print_info2 "🚀 ADDS :: Create '~/.zshenv' and '~/.profile'"
+  local profile_files=(
+    "${HOME}/.zshenv"
+    "${HOME}/.profile"
+  )
+  # shellcheck disable=SC2016
   local lines_to_add=(
     'source "$HOME/.zshrc-append"'
     'source "$HOME/.zshrc-sec"'
     'touch "$HOME/.zshrc-secrets"'
     'source "$HOME/.zshrc-secrets"'
   )
-  touch "${HOME}/.zshenv" 1>/dev/null
-  touch "${HOME}/.profile" 1>/dev/null
-  for line in "${lines_to_add[@]}"; do
-    if ! grep -Fxq "$line" "${HOME}/.zshenv"; then
-      echo "$line" >>"${HOME}/.zshenv"
-    fi
-    if ! grep -Fxq "$line" "${HOME}/.profile"; then
-      echo "$line" >>"${HOME}/.profile"
-    fi
+
+  for profile_file in "${profile_files[@]}"; do
+    print_info2 "🚀 ADDS :: Create '${profile_file}'"
+    touch "${profile_file}" 1>/dev/null
+    for line in "${lines_to_add[@]}"; do
+      if ! grep -Fxq "$line" "${profile_file}"; then
+        echo "$line" >>"${profile_file}"
+      fi
+    done
   done
 
   print_info2 "🚀 ADDS :: All symlinks created."
@@ -558,13 +605,13 @@ install_fonts() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   FONTS_URLS=(
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/NerdFontsSymbolsOnly.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/FiraCode.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/Hack.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/UbuntuMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/NerdFontsSymbolsOnly.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/FiraCode.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/Hack.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/UbuntuMono.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
+    "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
   )
   FONTS_DIR="${HOME}/.local/share/fonts/nerd-fonts"
   mkdir -p "$FONTS_DIR"
@@ -572,7 +619,7 @@ install_fonts() {
   for url in "${FONTS_URLS[@]}"; do
     file_name=$(basename "$url")
 
-    print_info2 "  - ⬇️ Downloading $file_name..."
+    print_info2 "  - ⬇️ Downloading $file_name... ($url)"
     curl -sL -o "/tmp/$file_name" "$url" || {
       print_error "Failed to download $file_name"
       return 1
@@ -603,10 +650,10 @@ install_btop() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
+    git clone -q "${VERSION_BTOP_G}" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q https://github.com/aristocratos/btop.git "$DEPS_INSTALL_PATH/btop"
+    git clone -q "${VERSION_BTOP_G}" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
     git checkout -q "${VERSION_BTOP}"
   fi
@@ -614,7 +661,7 @@ install_btop() {
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    git clone -q --depth 1 -b "$VERSION_RSMI" https://github.com/RadeonOpenCompute/rocm_smi_lib.git lib/rocm_smi_lib
+    git clone -q --depth 1 -b "$VERSION_RSMI" "$VERSION_RSMI_G" lib/rocm_smi_lib
     pushd lib/rocm_smi_lib 1>/dev/null
     mkdir -p build 1>/dev/null
     cd build 1>/dev/null
@@ -777,6 +824,13 @@ parse_args() {
       ;;
     -d | --debug)
       set -x # Enable debug mode
+      ;;
+    -upc | --update-check)
+      check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
+      check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
+      check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
+      check_for_newer_tag "$VERSION_BTOP_G" "$VERSION_BTOP"
+      check_for_newer_tag "$VERSION_RSMI_G" "$VERSION_RSMI"
       ;;
     *)
       print_error "❌ Unknown option: $key"
