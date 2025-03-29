@@ -140,7 +140,7 @@
     "Dockerfile": ["Dockerfile*"],
     "env": [".env"],
     "Git Ignore": [".gitignore", ".dockerignore", ".gitattributes"],
-    "YAML": ["*.yaml", ".yamllint"]
+    "YAML": ["*.yml", "*.yaml", ".yamllint"]
   },
   "file_scan_exclusions": [
     "**/.git",
@@ -152,6 +152,10 @@
     "**/.classpath",
     "**/.settings"
   ],
+  "auto_install_extensions": {
+    "catppuccin": true,
+    "catppuccin-icons": true
+  },
   "telemetry": {
     "diagnostics": false,
     "metrics": false
