@@ -194,13 +194,13 @@ usage() {
   echo "  $0 -c NLFREE685133.conf"
   echo "  $0 -ap -sd"
   echo "Options:"
-  echo "  -h,  --help          Show this help message and exit"
-  echo "  -c,  --conf          Path to WireGuard .conf file (default: ./wg0.conf)"
-  echo "  -i,  --interface     Name of WireGuard interface (default: wg0)"
-  echo "  -s,  --subnet        Private subnet for internal communication (default: 192.168.0.0/16)"
-  echo "  -sc, --caido         Port for Caido service (default: 9999)"
-  echo "  -sd, --systemd       Setup as systemd service (default: disabled)"
-  echo "  -ap, --allow-private Allow access private subnet (default: disabled)"
+  echo "  -h,  --help                 Show this help message and exit"
+  echo "  -c,  --conf <CONF_PATH>     Path to WireGuard .conf file (default: ./wg0.conf)"
+  echo "  -i,  --interface <IFACE>    Name of WireGuard interface (default: wg0)"
+  echo "  -s,  --subnet <SUBNET>      Private subnet for internal communication (default: 192.168.0.0/16)"
+  echo "  -sc, --caido <PORT>         Port for Caido service (default: 9999)"
+  echo "  -sd, --systemd              Setup as systemd service (default: disabled)"
+  echo "  -ap, --allow-private        Allow access private subnet (default: disabled)"
 }
 
 # Parse command-line arguments

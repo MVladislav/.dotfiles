@@ -121,7 +121,9 @@
     "Shell Script": {
       "preferred_line_length": 130,
       "format_on_save": "on",
-      "use_on_type_format": false
+      "use_on_type_format": false,
+      "enable_language_server": true,
+      "language_servers": ["bash-language-server"]
     }
   },
   "file_types": {

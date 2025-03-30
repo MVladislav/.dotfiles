@@ -16,8 +16,8 @@
 !zsh/
 zsh/**
 !zsh/zshrc
-!zsh/zshrc-append
-!zsh/zshrc-sec
+!zsh/profile-append
+!zsh/profile-sec
 
 !zsh/oh-my-zsh
 zsh/oh-my-zsh/**

@@ -218,62 +218,62 @@ vm_update_clean_all() {
   }
 
   # Update and clean apt
-  echo "${BPURPLE}Updating apt...${NC}"
+  echo -e "${BPURPLE}Updating apt...${NC}"
   if sudo apt update && sudo apt full-upgrade -y; then
-    echo "${BPURPLE}Apt update and upgrade completed.${NC}"
+    echo -e "${BPURPLE}Apt update and upgrade completed.${NC}"
   else
-    echo "${BRED}Apt update or upgrade failed.${NC}" >&2
+    echo -e "${BRED}Apt update or upgrade failed.${NC}" >&2
   fi
 
-  echo "${BPURPLE}Cleaning apt...${NC}"
+  echo -e "${BPURPLE}Cleaning apt...${NC}"
   if sudo apt autoclean -y && sudo apt autoremove -y && sudo apt clean; then
-    echo "${BPURPLE}Apt cleanup completed.${NC}"
+    echo -e "${BPURPLE}Apt cleanup completed.${NC}"
   else
-    echo "${BRED}Apt cleanup failed.${NC}" >&2
+    echo -e "${BRED}Apt cleanup failed.${NC}" >&2
   fi
 
   print_separator
 
   # Update and clean snap
-  echo "${BPURPLE}Updating snap...${NC}"
+  echo -e "${BPURPLE}Updating snap...${NC}"
   if sudo snap refresh; then
-    echo "${BPURPLE}Snap update completed.${NC}"
+    echo -e "${BPURPLE}Snap update completed.${NC}"
   else
-    echo "${BRED}Snap update failed.${NC}" >&2
+    echo -e "${BRED}Snap update failed.${NC}" >&2
   fi
 
-  echo "${BPURPLE}Cleaning snap...${NC}"
+  echo -e "${BPURPLE}Cleaning snap...${NC}"
   if LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/ {print $1, $3}' | while read -r SNAPNAME REVISION; do
     sudo snap remove "$SNAPNAME" --revision="$REVISION"
   done; then
-    echo "${BPURPLE}Snap cleanup completed.${NC}"
+    echo -e "${BPURPLE}Snap cleanup completed.${NC}"
   else
-    echo "${BRED}Snap cleanup failed.${NC}" >&2
+    echo -e "${BRED}Snap cleanup failed.${NC}" >&2
   fi
 
   print_separator
 
   # Update and clean flatpak
-  echo "${BPURPLE}Updating flatpak...${NC}"
+  echo -e "${BPURPLE}Updating flatpak...${NC}"
   if sudo flatpak update; then
-    echo "${BPURPLE}Flatpak update completed.${NC}"
+    echo -e "${BPURPLE}Flatpak update completed.${NC}"
   else
-    echo "${BRED}Flatpak update failed.${NC}" >&2
+    echo -e "${BRED}Flatpak update failed.${NC}" >&2
   fi
 
-  echo "${BPURPLE}Cleaning flatpak...${NC}"
+  echo -e "${BPURPLE}Cleaning flatpak...${NC}"
   if sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*; then
-    echo "${BPURPLE}Flatpak cleanup completed.${NC}"
+    echo -e "${BPURPLE}Flatpak cleanup completed.${NC}"
   else
-    echo "${BRED}Flatpak cleanup failed.${NC}" >&2
+    echo -e "${BRED}Flatpak cleanup failed.${NC}" >&2
   fi
 
   print_separator
 
   # Additional updates for Python pip
-  echo "You could also run more additional updates:"
-  echo "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
-  echo "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
+  echo -e "You could also run more additional updates:"
+  echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
+  echo -e "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
 }
 
 ### OTHER ###

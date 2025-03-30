@@ -46,7 +46,7 @@ RUN_SETUP_TMUX=1
 RUN_SETUP_NVIM=1
 RUN_SETUP_CODE=1
 RUN_SETUP_ZED=1
-RUN_SETUP_ADDS=1
+RUN_SETUP_PROFILES=1
 RUN_SETUP_LOGSEQ=1
 
 RUN_INSTALL_CODE_EXT=0
@@ -83,8 +83,8 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 : "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
 LN_ZSHRC="${HOME}/.zshrc"
-LN_ADDS_01="${HOME}/.zshrc-append"
-LN_ADDS_02="${HOME}/.zshrc-sec"
+LN_PROFILES_01="${HOME}/.profile-append"
+LN_PROFILES_02="${HOME}/.profile-sec"
 
 : "${LN_GHOSTTY_FOLDER=${HOME}/.config/ghostty}"
 
@@ -118,7 +118,7 @@ main() {
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
   [[ $RUN_SETUP_ZED -eq 1 ]] && setup_zed
-  [[ $RUN_SETUP_ADDS -eq 1 ]] && setup_adds
+  [[ $RUN_SETUP_PROFILES -eq 1 ]] && setup_profiles
   [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
@@ -143,6 +143,10 @@ install_dependencies_needs() {
     if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
       packages_to_install+=("$pkg")
     fi
+    # # TODO: possible speedup
+    # if ! dpkg -l | grep -q "^ii  $pkg "; then
+    #   packages_to_install+=("$pkg")
+    # fi
   done
 
   # Check packages_build: install if missing and add to removal list.
@@ -151,6 +155,11 @@ install_dependencies_needs() {
       packages_to_install+=("$pkg")
       DEPS_PACKAGES_TO_REMOVE+=("$pkg")
     fi
+    # # TODO: possible speedup
+    # if ! dpkg -l | grep -q "^ii  $pkg "; then
+    #   packages_to_install+=("$pkg")
+    #   DEPS_PACKAGES_TO_REMOVE+=("$pkg")
+    # fi
   done
 
   print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
@@ -243,7 +252,7 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n📥 DEPS :: install some base services :: [rsync fzf eza bat ripgrep fd-find xclip]"
-  $RUN_WITH_SUDO apt-get install -y rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
 
   print_info2 "📥 DEPS :: disable rsync systemd service"
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
@@ -256,8 +265,9 @@ install_dependencies_additional() {
   # $RUN_WITH_SUDO snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
 
-  # echo "DEPS :: install zed over flatpak"
-  # flatpak install flathub dev.zed.Zed
+  # echo "DEPS :: install shellcheck"
+  # $RUN_WITH_SUDO snap install shellcheck
+
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 }
 
@@ -336,7 +346,6 @@ install_dependencies_zsh() {
   print_info2 "\n🚀 ZSH :: install zsh ..."
   print_notes "   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
 
-  local zsh_install_bin_path
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     # $RUN_WITH_SUDO apt-get install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
     # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
@@ -352,11 +361,13 @@ install_dependencies_zsh() {
     # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
     $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
-    zsh_install_bin_path="/usr/bin/zsh"
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
-    zsh_install_bin_path="/usr/bin/zsh"
   fi
+
+  local zsh_install_bin_path
+  zsh_install_bin_path=$(command -v zsh || echo "/usr/bin/zsh")
+
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   print_info2 "🚀 ZSH :: Load git submodules"
@@ -515,33 +526,36 @@ setup_zed() {
   print_info2 "🚀 ZED :: All symlinks created."
 }
 
-# ADDS :: CREATE LINKS ---------------------------------------------------------
-setup_adds() {
-  print_info2 "\n🚀 ADDS :: Create symlink from './zsh/zshrc' as '$LN_ZSHRC'"
+# PROFILES :: CREATE LINKS -----------------------------------------------------
+setup_profiles() {
+  print_info2 "\n🚀 PROFILES :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
 
-  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-append' as '$LN_ADDS_01'"
-  rm -f "${LN_ADDS_01}"
-  ln -sf "${PWD}/zsh/zshrc-append" "${LN_ADDS_01}"
-  print_info2 "🚀 ADDS :: Create symlink from './zsh/zshrc-sec' as '$LN_ADDS_02'"
-  rm -f "${LN_ADDS_02}"
-  ln -sf "${PWD}/zsh/zshrc-sec" "${LN_ADDS_02}"
+  print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-append' as '$LN_PROFILES_01'"
+  rm -f "${LN_PROFILES_01}"
+  ln -sf "${PWD}/zsh/profile-append" "${LN_PROFILES_01}"
+  print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-sec' as '$LN_PROFILES_02'"
+  rm -f "${LN_PROFILES_02}"
+  ln -sf "${PWD}/zsh/profile-sec" "${LN_PROFILES_02}"
+
+  local PROFILE_SECRETS="${HOME}/.profile-secrets"
+  print_info2 "🚀 PROFILES :: Create secrets file as '$PROFILE_SECRETS'"
+  touch "$PROFILE_SECRETS"
 
   local profile_files=(
     "${HOME}/.zshenv"
-    "${HOME}/.profile"
+    "${HOME}/.bashrc"
   )
   # shellcheck disable=SC2016
   local lines_to_add=(
-    'source "$HOME/.zshrc-append"'
-    'source "$HOME/.zshrc-sec"'
-    'touch "$HOME/.zshrc-secrets"'
-    'source "$HOME/.zshrc-secrets"'
+    "source \"$LN_PROFILES_01\""
+    "source \"$LN_PROFILES_02\""
+    "source \"$PROFILE_SECRETS\""
   )
 
   for profile_file in "${profile_files[@]}"; do
-    print_info2 "🚀 ADDS :: Create '${profile_file}'"
+    print_info2 "🚀 PROFILES :: Create '${profile_file}'"
     touch "${profile_file}" 1>/dev/null
     for line in "${lines_to_add[@]}"; do
       if ! grep -Fxq "$line" "${profile_file}"; then
@@ -550,7 +564,7 @@ setup_adds() {
     done
   done
 
-  print_info2 "🚀 ADDS :: All symlinks created."
+  print_info2 "🚀 PROFILES :: All symlinks created."
 }
 
 # LOGSEQ :: CREATE LINKS -------------------------------------------------------
@@ -588,7 +602,7 @@ install_code_ext() {
     )
 
     for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
-      print_info2 "  📌 CODE:: install extionsion '$vs_code_ext'"
+      print_info2 "  📌 install extionsion '$vs_code_ext'"
       code --force --install-extension "$vs_code_ext" 1>/dev/null
     done
   else
@@ -639,6 +653,7 @@ install_fonts() {
   print_info2 "🚀 FONTS :: All fonts are downloaded and extracted"
 }
 
+# BTOP :: install btop ---------------------------------------------------------
 install_btop() {
   print_info2 "\n🚀 BTOP :: install btop..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
@@ -725,7 +740,7 @@ usage() {
   print_info "     -nsv,          --not-setup-nvim                Skip setup_nvim"
   print_info "     -nsc,          --not-setup-code                Skip setup_code"
   print_info "     -nsz,          --not-setup-zed                 Skip setup_zed"
-  print_info "     -nsa,          --not-setup-adds                Skip setup_adds"
+  print_info "     -nsp,          --not-setup-profiles            Skip setup_profiles"
   print_info "     -nsl,          --not-setup-logseq              Skip setup_logseq"
   print_info "     -ds,           --disable-setups                Skip all setup"
   print_info "     -ice,          --install-code-ext              Run install install_code_ext"
@@ -787,8 +802,8 @@ parse_args() {
     -nsz | --not-setup-zed)
       RUN_SETUP_ZED=0
       ;;
-    -nsa | --not-setup-adds)
-      RUN_SETUP_ADDS=0
+    -nsp | --not-setup-profiles)
+      RUN_SETUP_PROFILES=0
       ;;
     -nsl | --not-setup-logseq)
       RUN_SETUP_LOGSEQ=0
@@ -799,7 +814,7 @@ parse_args() {
       RUN_SETUP_NVIM=0
       RUN_SETUP_CODE=0
       RUN_SETUP_ZED=0
-      RUN_SETUP_ADDS=0
+      RUN_SETUP_PROFILES=0
       RUN_SETUP_LOGSEQ=0
       ;;
     -ice | --install-code-ext)

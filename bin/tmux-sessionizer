@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-source "${HOME}/.tmux_profile"
 set -euo pipefail
 #PATH='/usr/bin:/usr/local/bin:~/.local/bin'
 
