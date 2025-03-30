@@ -55,12 +55,12 @@ repos:
       - id: detect-secrets
         args: [--exclude-files=tests/*]
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.0
+    rev: v8.24.2
     hooks:
       - id: gitleaks
 
   # YAML Linting
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.36.0
+    rev: v1.37.0
     hooks:
       - id: yamllint
