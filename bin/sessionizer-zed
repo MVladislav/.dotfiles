@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$' '
+
+# Ensure required dependencies are available
+command -v fzf >/dev/null 2>&1 || {
+  echo "fzf is not installed. Please install it and try again."
+  exit 1
+}
+command -v flatpak >/dev/null 2>&1 || {
+  echo "flatpak is not installed. Please install it and try again."
+  exit 1
+}
+
+source "$HOME/.profile-secrets"
+
+# Ensure TMUX_WORKSPACES is an array
+if [[ -z ${TMUX_WORKSPACES+x} || ! "$(declare -p TMUX_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
+  TMUX_WORKSPACES=("$HOME")
+fi
+
+if [[ $# -eq 1 ]]; then
+  selected=$1
+else
+  selected=$(
+    find \
+      "${TMUX_WORKSPACES[@]}" \
+      -mindepth 1 -maxdepth 1 -type d | fzf
+  )
+fi
+
+if [[ -z $selected ]]; then
+  echo "No selection made. Exiting."
+  exit 0
+fi
+
+flatpak run dev.zed.Zed -n "$selected"
