@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=ihs,ro,fo,nd,edn
+          - --ignore-words-list=nd,edn
           - --skip="./.*,*.csv,*.json"
           - --quiet-level=2
         exclude_types:
@@ -26,9 +26,14 @@ repos:
       - id: check-case-conflict
       - id: check-executables-have-shebangs
       - id: trailing-whitespace
+        name: Trim Trailing Whitespace
+        description: This hook trims trailing whitespace.
+        entry: trailing-whitespace-fixer
+        language: python
+        types: [text]
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
-      - id: check-toml
+      # - id: check-toml
       # - id: check-json
       - id: check-yaml
         args: [--allow-multiple-documents]
@@ -39,28 +44,43 @@ repos:
     rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
-        # additional_dependencies:
-        #   - prettier@3.2.5
-        #   - prettier-plugin-sort-json@3.1.0
-        # exclude_types:
-        #   - python
-        types_or:
-          - yaml
-          - json5
+        additional_dependencies:
+          - prettier@3.2.5
+          - prettier-plugin-sort-json@4.1.1
+        exclude_types:
+          - python
 
   # Secret detection
   - repo: https://github.com/Yelp/detect-secrets
     rev: v1.5.0
     hooks:
       - id: detect-secrets
-        args: [--exclude-files=tests/*]
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.0
+    rev: v8.24.2
     hooks:
       - id: gitleaks
 
   # YAML Linting
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.36.0
+    rev: v1.37.0
     hooks:
       - id: yamllint
+
+  # # Markdownlint for Markdown files
+  # - repo: https://github.com/markdownlint/markdownlint
+  #   rev: v0.12.0
+  #   hooks:
+  #     - id: markdownlint
+  #       exclude: .github/
+
+  # # ShellCheck for shell script linting
+  # - repo: https://github.com/koalaman/shellcheck-precommit
+  #   rev: v0.10.0
+  #   hooks:
+  #     - id: shellcheck
+
+  # # EditorConfig checker
+  # - repo: https://github.com/editorconfig-checker/editorconfig-checker
+  #   rev: v3.2.1
+  #   hooks:
+  #     - id: editorconfig-checker

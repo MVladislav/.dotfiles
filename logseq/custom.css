@@ -7,8 +7,8 @@
 }
 
 table td {
-  min-width:100px;
-  word-wrap:break-word;
+  min-width: 100px;
+  word-wrap: break-word;
 }
 
 th {
@@ -19,58 +19,311 @@ th {
 # Tag style
 */
 /*Changing tags to have a blue button appearance and be nice and rounded */
-.tag{ padding:0 7px; border-radius:7px; margin:2x 0; color:#3D33FF !important; background-color:#D8D6FF}.content
+.tag {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2x 0;
+  color: #3d33ff !important;
+  background-color: #d8d6ff;
+}
+
+.content
 
 /* Changing colours for research  page references and creating button appearance*/
-.page-reference[data-ref^="Q:"] {  color: #B19443; padding: 2px 5px 2px 5px; font-size: 0.95rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #B19443; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="Q:"] .bracket { display: none}
+.page-reference[data-ref^="Q:"] {
+  color: #b19443;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.95rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #b19443;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
 
-.page-reference[data-ref^="E:"] {  color: #c66868; padding: 2px 5px 2px 5px; font-size: 0.95rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #c66868; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="E:"] .bracket { display: none;}
+.page-reference[data-ref^="Q:"] .bracket {
+  display: none;
+}
 
-.page-reference[data-ref^="C:"] {  color: #62a36b !important; padding: 2px 5px 2px 5px; font-size: .95rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #62a36b; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="C:"] .bracket { display: none}
+.page-reference[data-ref^="E:"] {
+  color: #c66868;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.95rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #c66868;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
+
+.page-reference[data-ref^="E:"] .bracket {
+  display: none;
+}
+
+.page-reference[data-ref^="C:"] {
+  color: #62a36b !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.95rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #62a36b;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
+
+.page-reference[data-ref^="C:"] .bracket {
+  display: none;
+}
 
 /* Changing appearance of query tables */
-th {font-size: 1.1rem; font-weight: bold; text-transform: capitalize}/* Wrapping text in query table */
-td {white-space: pre-wrap !important}
+th {
+  font-size: 1.1rem;
+  font-weight: bold;
+  text-transform: capitalize;
+}
+
+/* Wrapping text in query table */
+td {
+  white-space: pre-wrap !important;
+}
 
 /* Task management tags */
-a.tag[data-ref="inbox"]{ padding:0 7px; border-radius:7px; margin:2px 0; color:#FF33AA !important; background-color:#FFD6EE}.content
-a.tag[data-ref="follow-up"]{ padding:0 7px; border-radius:7px; margin:2px 0; color:#FF33AA !important; background-color:#FFD6EE}.content
+a.tag[data-ref="inbox"] {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #ff33aa !important;
+  background-color: #ffd6ee;
+}
 
-a.tag[data-ref="draft"]{ padding:0 7px; border-radius:7px; margin:2px 0; color:#FF9D00 !important; background-color:#FFEFD6}.content
-a.tag[data-ref="note"]{ padding:0 7px; border-radius:7px; margin:2px 0; color:#FF9D00 !important; background-color:#FFEFD6}.content
+.content a.tag[data-ref="follow-up"] {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #ff33aa !important;
+  background-color: #ffd6ee;
+}
 
-a.tag[data-ref="discussed"]{ padding:0 7px; border-radius:7px; margin:2px 0; color:#33B1FF !important; background-color:#D6EFFF}.content
+.content a.tag[data-ref="draft"] {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #ff9d00 !important;
+  background-color: #ffefd6;
+}
 
+.content a.tag[data-ref="note"] {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #ff9d00 !important;
+  background-color: #ffefd6;
+}
+
+.content a.tag[data-ref="discussed"] {
+  padding: 0 7px;
+  border-radius: 7px;
+  margin: 2px 0;
+  color: #33b1ff !important;
+  background-color: #d6efff;
+}
+
+.content
 
 /* Creating buttons for tasks for the 10K work framework */
-a.tag[data-ref*="$10k"]{ margin: 0 1em 0 0; visibility: hidden}.content
-a.tag[data-ref="$10k"]::before { visibility: visible; display: block; position: absolute; width: fit-content; content: "$10k"; padding: 0 7px 0 7px; border-radius:7px; margin:0px -7px; color:white !important; background-color:green}
+a.tag[data-ref*="$10k"] {
+  margin: 0 1em 0 0;
+  visibility: hidden;
+}
 
-a.tag[data-ref*="$1k"]{ margin: 0 1em 0 0; visibility: hidden}.content
-a.tag[data-ref="$1k"]::before { visibility: visible; display: block; position: absolute; width: fit-content; content: "$1k"; padding: 0 7px 0 7px; border-radius:7px; margin:0px -7px; color:white !important; background-color:rgb(56, 163, 56)}
+.content a.tag[data-ref="$10k"]::before {
+  visibility: visible;
+  display: block;
+  position: absolute;
+  width: fit-content;
+  content: "$10k";
+  padding: 0 7px 0 7px;
+  border-radius: 7px;
+  margin: 0px -7px;
+  color: white !important;
+  background-color: green;
+}
 
-a.tag[data-ref*="$100"]{ margin: 0 1em 0 0; visibility: hidden}.content
-a.tag[data-ref="$100"]::before { visibility: visible; display: block; position: absolute; width: fit-content; content: "$100"; padding: 0 7px 0 7px; border-radius:7px; margin:0px -7px; color:black !important; background-color:rgb(120, 199, 120)}
+a.tag[data-ref*="$1k"] {
+  margin: 0 1em 0 0;
+  visibility: hidden;
+}
 
-a.tag[data-ref*="$10"]{ margin: 0 1em 0 0; visibility: hidden}.content
-a.tag[data-ref="$10"]::before { visibility: visible; display: block; position: absolute; width: fit-content; content: "$10"; padding: 0 7px 0 7px; border-radius:7px; margin:0px -7px; color:black !important; background-color:rgb(184, 244, 184)}
+.content a.tag[data-ref="$1k"]::before {
+  visibility: visible;
+  display: block;
+  position: absolute;
+  width: fit-content;
+  content: "$1k";
+  padding: 0 7px 0 7px;
+  border-radius: 7px;
+  margin: 0px -7px;
+  color: white !important;
+  background-color: rgb(56, 163, 56);
+}
+
+a.tag[data-ref*="$100"] {
+  margin: 0 1em 0 0;
+  visibility: hidden;
+}
+
+.content a.tag[data-ref="$100"]::before {
+  visibility: visible;
+  display: block;
+  position: absolute;
+  width: fit-content;
+  content: "$100";
+  padding: 0 7px 0 7px;
+  border-radius: 7px;
+  margin: 0px -7px;
+  color: black !important;
+  background-color: rgb(120, 199, 120);
+}
+
+a.tag[data-ref*="$10"] {
+  margin: 0 1em 0 0;
+  visibility: hidden;
+}
+
+.content a.tag[data-ref="$10"]::before {
+  visibility: visible;
+  display: block;
+  position: absolute;
+  width: fit-content;
+  content: "$10";
+  padding: 0 7px 0 7px;
+  border-radius: 7px;
+  margin: 0px -7px;
+  color: black !important;
+  background-color: rgb(184, 244, 184);
+}
 
 /* Creating button appearance for my jumping off pages, 'to/' 'Scratchpad/' 'Projects' 'times in my life/'*/
-.page-reference[data-ref^="to/"] {  color: #2883df;; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #2883df; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="to/"] .bracket { display: none}
+.page-reference[data-ref^="to/"] {
+  color: #2883df;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #2883df;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
 
-.page-reference[data-ref^="Scratchpad/"] {  color: #7caa4b; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #7caa4b; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="Scratchpad/"] .bracket { display: none}
+.page-reference[data-ref^="to/"] .bracket {
+  display: none;
+}
 
-.page-reference[data-ref^="Projects"] {color: #4e89a8 !important;  padding: 2px 5px 2px 5px;  font-size: 0.9rem;  line-height: 1em;  font-weight: 500;   border-radius: 5px 5px 5px 5px;  border-style: solid;  border-color: #4e89a8;  border-width: thin;  position:relative;  box-shadow: 1px 1px 3px  #DFDFDF}
-.page-reference[data-ref^="Projects"] .bracket { display: none}
+.page-reference[data-ref^="Scratchpad/"] {
+  color: #7caa4b;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #7caa4b;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
 
+.page-reference[data-ref^="Scratchpad/"] .bracket {
+  display: none;
+}
+
+.page-reference[data-ref^="Projects"] {
+  color: #4e89a8 !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #4e89a8;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+}
+
+.page-reference[data-ref^="Projects"] .bracket {
+  display: none;
+}
 
 /* Button like tags for broad themes */
-a.tag[data-ref*="vs"]{ color: #4e89a8 !important; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #4e89a8; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF; background-color: white}.content
-a.tag[data-ref^="times in my life"]{ color: #4e89a8 !important; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #4e89a8; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF; background-color: white}.content
-a.tag[data-ref^="relationships/"]{ color: #4e89a8 !important; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #4e89a8; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF; background-color: white}.content
-a.tag[data-ref^="times i felt or experienced"]{ color: #4e89a8 !important; padding: 2px 5px 2px 5px; font-size: 0.9rem; line-height: 1em; font-weight: 500; border-radius: 5px 5px 5px 5px; border-style: solid; border-color: #4e89a8; border-width: thin; position:relative; box-shadow: 1px 1px 3px  #DFDFDF; background-color: white}.content
+a.tag[data-ref*="vs"] {
+  color: #4e89a8 !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #4e89a8;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+  background-color: white;
+}
+
+.content a.tag[data-ref^="times in my life"] {
+  color: #4e89a8 !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #4e89a8;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+  background-color: white;
+}
+
+.content a.tag[data-ref^="relationships/"] {
+  color: #4e89a8 !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #4e89a8;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+  background-color: white;
+}
+
+.content a.tag[data-ref^="times i felt or experienced"] {
+  color: #4e89a8 !important;
+  padding: 2px 5px 2px 5px;
+  font-size: 0.9rem;
+  line-height: 1em;
+  font-weight: 500;
+  border-radius: 5px 5px 5px 5px;
+  border-style: solid;
+  border-color: #4e89a8;
+  border-width: thin;
+  position: relative;
+  box-shadow: 1px 1px 3px #dfdfdf;
+  background-color: white;
+}

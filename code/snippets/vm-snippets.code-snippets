@@ -19,8 +19,8 @@
   "Java :: logger": {
     "prefix": ["logger"],
     "body": [
-      "private static final Logger log = LoggerFactory.getLogger($1.class);"
+      "private static final Logger log = LoggerFactory.getLogger($1.class);",
     ],
-    "description": "Basic logger."
-  }
+    "description": "Basic logger.",
+  },
 }
