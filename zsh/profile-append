@@ -33,18 +33,14 @@ fi
 ##
 ######################################################################
 addToPath() {
-  # if [ -d "$1" ]; then
   if [[ ":$PATH:" != *":$1:"* ]]; then
     export PATH="$PATH:$1"
   fi
-  # fi
 }
 addToPathFront() {
-  # if [ -d "$1" ]; then
   if [[ ":$PATH:" != *":$1:"* ]]; then
     export PATH="$1:$PATH"
   fi
-  # fi
 }
 
 ######################################################################
@@ -84,6 +80,14 @@ addToPath "$NPM_PACKAGES/bin"
 export GEM_HOME="$HOME/.gems"
 addToPath "$GEM_HOME/bin"
 
+export RUSTUP_HOME="$HOME/.rustup"
+# addToPath "$RUSTUP_HOME/bin"
+
+######################################################################
+##
+## set ALIASES
+##
+######################################################################
 ### LS as EZA ###
 if command -v eza &>/dev/null; then
   alias ls='eza --color=always --git'
@@ -129,8 +133,8 @@ find-l() {
 ### DOCKER ###
 alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
-alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
-alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
+alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | sed '\''s|mode: "\([0-9]\+\)"|mode: \1|'\'' | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
+alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | sed '\''s|mode: "\([0-9]\+\)"|mode: \1|'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
 
 docker-swarm-compose2() {
   local COMPOSE_FILE="docker-compose.yaml"
@@ -168,12 +172,11 @@ alias ka='kubectl apply -f'
 alias kg='kubectl get'
 alias kd='kubectl describe'
 alias kdel='kubectl delete'
-alias kl='kubectl logs'
+alias kl='kubectl logs -f'
 alias kgpo='kubectl get pod'
 alias kgd='kubectl get deployments'
 alias kc='kubectx'
 alias kns='kubens'
-alias kl='kubectl logs -f'
 alias ke='kubectl exec -it'
 alias kcns='kubectl config set-context --current --namespace'
 
@@ -217,61 +220,35 @@ vm_update_clean_all() {
     echo -e '\n#########################################################################\n'
   }
 
-  # Update and clean apt
-  echo -e "${BPURPLE}Updating apt...${NC}"
-  if sudo apt update && sudo apt full-upgrade -y; then
-    echo -e "${BPURPLE}Apt update and upgrade completed.${NC}"
-  else
-    echo -e "${BRED}Apt update or upgrade failed.${NC}" >&2
-  fi
+  # Consolidated repetitive update and cleanup logic into a single function.
+  update_and_clean() {
+    local tool="$1"
+    local update_cmd="$2"
+    local clean_cmd="$3"
 
-  echo -e "${BPURPLE}Cleaning apt...${NC}"
-  if sudo apt autoclean -y && sudo apt autoremove -y && sudo apt clean; then
-    echo -e "${BPURPLE}Apt cleanup completed.${NC}"
-  else
-    echo -e "${BRED}Apt cleanup failed.${NC}" >&2
-  fi
+    echo -e "${BPURPLE}Updating $tool...${NC}"
+    if eval "$update_cmd"; then
+      echo -e "${BPURPLE}$tool update completed.${NC}"
+    else
+      echo -e "${BRED}$tool update failed.${NC}" >&2
+    fi
 
+    echo -e "${BPURPLE}Cleaning $tool...${NC}"
+    if eval "$clean_cmd"; then
+      echo -e "${BPURPLE}$tool cleanup completed.${NC}"
+    else
+      echo -e "${BRED}$tool cleanup failed.${NC}" >&2
+    fi
+  }
+
+  update_and_clean "apt" "sudo apt update && sudo apt full-upgrade -y" "sudo apt autoclean -y && sudo apt autoremove -y && sudo apt clean"
+  print_separator
+  update_and_clean "snap" "sudo snap refresh" "LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/ {print \$1, \$3}' | while read -r SNAPNAME REVISION; do sudo snap remove \"\$SNAPNAME\" --revision=\"\$REVISION\"; done"
+  print_separator
+  update_and_clean "flatpak" "sudo flatpak update" "sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*"
   print_separator
 
-  # Update and clean snap
-  echo -e "${BPURPLE}Updating snap...${NC}"
-  if sudo snap refresh; then
-    echo -e "${BPURPLE}Snap update completed.${NC}"
-  else
-    echo -e "${BRED}Snap update failed.${NC}" >&2
-  fi
-
-  echo -e "${BPURPLE}Cleaning snap...${NC}"
-  if LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/ {print $1, $3}' | while read -r SNAPNAME REVISION; do
-    sudo snap remove "$SNAPNAME" --revision="$REVISION"
-  done; then
-    echo -e "${BPURPLE}Snap cleanup completed.${NC}"
-  else
-    echo -e "${BRED}Snap cleanup failed.${NC}" >&2
-  fi
-
-  print_separator
-
-  # Update and clean flatpak
-  echo -e "${BPURPLE}Updating flatpak...${NC}"
-  if sudo flatpak update; then
-    echo -e "${BPURPLE}Flatpak update completed.${NC}"
-  else
-    echo -e "${BRED}Flatpak update failed.${NC}" >&2
-  fi
-
-  echo -e "${BPURPLE}Cleaning flatpak...${NC}"
-  if sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*; then
-    echo -e "${BPURPLE}Flatpak cleanup completed.${NC}"
-  else
-    echo -e "${BRED}Flatpak cleanup failed.${NC}" >&2
-  fi
-
-  print_separator
-
-  # Additional updates for Python pip
-  echo -e "You could also run more additional updates:"
+  echo -e "You could also run additional updates:"
   echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
   echo -e "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
 }
@@ -335,7 +312,7 @@ vm_random2() {
 alias vm_find_command='apropos'
 
 vm_quick_android_emulator() {
-  local android_path="${VM_ANDROID_PATH:-$HOME/Android}"
+  local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
   selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
   if [[ -z "$selected_emulator" ]]; then
     echo "No emulator selected."

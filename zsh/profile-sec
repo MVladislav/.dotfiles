@@ -105,6 +105,8 @@ alias vm_sec_sj="sj -i"
 
 alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
 
+alias vm_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run website_scanner'
+
 ######################################################################
 ##
 ## HELPER:: converter
