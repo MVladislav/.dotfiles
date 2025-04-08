@@ -88,6 +88,16 @@ export RUSTUP_HOME="$HOME/.rustup"
 ## set ALIASES
 ##
 ######################################################################
+### SSH ###
+vm_ssh_xterm(){
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <SSH_HOST>"
+    return 1
+  fi
+
+  infocmp -x | ssh "$1" -- tic -x -
+}
+
 ### LS as EZA ###
 if command -v eza &>/dev/null; then
   alias ls='eza --color=always --git'

@@ -55,7 +55,7 @@ vm_sec_fuzz_path() {
   fi
 
   # Check if the URL contains http or https
-  if [[ "$1" =~ ^(http|https):// ]]; then
+  if [[ "$1" =~ ^https?:// ]]; then
     # Extract protocol and domain
     protocol=$(echo "$1" | awk -F'://' '{print $1}')
     domain=$(echo "$1" | awk -F'://' '{print $2}')
@@ -76,7 +76,7 @@ vm_sec_fuzz_dns() {
   fi
 
   # Check if the URL contains http or https
-  if [[ "$1" =~ ^(http|https):// ]]; then
+  if [[ "$1" =~ ^https?:// ]]; then
     # Extract protocol and domain
     protocol=$(echo "$1" | awk -F'://' '{print $1}')
     domain=$(echo "$1" | awk -F'://' '{print $2}')
@@ -105,7 +105,10 @@ alias vm_sec_sj="sj -i"
 
 alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
 
-alias vm_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run website_scanner'
+# https://pentest-tools.com/website-vulnerability-scanning/website-scanner
+alias vm_sec_scan_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run website_scanner'
+# https://github.com/wpscanteam/wpscan
+alias vm_sec_scan_wpscan='docker run --rm -it wpscanteam/wpscan:latest --url'
 
 ######################################################################
 ##
@@ -169,6 +172,221 @@ vm_sec_ip_country_batch() {
     jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
     sort -h
 }
+
+vm_sec_dig_multi() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+
+  local domain=$1
+  local result=""
+
+  echo "=== MX Records for $domain ==="
+  result=$(dig "$domain" MX +short)
+  [ -z "$result" ] && echo "No MX records found" || echo "$result"
+
+  echo -e "=== TXT (SPF) Records for $domain ==="
+  result=$(dig "$domain" TXT +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No TXT records found" || echo "$result"
+  echo -e "=== SPF Records for $domain ==="
+  result=$(dig "$domain" SPF +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No SPF records found" || echo "$result"
+
+  echo -e "=== DMARC Records for $domain ==="
+  result=$(dig "_dmarc.$domain" TXT +short)
+  [ -z "$result" ] && echo "No DMARC records found" || echo "$result"
+
+  # echo -e "=== DKIM Records for $domain ==="
+  # dkim_selector="default." # Change this to your DKIM selector if needed
+  # result=$(dig "${dkim_selector}_domainkey.$domain" TXT +short)
+  # [ -z "$result" ] && echo "No DKIM records found" || echo "$result"
+
+  echo -e "\n=== NS Records for $domain ==="
+  result=$(dig "$domain" NS +short)
+  [ -z "$result" ] && echo "No NS records found" || echo "$result"
+  echo -e "=== A Records for $domain ==="
+  result=$(dig "$domain" A +short)
+  [ -z "$result" ] && echo "No A records found" || echo "$result"
+  echo -e "=== AAAA Records for $domain ==="
+  result=$(dig "$domain" AAAA +short)
+  [ -z "$result" ] && echo "No AAAA records found" || echo "$result"
+  echo -e "=== CNAME Records for $domain ==="
+  result=$(dig "$domain" CNAME +short)
+  [ -z "$result" ] && echo "No CNAME records found" || echo "$result"
+
+  echo -e "\n=== SOA Records for $domain ==="
+  result=$(dig "$domain" SOA +short)
+  [ -z "$result" ] && echo "No SOA records found" || echo "$result"
+  echo -e "=== CAA Records for $domain ==="
+  result=$(dig "$domain" CAA +short)
+  [ -z "$result" ] && echo "No CAA records found" || echo "$result"
+  echo -e "=== SRV Records for $domain ==="
+  result=$(
+    dig "$domain" SRV +short
+    dig "_imaps._tcp.@$domain" SRV +short
+    dig "_smtps._tcp.@$domain" SRV +short
+  )
+  [ -z "$result" ] && echo "No SRV records found" || echo "$result"
+}
+
+######################################################################
+##
+## FUNCTIONS:: ...
+##
+######################################################################
+vm_sec_api_doc_search() {
+  # Function to check for active API documentation endpoints on a domain
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <domain>"
+    return 1
+  fi
+
+  # Ensure the domain starts with http:// or https://
+  local domain="$1"
+  if [[ ! "$domain" =~ ^https?:// ]]; then
+    domain="http://$domain"
+  fi
+
+  # List of common API documentation paths (can be extended)
+  local endpoint_docs=(
+    '/swagger-ui.html'
+    '/swagger-ui/'
+    '/swagger-ui/index.html'
+    '/api-docs'
+    '/v2/api-docs'
+    '/v3/api-docs'
+    '/swagger.json'
+    '/openapi.json'
+    '/api/swagger.json'
+    '/docs'
+    '/api-docs/'
+    '/swagger/'
+    '/swagger/index.html'
+    '/swagger/v1/swagger.json'
+    '/swagger/v2/swagger.json'
+    '/swagger/v3/swagger.json'
+    '/openapi/'
+    '/openapi/v1/'
+    '/openapi/v2/'
+    '/openapi/v3/'
+    '/api/v1/swagger.json'
+    '/api/v2/swagger.json'
+    '/api/v3/swagger.json'
+    '/documentation'
+    '/documentation/swagger'
+    '/documentation/openapi'
+    '/swagger/docs/v1'
+    '/swagger/docs/v2'
+    '/swagger/docs/v3'
+    '/swagger-ui.html#/'
+    '/swagger-ui/index.html#/'
+    '/openapi/ui'
+    '/swagger-ui/v1/'
+    '/swagger-ui/v2/'
+    '/swagger-ui/v3/'
+    '/api/swagger-ui.html'
+    '/api/swagger-ui/'
+    '/api/documentation'
+    '/v1/documentation'
+    '/v2/documentation'
+    '/v3/documentation'
+    '/swagger-resources'
+    '/swagger-resources/configuration/ui'
+    '/swagger-resources/configuration/security'
+    '/swagger-resources/swagger.json'
+    '/swagger-resources/openapi.json'
+    '/swagger-ui/swagger-ui.html'
+    '/swagger-ui/swagger-ui/'
+    '/swagger-ui.html/swagger-resources'
+    '/swagger-ui.html/swagger-resources/configuration/ui'
+    '/swagger-ui.html/swagger-resources/configuration/security'
+    '/api/swagger-resources'
+    '/api/swagger-resources/configuration/ui'
+    '/api/swagger-resources/configuration/security'
+    '/api/swagger-resources/swagger.json'
+    '/api/swagger-resources/openapi.json'
+    '/swagger/v1/'
+    '/swagger/v2/'
+    '/swagger/v3/'
+    '/swagger-ui/v1/swagger.json'
+    '/swagger-ui/v2/swagger.json'
+    '/swagger-ui/v3/swagger.json'
+    '/api/swagger-ui/v1/'
+    '/api/swagger-ui/v2/'
+    '/api/swagger-ui/v3/'
+    '/openapi/swagger.json'
+    '/openapi/openapi.json'
+    '/api/openapi'
+    '/api/openapi.json'
+    '/api/v1/openapi.json'
+    '/api/v2/openapi.json'
+    '/api/v3/openapi.json'
+    '/swagger.yaml'
+    '/openapi.yaml'
+    '/swagger.yml'
+    '/openapi.yml'
+    '/v1/swagger.json'
+    '/v2/swagger.json'
+    '/v3/swagger.json'
+    '/v1/openapi.json'
+    '/v2/openapi.json'
+    '/v3/openapi.json'
+    '/v1/swagger.yaml'
+    '/v2/swagger.yaml'
+    '/v3/swagger.yaml'
+    '/v1/openapi.yaml'
+    '/v2/openapi.yaml'
+    '/v3/openapi.yaml'
+    '/swagger/api'
+    '/openapi/api'
+    '/swagger/api-docs'
+    '/openapi/api-docs'
+    '/swagger/api/swagger.json'
+    '/openapi/api/openapi.json'
+    '/swagger/api/v1/swagger.json'
+    '/swagger/api/v2/swagger.json'
+    '/swagger/api/v3/swagger.json'
+    '/openapi/api/v1/openapi.json'
+    '/openapi/api/v2/openapi.json'
+    '/openapi/api/v3/openapi.json'
+    '/swagger/api/swagger.yaml'
+    '/swagger/api/swagger.yml'
+    '/openapi/api/openapi.yaml'
+    '/openapi/api/openapi.yml'
+  )
+
+  echo "Checking API documentation endpoints on: $domain"
+
+  local found_docs=0
+  local not_found_docs=0
+  local curl_reps=-1
+  for endpoint in "${endpoint_docs[@]}"; do
+    local url="${domain}${endpoint}"
+    # Get only the HTTP response code (-s silent, -o discard output, -w writes status code)
+    curl_reps=$(curl -ks -o /dev/null -w '%{http_code}' "$url")
+    # Check for success (HTTP 200-299)
+    if [[ "$curl_reps" -ge 200 && "$curl_reps" -lt 300 ]]; then
+      echo "✅ Active API documentation found at: $url (HTTP $curl_reps)"
+      found_docs=1
+      break
+    else
+      if [[ "$curl_reps" -eq 404 ]]; then
+        not_found_docs=$((not_found_docs+1))
+        # echo "✖ Not found at: $url (HTTP $curl_reps)"
+      else
+        echo "✖ Not found at: $url (HTTP $curl_reps)"
+      fi
+    fi
+  done
+
+  if [ $found_docs -eq 0 ]; then
+    echo "No active API documentation endpoint was found on $domain. (resp 404 :: $not_found_docs counts)"
+    return 1
+  fi
+  return 0
+}
+
 
 ######################################################################
 ##

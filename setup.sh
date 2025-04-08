@@ -591,6 +591,12 @@ install_code_ext() {
   if command -v code &>/dev/null; then
     print_info2 "\n🚀 CODE :: installing code extensions"
 
+    # "adpyke.codesnap" "aykutsarac.jsoncrack-vscode" "benjaminkott.typo3-typoscript"
+    # "chrischinchilla.vscode-pandoc" "davidanson.vscode-markdownlint" "febley.typo3-fluid-snippets"
+    # "gruntfuggly.todo-tree" "james-yu.latex-workshop" "mechatroner.rainbow-csv"
+    # "ms-python.vscode-pylance" "ms-vscode.live-server" "ralffreit.typo3snippets"
+    # "rangav.vscode-thunder-client" "redhat.java" "ryanluker.vscode-coverage-gutters"
+    # "simonsiefke.svg-preview" "sumneko.lua" "wholroyd.jinja"
     VS_CODE_EXTS=(
       "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf" "bibhasdn.unique-lines"
       "bierner.markdown-preview-github-styles" "charliermarsh.ruff" "donjayamanne.githistory" "eamodio.gitlens"

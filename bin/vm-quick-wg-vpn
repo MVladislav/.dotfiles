@@ -153,10 +153,11 @@ setup_kill_switch() {
 # ******************************************************************************
 
 setup_systemd() {
-  log "INFO" "Creating symlink from '$0' as '/opt/vm-quick-wg-vpn.sh'"
-  sudo chmod 775 "$PWD/$0"
-  sudo chown root:root "$PWD/$0"
-  sudo ln -sf "$PWD/$0" /opt/vm-quick-wg-vpn.sh
+  local script_install_path='/opt/vm-quick-wg-vpn'
+  log "INFO" "Creating symlink from '$0' as '$script_install_path'"
+  sudo chmod 775 "$0"
+  sudo chown root:root "$0"
+  sudo ln -sf "$0" "$script_install_path"
 
   log "INFO" "Creating systemd entry as 'vm-quick-wg-vpn.service'"
   sudo tee /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<'EOF'
@@ -167,7 +168,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/opt/vm-quick-wg-vpn.sh
+ExecStart=/opt/vm-quick-wg-vpn
 Type=simple
 User=root
 
