@@ -12,8 +12,9 @@ VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; 
 ##
 ######################################################################
 # -Pn -sS -T4
-alias vm_sec_nmap1='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
-alias vm_sec_nmap2='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
+alias vm_sec_nmap_ssl='mkdir -p nmap && sudo nmap -vv -p 443 --script "ssl-enum-ciphers"'
+alias vm_sec_nmap_quick='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
+alias vm_sec_nmap_deep='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
 
 xsltproc() {
   local NMAP_REPORT_ID="${1:-1}"
@@ -108,7 +109,8 @@ alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
 # https://pentest-tools.com/website-vulnerability-scanning/website-scanner
 alias vm_sec_scan_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run website_scanner'
 # https://github.com/wpscanteam/wpscan
-alias vm_sec_scan_wpscan='docker run --rm -it wpscanteam/wpscan:latest --url'
+# --plugins-detection aggressive
+alias vm_sec_scan_wpscan='docker run --rm -it wpscanteam/wpscan:latest --rua -e ap,at,tt,cb,dbe,u,m --url'
 
 ######################################################################
 ##
@@ -372,7 +374,7 @@ vm_sec_api_doc_search() {
       break
     else
       if [[ "$curl_reps" -eq 404 ]]; then
-        not_found_docs=$((not_found_docs+1))
+        not_found_docs=$((not_found_docs + 1))
         # echo "✖ Not found at: $url (HTTP $curl_reps)"
       else
         echo "✖ Not found at: $url (HTTP $curl_reps)"
@@ -386,7 +388,6 @@ vm_sec_api_doc_search() {
   fi
   return 0
 }
-
 
 ######################################################################
 ##

@@ -89,7 +89,7 @@ export RUSTUP_HOME="$HOME/.rustup"
 ##
 ######################################################################
 ### SSH ###
-vm_ssh_xterm(){
+vm_ssh_xterm() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <SSH_HOST>"
     return 1
@@ -661,10 +661,10 @@ vm_oc_dc_logs() {
 
 ######################################################################
 ##
-## markdown to csv: converts a markdown table to csv
+## markdown to csv or pdf converts
 ##
 ######################################################################
-vm_markdown_to_csv() {
+vm_convert_md_to_csv() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <MARKDOWN_FILE>"
     return 1
@@ -680,6 +680,95 @@ vm_markdown_to_csv() {
         }
         printf "\n";
       }' >"$(basename "$1" | cut -d. -f1).csv"
+}
+
+vm_convert_md_to_pdf() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    return 1
+  fi
+
+  local input_file="$1"
+  local cur_date
+  local filename
+  local template_path="${2:-$HOME/.config/templates/eisvogel.latex}"
+  # local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/template-multi-file/eisvogel.latex"
+  local template_url="https://github.com/Wandmalfarbe/pandoc-latex-template/releases/download/v3.1.0/Eisvogel.tar.gz"
+
+  # Check if the template file exists, if not, download it
+  if [ ! -f "$template_path" ]; then
+    mkdir -p "$(dirname "$template_path")"
+    echo "Template not found locally. Downloading from URL..."
+    if ! curl -sf -o "$template_path" "$template_url"; then
+      echo "Error: Failed to download the template from '$template_url'."
+      return 1
+    fi
+    echo "Template downloaded successfully."
+  fi
+
+  # Check if the input file exists
+  if [ ! -f "$input_file" ]; then
+    echo "Error: '$input_file' does not exist."
+    return 1
+  fi
+
+  # Check if pandoc is installed
+  if ! command -v pandoc &>/dev/null; then
+    echo "Error: pandoc is not installed."
+    return 1
+  fi
+
+  cur_date=$(date +"%Y-%m-%d")
+  filename=$(basename "$input_file" | cut -f 1 -d ".")
+
+  # Check if fc-list command is available
+  if ! command -v fc-list &>/dev/null; then
+    echo "Error: fc-list is not installed."
+    return 1
+  fi
+
+  # Font list and checking for available fonts
+  local main_font="DejaVu Sans Mono"
+  local font_list=("FiraMono Nerd Font Mono" "Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
+
+  for font_check in "${font_list[@]}"; do
+    if fc-list | grep -iq "$font_check"; then
+      main_font=$font_check
+      break
+    fi
+  done
+  echo "Using font: $main_font"
+
+  # Run pandoc to convert markdown to PDF
+  pandoc "$input_file" \
+    -o "${filename}.pdf" \
+    --from markdown \
+    --template "$template_path" \
+    --pdf-engine=xelatex \
+    --listings \
+    -V lang=en-GB \
+    -V classoption=onside \
+    -V book \
+    -V date="$cur_date" \
+    -V "mainfont:$main_font" \
+    -V 'sansfont:DejaVuSans' \
+    -V 'monofont:DejaVuSansMono' \
+    -V 'mathfont:TeXGyreDejaVuMath-Regular'
+}
+
+vm_convert_docs_to_md() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <DOC_FILE | DOC_URL>"
+    echo "  - Supported formats: https://docling-project.github.io/docling/usage/supported_formats/"
+    return 1
+  fi
+
+  python3 -m venv .venv
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+  python3 -m pip install docling
+
+  docling --image-export-mode referenced "$1"
 }
 
 ######################################################################
@@ -869,85 +958,6 @@ vm_shortcut_appimage() {
   }
 
   echo "Shortcut for '${name}' created successfully."
-}
-
-######################################################################
-##
-## EXPORT & ALIAS
-##
-######################################################################
-vm_md_to_pdf() {
-  if [ -z "$1" ]; then
-    echo "Usage: $0 <input_file.md>"
-    return 1
-  fi
-
-  local input_file="$1"
-  local cur_date
-  local filename
-  local template_path="${2:-$HOME/.config/templates/eisvogel.latex}"
-  # local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/template-multi-file/eisvogel.latex"
-  local template_url="https://github.com/Wandmalfarbe/pandoc-latex-template/releases/download/v3.1.0/Eisvogel.tar.gz"
-
-  # Check if the template file exists, if not, download it
-  if [ ! -f "$template_path" ]; then
-    mkdir -p "$(dirname "$template_path")"
-    echo "Template not found locally. Downloading from URL..."
-    if ! curl -sf -o "$template_path" "$template_url"; then
-      echo "Error: Failed to download the template from '$template_url'."
-      return 1
-    fi
-    echo "Template downloaded successfully."
-  fi
-
-  # Check if the input file exists
-  if [ ! -f "$input_file" ]; then
-    echo "Error: '$input_file' does not exist."
-    return 1
-  fi
-
-  # Check if pandoc is installed
-  if ! command -v pandoc &>/dev/null; then
-    echo "Error: pandoc is not installed."
-    return 1
-  fi
-
-  cur_date=$(date +"%Y-%m-%d")
-  filename=$(basename "$input_file" | cut -f 1 -d ".")
-
-  # Check if fc-list command is available
-  if ! command -v fc-list &>/dev/null; then
-    echo "Error: fc-list is not installed."
-    return 1
-  fi
-
-  # Font list and checking for available fonts
-  local main_font="DejaVu Sans Mono"
-  local font_list=("FiraMono Nerd Font Mono" "Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
-
-  for font_check in "${font_list[@]}"; do
-    if fc-list | grep -iq "$font_check"; then
-      main_font=$font_check
-      break
-    fi
-  done
-  echo "Using font: $main_font"
-
-  # Run pandoc to convert markdown to PDF
-  pandoc "$input_file" \
-    -o "${filename}.pdf" \
-    --from markdown \
-    --template "$template_path" \
-    --pdf-engine=xelatex \
-    --listings \
-    -V lang=en-GB \
-    -V classoption=onside \
-    -V book \
-    -V date="$cur_date" \
-    -V "mainfont:$main_font" \
-    -V 'sansfont:DejaVuSans' \
-    -V 'monofont:DejaVuSansMono' \
-    -V 'mathfont:TeXGyreDejaVuMath-Regular'
 }
 
 ######################################################################
