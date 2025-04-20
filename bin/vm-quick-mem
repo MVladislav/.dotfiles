@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+# mem_report.sh - List top memory-consuming processes with detailed metrics
+
+set -euo pipefail
+IFS=$'\n\t'
+
+# Default settings
+USER_FILTER=""
+TOP_COUNT=25
+
+# ANSI colors
+RED=$(tput setaf 1)
+RESET=$(tput sgr0)
+
+# ******************************************************************************
+# *** Main Flow ***
+
+main() {
+  display_header
+  display_collect
+  display_top
+  display_summary
+}
+
+# ******************************************************************************
+# *** Display Functions ***
+
+# Collect memory stats from /proc into PROC_LIST
+display_collect() {
+  PROC_LIST=()
+  total_anon_kb=0
+  total_file_kb=0
+  total_shmem_kb=0
+
+  for pid_path in /proc/[0-9]*; do
+    pid=${pid_path##*/}
+    status="$pid_path/status"
+    [[ -r $status ]] || continue
+
+    uid=$(awk '/^Uid:/ {print $2; exit}' "$status")
+    owner=$(getent passwd "$uid" | cut -d: -f1)
+    [[ -z $USER_FILTER || $owner == "$USER_FILTER" ]] || continue
+
+    # Anonymous resident memory: Private, anonymous memory (e.g., heap, stack).
+    anon_kb=$(awk '/^RssAnon:/ {print $2; exit}' "$status" || echo 0)
+    # File-backed resident memory: File-mapped memory (e.g., libraries, mmap files).
+    file_kb=$(awk '/^RssFile:/ {print $2; exit}' "$status" || echo 0)
+    # Shared memory: Shared memory regions (e.g., /dev/shm, shared mappings)
+    shmem_kb=$(awk '/^RssShmem:/ {print $2; exit}' "$status" || echo 0)
+    total_kb=$((anon_kb + file_kb + shmem_kb))
+    [[ $total_kb -gt 0 ]] || continue
+
+    if [[ -r "/proc/$pid/cmdline" ]]; then
+      cmd=$(tr '\0' ' ' <"/proc/$pid/cmdline" | awk '{print $1}')
+      if [[ -z "$cmd" ]]; then
+        cmd=$(awk '/^Name:/ {print $2; exit}' "$status")
+      fi
+    else
+      cmd=$(awk '/^Name:/ {print $2; exit}' "$status")
+    fi
+    cmd_first=$(basename "$(cut -d'/' -f2 <<<"$cmd")")
+    cmd_last=$(basename "$cmd")
+    cmd=$(printf "%-6s :: %s" "$cmd_first" "$cmd_last")
+
+    PROC_LIST+=("$total_kb;$pid;$owner;$cmd;$anon_kb;$file_kb;$shmem_kb")
+    total_anon_kb=$((total_anon_kb + anon_kb))
+    total_file_kb=$((total_file_kb + file_kb))
+    total_shmem_kb=$((total_shmem_kb + shmem_kb))
+  done
+}
+
+# Display table header
+display_header() {
+  printf "%-6s %-10s %-32s %8s %10s %10s %10s\n" \
+    "PID" "USER" "COMMAND" "ANON(MB)" "FILE(MB)" "SHMEM(MB)" "TOTAL(MB)"
+  printf '%*s\n' 92 '' | tr ' ' '-'
+}
+
+# Display top processes from collected data
+display_top() {
+  printf '%s\n' "${PROC_LIST[@]}" |
+    sort -t';' -k1,1nr | head -n "$TOP_COUNT" |
+    while IFS=';' read -r total_kb pid owner cmd anon_kb file_kb shmem_kb; do
+      total_mb=$(to_mb "$total_kb")
+      anon_mb=$(to_mb "$anon_kb")
+      file_mb=$(to_mb "$file_kb")
+      shmem_mb=$(to_mb "$shmem_kb")
+      if (($(echo "$total_mb > 1024" | bc -l))); then
+        color=$RED
+      else
+        color=$RESET
+      fi
+      printf "%s%-6s %-10s %-32s %8s %10s %10s %10s%s\n" \
+        "$color" "$pid" "$owner" "${cmd:0:30}" \
+        "$anon_mb" "$file_mb" "$shmem_mb" "$total_mb" "$RESET"
+    done
+}
+
+# Display summary of all memory usage
+display_summary() {
+  total_mem_kb=$((total_anon_kb + total_file_kb + total_shmem_kb))
+  printf '%*s\n' 92 '' | tr ' ' '-'
+  printf "%-6s %-10s %-32s %8s %10s %10s %10s\n" \
+    "TOTAL" "" "" \
+    "$(to_mb "$total_anon_kb")" \
+    "$(to_mb "$total_file_kb")" \
+    "$(to_mb "$total_shmem_kb")" \
+    "$(to_mb "$total_mem_kb")"
+}
+
+# ******************************************************************************
+# *** Utility Functions ***
+
+# Convert kilobytes to megabytes with two decimals
+to_mb() {
+  awk -v val="$1" 'BEGIN {printf "%.2f", val/1024}'
+}
+
+# ******************************************************************************
+# *** Usage and Argument Parsing ***
+
+usage() {
+  echo "Usage: $0 [-u user] [-n count] [-h]"
+  echo "  -u user    Only include processes owned by this user"
+  echo "  -n count   Show top N processes (default: $TOP_COUNT)"
+  echo "  -h         Show help message"
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+    -u)
+      USER_FILTER="$2"
+      shift 2
+      ;;
+    -n)
+      TOP_COUNT="$2"
+      shift 2
+      ;;
+    -h)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+    esac
+  done
+}
+
+# ******************************************************************************
+# *** Entrypoint ***
+
+# Parse arguments and run main script
+parse_args "$@"
+main "$@"
