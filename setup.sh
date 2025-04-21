@@ -57,7 +57,7 @@ RUN_INSTALL_BTOP_INTEL=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-VERSION_NVIM=stable
+VERSION_NVIM=v0.11.0
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZIG_V=0.13.0
 VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
@@ -67,7 +67,7 @@ VERSION_FONTS_RELEASE=v3.3.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
 VERSION_BTOP=v1.4.0
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-6.3.3
+VERSION_RSMI=rocm-6.4.0
 VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
@@ -203,40 +203,53 @@ install_dependencies_needs_rm() {
 check_for_newer_tag() {
   local REPO_URL="$1"
   local CURRENT_TAG="$2"
+  local TAG_FILTER="${3:-}"
 
-  # Extract owner/repository name from URL, handling both .git and non-.git URLs
+  # Derive owner/repo from URL
   local REPO_NAME
   REPO_NAME=$(echo "$REPO_URL" | sed -E 's|https://github\.com/||; s|\.git$||')
 
-  # Fetch the latest tags using GitHub API
+  # Fetch all tags via GitHub API
   local TAGS_JSON
-  TAGS_JSON=$(curl -Ls "https://api.github.com/repos/$REPO_NAME/tags")
+  TAGS_JSON=$(curl -sL "https://api.github.com/repos/$REPO_NAME/tags")
 
-  # Handle API errors (empty response or rate limiting)
   if [[ -z "$TAGS_JSON" || "$TAGS_JSON" == *"API rate limit exceeded"* ]]; then
     print_error "⚠️ GitHub API rate limit exceeded or no response for $REPO_NAME."
     return 0
   fi
 
-  # Extract the latest tag, sort, and get the highest version
-  local LATEST_TAG
-  LATEST_TAG=$(echo "$TAGS_JSON" | jq -r '.[].name' | sort -V | tail -n1)
-
-  # Fallback: If no tags found, try the latest release
-  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
-    LATEST_TAG=$(curl -Ls "https://api.github.com/repos/$REPO_NAME/releases/latest" | jq -r '.tag_name')
+  # Extract tag names, optionally filtering by TAG_FILTER
+  local TAGS
+  TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
+  if [[ -n "$TAG_FILTER" ]]; then
+    TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
   fi
 
-  # Final check if we got a valid latest tag
+  # Determine the latest tag by version-sort
+  local LATEST_TAG
+  LATEST_TAG=$(echo "$TAGS" | sort -V | tail -n1)
+
+  # Fallback: no matching tags → try latest release
+  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+    LATEST_TAG=$(curl -sL "https://api.github.com/repos/$REPO_NAME/releases/latest" |
+      jq -r '.tag_name')
+    # If a filter was provided, ensure the release tag matches it
+    if [[ -n "$TAG_FILTER" && ! "$LATEST_TAG" =~ $TAG_FILTER ]]; then
+      print_info2 "⚠️ No releases matching filter '$TAG_FILTER' for $REPO_NAME."
+      return 0
+    fi
+  fi
+
+  # Final validation
   if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
     print_error "⚠️ No tags or releases found for $REPO_NAME."
     return 0
   fi
 
-  # Compare versions
+  # Compare and report
   if [[ "$CURRENT_TAG" != "$LATEST_TAG" ]]; then
     print_info2 "⬆️ A newer version for '$REPO_NAME' is available: $LATEST_TAG (current: $CURRENT_TAG)"
-    print_info2 "    https://github.com/$REPO_NAME/releases/$LATEST_TAG"
+    print_info2 "    https://github.com/$REPO_NAME/releases/tag/$LATEST_TAG"
   else
     print_info2 "✅ You already have the latest version for '$REPO_NAME': $CURRENT_TAG"
   fi
@@ -671,10 +684,10 @@ install_btop() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q "${VERSION_BTOP_G}" "$DEPS_INSTALL_PATH/btop"
+    git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q "${VERSION_BTOP_G}" "$DEPS_INSTALL_PATH/btop"
+    git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
     git checkout -q "${VERSION_BTOP}"
   fi
@@ -682,7 +695,7 @@ install_btop() {
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    git clone -q --depth 1 -b "$VERSION_RSMI" "$VERSION_RSMI_G" lib/rocm_smi_lib
+    git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" lib/rocm_smi_lib
     pushd lib/rocm_smi_lib 1>/dev/null
     mkdir -p build 1>/dev/null
     cd build 1>/dev/null
@@ -851,7 +864,7 @@ parse_args() {
       check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
       check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
       check_for_newer_tag "$VERSION_BTOP_G" "$VERSION_BTOP"
-      check_for_newer_tag "$VERSION_RSMI_G" "$VERSION_RSMI"
+      check_for_newer_tag "$VERSION_RSMI_G" "$VERSION_RSMI" "rocm"
       ;;
     *)
       print_error "❌ Unknown option: $key"
