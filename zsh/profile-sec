@@ -112,6 +112,14 @@ alias vm_sec_scan_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run w
 # --plugins-detection aggressive
 alias vm_sec_scan_wpscan='docker run --rm -it wpscanteam/wpscan:latest --rua -e ap,at,tt,cb,dbe,u,m --url'
 
+vm_sec_crt() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+  curl -s "https://crt.sh/?output=json&q=$1" | jq -r '.[].name_value' | sed 's/\*\.//g' | sort -u
+}
+
 ######################################################################
 ##
 ## HELPER:: converter
