@@ -189,8 +189,12 @@ install_tools() {
   go_github_commit_date_and_download 'ffuf/ffuf/vm'
   go_github_commit_date_and_download 'dwisiswant0/unew'
   go_github_commit_date_and_download 'BishopFox/sj'
+  go_github_commit_date_and_download 'tomnomnom/waybackurls'
 
   print_info2 "🚀 TOOLS :: Additional tools installed!"
+
+  print_info2 "\n🚀 TOOLS :: Extend manually install:"
+  print_info2 "     - https://addons.mozilla.org/en-US/firefox/addon/hackbar/"
 }
 
 # ******************************************************************************
