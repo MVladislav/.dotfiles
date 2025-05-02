@@ -328,7 +328,14 @@ vm_quick_android_emulator() {
     echo "No emulator selected."
     return 1
   fi
-  "${android_path}/Sdk/emulator/emulator" -cores 4 -memory 4096 -no-boot-anim -writable-system -gpu host -avd "$selected_emulator" "$@"
+  # avdmanager create avd -n <new_avd_name> -k "system-images;android-<version>;google_apis;x86"
+
+  QT_QPA_PLATFORM=xcb "${android_path}/Sdk/emulator/emulator" \
+    -cores 4 -memory 4096 \
+    -no-snapshot-load -no-snapshot -no-snapshot-save -no-snapstorage \
+    -no-boot-anim -no-audio \
+    -writable-system -gpu host \
+    -avd "$selected_emulator" "$@" 1>/dev/null
 }
 
 ### TOOLS ###
