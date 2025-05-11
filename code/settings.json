@@ -658,7 +658,7 @@
   "chat.agent.enabled": false,
   "chat.mcp.discovery.enabled": false,
   "chat.promptFilesLocations": {
-    "**": true,
+    "**": false,
     ".github/prompts": true
   }
 }
