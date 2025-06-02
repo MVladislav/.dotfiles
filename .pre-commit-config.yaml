@@ -56,13 +56,13 @@ repos:
     hooks:
       - id: detect-secrets
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.24.2
+    rev: v8.27.0
     hooks:
       - id: gitleaks
 
   # YAML Linting
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.37.0
+    rev: v1.37.1
     hooks:
       - id: yamllint
 
