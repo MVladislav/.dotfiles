@@ -172,7 +172,6 @@ docker-context() {
 
 # shellcheck disable=SC2139
 alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:24.04"
-alias vm_quick_docker_iperf="docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s"
 
 ### KUBERNETES ###
 alias h='helm'
@@ -340,8 +339,10 @@ vm_quick_android_emulator() {
 
 ### TOOLS ###
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
-alias vm_speed='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
-alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -w128m -t0 -c'
+alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
+alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
 # https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
 vm_speed_pub() {
   if [ "$#" -lt 1 ]; then
@@ -350,14 +351,14 @@ vm_speed_pub() {
   fi
 
   local servers=(
-    "a209.speedtest.wobcom.de:5201" # 1
-    "a205.speedtest.wobcom.de:5201" # 2
-    "speedtest.lu.buyvm.net:5201"   # 3
-    "iperf3.moji.fr:5201"           # 4
-    "ping.online.net:5001"          # 5 change
-    "speedtest.init7.net:5201"      # 6
-    "speedtest.shinternet.ch:5200"  # 7
-    "speedtest.serverius.net:5002"  # 8 change
+    'a209.speedtest.wobcom.de:5201' # 1
+    'a205.speedtest.wobcom.de:5201' # 2
+    'speedtest.lu.buyvm.net:5201'   # 3
+    'iperf3.moji.fr:5201'           # 4
+    'ping.online.net:5001'          # 5 change
+    'speedtest.init7.net:5201'      # 6
+    'speedtest.shinternet.ch:5200'  # 7
+    'speedtest.serverius.net:5002'  # 8 change
   )
 
   local num="$1"
@@ -371,7 +372,13 @@ vm_speed_pub() {
   local port="${entry##*:}"   # Extract port number (after :)
 
   clear
-  iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+
+  local use_docker=0
+  if [[ $use_docker -eq 1 ]]; then
+    docker run -it --rm networkstatic/iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+  else
+    iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+  fi
 }
 
 ######################################################################
