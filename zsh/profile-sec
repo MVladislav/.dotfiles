@@ -688,3 +688,63 @@ vm_sec_search_mitre() {
       "$common_filter_extended | $output_extended" "$vm_mitre_file"
   fi
 }
+
+######################################################################
+##
+## FUNCTIONS:: EUVD/CVE search
+##
+######################################################################
+vm_sec_search_vulns() {
+  if [ "$#" -gt 0 ] && [ "$#" -lt 2 ]; then
+    echo "Usage: $0 [euvd|cve] <ID>"
+    return 1
+  fi
+
+  local vm_s_type=""
+  local vm_s_id=""
+  local merged_json
+
+  if [ "$#" -eq 2 ]; then
+    vm_s_type="$1"
+    vm_s_id="$2"
+  fi
+
+  # NOTE: https://euvd.enisa.europa.eu/apidoc
+  local vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
+  case $vm_s_type in
+  "euvd")
+    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/enisaid?id=$vm_s_id"
+    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
+    ;;
+  "cve")
+    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/vulnerability?id=$vm_s_id"
+    echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
+    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    ;;
+  *)
+    vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
+    merged_json=$(curl -s "$vm_vuln_api" | jq '.items')
+    ;;
+  esac
+
+  # local vm_vuln_q_list1="https://euvdservices.enisa.europa.eu/api/exploitedvulnerabilities"
+  # local vm_vuln_q_list2="https://euvdservices.enisa.europa.eu/api/criticalvulnerabilities"
+  # local vm_vuln_q_list3="https://euvdservices.enisa.europa.eu/api/lastvulnerabilities"
+  # merged_json=$(jq -s 'add' <(curl -s "$vm_vuln_q_list1") <(curl -s "$vm_vuln_q_list2") <(curl -s "$vm_vuln_q_list3"))
+
+  # Filter the required fields and pretty print
+  jq -r '
+    .[] | {
+      id,
+      enisa_id,
+      status,
+      datePublished,
+      dateUpdated,
+      baseScore,
+      epss,
+      aliases,
+      description
+    }
+  ' <<<"$merged_json"
+}
