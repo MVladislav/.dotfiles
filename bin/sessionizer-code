@@ -14,20 +14,24 @@ command -v code >/dev/null 2>&1 || {
 
 source "$HOME/.profile-secrets"
 
-# Ensure TMUX_WORKSPACES is an array
-if [[ -z ${TMUX_WORKSPACES+x} || ! "$(declare -p TMUX_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
+if [[ $# -eq 1 ]]; then
+  TMUX_WORKSPACES=("$1")
+elif [[ -z ${TMUX_WORKSPACES+x} || ! "$(declare -p TMUX_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
   TMUX_WORKSPACES=("$HOME")
 fi
 
-if [[ $# -eq 1 ]]; then
-  selected=$1
-else
-  selected=$(
-    find \
-      "${TMUX_WORKSPACES[@]}" \
-      -mindepth 1 -maxdepth 1 -type d | fzf
-  )
-fi
+TMUX_WORKSPACES_EXPAND=()
+for pattern in "${TMUX_WORKSPACES[@]}"; do
+  for path in $pattern; do
+    [[ -d $path ]] && TMUX_WORKSPACES_EXPAND+=("$path")
+  done
+done
+
+selected=$(
+  find \
+    "${TMUX_WORKSPACES_EXPAND[@]}" \
+    -mindepth 1 -maxdepth 1 -type d | fzf
+)
 
 if [[ -z $selected ]]; then
   echo "No selection made. Exiting."
