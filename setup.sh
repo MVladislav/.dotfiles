@@ -57,7 +57,7 @@ RUN_INSTALL_BTOP_INTEL=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-VERSION_NVIM=v0.11.1
+VERSION_NVIM=v0.11.2
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZIG_V=0.13.0
 VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
@@ -65,9 +65,9 @@ VERSION_GHOSTTY=v1.1.3
 VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
-VERSION_BTOP=v1.4.2
+VERSION_BTOP=v1.4.3
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-6.4.0
+VERSION_RSMI=rocm-6.4.1
 VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
@@ -878,7 +878,7 @@ parse_args() {
 
 # ******************************************************************************
 
-print_info2 "✅ Starting script $0 ..."
+print_info2 "▶️ Starting script $0 ...\n"
 
 # Parse command-line arguments
 parse_args "$@"
