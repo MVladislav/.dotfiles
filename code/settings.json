@@ -169,6 +169,7 @@
   "git.enableSmartCommit": true,
   "git.ignoreRebaseWarning": true,
   "git.openRepositoryInParentFolders": "never",
+  "git.allowNoVerifyCommit": true,
   "gitlens.menus": {
     "scmRepositoryInline": {
       "graph": false
