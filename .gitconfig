@@ -1,0 +1,74 @@
+# [user]
+#   email = groot@home.local
+#   name = groot
+#   signingkey = ~/.ssh/id_ed25519_github.pub
+# [commit]
+#   gpgsign = true
+[gpg]
+  format = ssh
+[core]
+  hooksPath = ~/.git-hooks
+  compression = 9
+  whitespace = error
+  preloadindex = true
+[init]
+  defaultBranch = main
+[push]
+  autoSetupRemote = true
+  default = current
+  followTags = true
+[pull]
+  ff = only
+  default = current
+  rebase = true
+[rebase]
+  autoStash = true
+  missingCommitsCheck = warn
+[branch]
+  sort = -committerdatei
+[tag]
+  sort = -taggerdate
+[advice]
+  addEmptyPathspec = false
+  pushNonFastForward = false
+  statusHints = false
+[status]
+  branch = true
+  showStash = true
+  showUntrackedFiles = all
+[log]
+  abbrevCommit = true
+  graphColors = blue,yellow,cyan,magenta,green,red
+[diff]
+  context = 3
+  renames = copies
+  interHunkContext = 10
+  tool = nvimdiff
+[pager]
+  branch = false
+  tag = false
+  # diff = diff-so-fancy | $PAGER
+# [diff-so-fancy]
+#   markEmptyLines = false
+# [interactive]
+#   diffFilter = diff-so-fancy --patch
+#   singlekey = true
+[color "diff"]
+  meta = black bold
+  frag = magenta
+  context = white
+  whitespace = yellow reverse
+  old = red
+[color "decorate"]
+  HEAD = red
+  branch = blue
+  tag = yellow
+  remoteBranch = magenta
+[color "branch"]
+  current = magenta
+  local = default
+  remote = yellow
+  upstream = green
+  plain = blue
+[url "git@github.com:"]
+  insteadOf = "gh:"
