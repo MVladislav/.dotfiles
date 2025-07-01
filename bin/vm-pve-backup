@@ -11,6 +11,8 @@ trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT SIGTERM
 # Constants
 # shellcheck disable=SC2034
 readonly FILES_TO_BACKUP_PVE=(
+  "/etc/default/grub"
+  "/etc/kernel/cmdline"
   "/etc/systemd/system/mnt-*.mount"
   "/etc/pve/storage.cfg"
   "/etc/systemd/network/*.link"
@@ -28,6 +30,8 @@ readonly FILES_TO_BACKUP_PVE=(
 )
 # shellcheck disable=SC2034
 readonly FILES_TO_BACKUP_PBS=(
+  "/etc/default/grub"
+  "/etc/kernel/cmdline"
   "/etc/proxmox-backup/notifications.cfg"
   "/etc/fstab"
   "/etc/proxmox-backup/node.cfg"
@@ -139,6 +143,8 @@ sync_files() {
     total_size=$((total_size + size))
   done
 
+  backup_zfs_info "$type"
+
   end_time=$(date +%s)
   elapsed_time=$((end_time - start_time))
 
@@ -146,6 +152,27 @@ sync_files() {
   print_info2 "Total size transferred: $((total_size / 1024)) KB"
   print_info2 "Total errors encountered: $total_errors"
   print_info2 "Elapsed time: ${elapsed_time}s\n"
+}
+
+backup_zfs_info() {
+  local type="$1"
+  local zfs_dir="$BACKUP_DIR/$type/zfs-configs"
+
+  if [[ "$DRY_RUN" == true ]]; then
+    print_info1 "🧁 [Dry Run] Would run remote ZFS commands and store output to '$zfs_dir'"
+    return
+  fi
+
+  print_info1 "💡 Backing up ZFS configuration..."
+  mkdir -p "$zfs_dir"
+
+  ssh "$REMOTE_HOST" "zfs list -r -o name,used,avail,refer,mountpoint" >"$zfs_dir/zfs_list.txt" || print_error2 "Failed to fetch 'zfs list'"
+  ssh "$REMOTE_HOST" "zfs get all -r" >"$zfs_dir/zfs_get_all.txt" || print_error2 "Failed to fetch 'zfs get all'"
+  ssh "$REMOTE_HOST" "zpool status" >"$zfs_dir/zpool_status.txt" || print_error2 "Failed to fetch 'zpool status'"
+  ssh "$REMOTE_HOST" "zpool get all" >"$zfs_dir/zpool_get_all.txt" || print_error2 "Failed to fetch 'zpool get all'"
+  ssh "$REMOTE_HOST" "zpool list" >"$zfs_dir/zpool_list.txt" || print_error2 "Failed to fetch 'zpool list'"
+
+  print_info2 "ZFS configuration saved under $zfs_dir"
 }
 
 # Function to restore files using rsync (Restore direction: Local -> Remote)
@@ -188,6 +215,8 @@ restore_files() {
     total_size=$((total_size + size))
   done
 
+  restore_zfs_info "$type"
+
   end_time=$(date +%s)
   elapsed_time=$((end_time - start_time))
 
@@ -195,6 +224,51 @@ restore_files() {
   print_info2 "Total size transferred: $((total_size / 1024)) KB"
   print_info2 "Total errors encountered: $total_errors"
   print_info2 "Elapsed time: ${elapsed_time}s\n"
+}
+
+restore_zfs_info() {
+  local type="$1"
+  local zfs_dir="$BACKUP_DIR/$type/zfs-configs"
+
+  print_info1 "💡 Manual ZFS restore instructions"
+
+  if [[ ! -d "$zfs_dir" ]]; then
+    print_error2 "ZFS backup directory not found: $zfs_dir"
+    return
+  fi
+
+  echo -e "\n📁 ZFS configuration files are located in: $zfs_dir\n"
+  echo
+  echo "🧠 Tip: Always check each command before running it, especially if restoring to a new system."
+  echo
+  echo "You can use the following manual steps on your restored Proxmox system:"
+  echo
+  echo "1️⃣  View all datasets:"
+  echo "    less $zfs_dir/zfs_list.txt"
+  echo
+  echo "2️⃣  Import your ZFS pool (check name from 'zpool_list.txt'):"
+  echo "    zpool import"
+  echo "    zpool import <yourpoolname>"
+  echo
+  echo "3️⃣  (Optional) Set mountpoints if needed:"
+  echo "    zfs set mountpoint=/mnt/<something> <yourpoolname>/<dataset>"
+  echo
+  echo "4️⃣  Reapply ZFS dataset properties:"
+  echo "    less $zfs_dir/zfs_get_all.txt"
+  echo "    zfs set <property>=<value> <dataset>"
+  echo
+  echo "5️⃣  Review pool status and properties:"
+  echo "    less $zfs_dir/zpool_status.txt"
+  echo "    less $zfs_dir/zpool_get_all.txt"
+  echo
+  echo "6️⃣  (Optional) Add to Proxmox storage config:"
+  echo "    nano /etc/pve/storage.cfg"
+  echo "    # Example:"
+  echo "    zfspool: mypool"
+  echo "        pool yourpoolname"
+  echo "        content rootdir,images"
+  echo "        mountpoint /mnt/<yourmount> # optional"
+  echo
 }
 
 # ******************************************************************************
