@@ -28,7 +28,7 @@
   "terminal.integrated.allowChords": false,
   "terminal.integrated.fontSize": 15,
   "diffEditor.experimental.showMoves": true,
-  "diffEditor.ignoreTrimWhitespace": false,
+  "diffEditor.ignoreTrimWhitespace": true,
   "diffEditor.renderSideBySide": true,
   "diffEditor.maxComputationTime": 0,
   "editor.acceptSuggestionOnCommitCharacter": true,
@@ -374,7 +374,8 @@
   },
   "[yaml]": {
     "editor.defaultFormatter": "redhat.vscode-yaml",
-    "editor.autoIndent": "none"
+    "editor.autoIndent": "none",
+    "diffEditor.ignoreTrimWhitespace": true
   },
   "yaml.maxItemsComputed": 99999,
   "[json]": {
