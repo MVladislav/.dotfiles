@@ -11,14 +11,16 @@ trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT SIGTERM
 # Constants
 # shellcheck disable=SC2034
 readonly FILES_TO_BACKUP_PVE=(
-  "/etc/default/grub"
-  "/etc/kernel/cmdline"
+  "/etc/hosts"
+  # "/etc/default/grub"
+  # "/etc/kernel/cmdline"
   "/etc/systemd/system/mnt-*.mount"
   "/etc/pve/storage.cfg"
   "/etc/systemd/network/*.link"
   "/etc/network/interfaces"
   "/etc/network/interfaces.new"
   "/etc/network/interfaces.d/sdn"
+  "/etc/pve/nodes/pve/qemu-server/*.conf"
   "/etc/pve/sdn/subnets.cfg"
   "/etc/pve/sdn/vnets.cfg"
   "/etc/pve/sdn/zones.cfg"
@@ -201,7 +203,7 @@ restore_files() {
 
     print_info1 "💡 Restoring: $local_dir/$(basename "$FILE_PATTERN") to $REMOTE_HOST:$(dirname "$FILE_PATTERN")/"
     # Upload files from local backup directory to remote host # --rsync-path="sudo -S rsync" \
-    if ! rsync --info=progress2 -auz -e "ssh -tt -T -o Compression=no -x" \
+    if ! rsync --info=progress2 -rlD --no-o --no-g --no-t -z -e "ssh -tt -T -o Compression=no -x" \
       --include="$(basename "$FILE_PATTERN")" --exclude="*" \
       "$local_dir/" "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/"; then
       print_error2 "Error restoring $FILE_PATTERN"
