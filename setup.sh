@@ -66,7 +66,7 @@ VERSION_GHOSTTY=v1.1.3
 VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
-VERSION_BTOP=v1.4.3
+VERSION_BTOP=v1.4.4
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-6.4.1
 VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
@@ -826,6 +826,7 @@ usage() {
   print_info "     -ibtop,        --install-btop                  Run install install_btop"
   print_info "     -ibtop-amd,    --install-btop-amd              Run install install_btop with AMD GPU support"
   print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
+  print_info "     -upc,          --update-check                  Check if new version for builds exists"
   print_info "     -s                                             Use 'source' instead 'release' for install services"
 }
 
@@ -923,6 +924,15 @@ parse_args() {
       set -x # Enable debug mode
       ;;
     -upc | --update-check)
+      RUN_SETUP_BIN=0
+      RUN_SETUP_TMUX=0
+      RUN_SETUP_NVIM=0
+      RUN_SETUP_CODE=0
+      RUN_SETUP_ZED=0
+      RUN_SETUP_PROFILES=0
+      RUN_SETUP_LOGSEQ=0
+      RUN_SETUP_GITCONFIG=0
+
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
       check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
       check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
