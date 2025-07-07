@@ -73,14 +73,21 @@ repos:
   #     - id: markdownlint
   #       exclude: .github/
 
-  # # ShellCheck for shell script linting
-  # - repo: https://github.com/koalaman/shellcheck-precommit
-  #   rev: v0.10.0
-  #   hooks:
-  #     - id: shellcheck
-
   # # EditorConfig checker
   # - repo: https://github.com/editorconfig-checker/editorconfig-checker
   #   rev: v3.2.1
   #   hooks:
   #     - id: editorconfig-checker
+
+  # ShellCheck for shell script linting
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.10.0
+    hooks:
+      - id: shellcheck
+        files: "\\.(sh|zsh|bash)$"
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.11.0-1
+    hooks:
+      - id: shfmt-docker # Docker image (requires Docker to run)
+        args: ["-i", "2", "-ci"]

@@ -79,7 +79,7 @@ main_backup() {
 # Restore mode: Push files from local backup directory to remote host
 main_restore() {
   # In restore mode the backup directory must exist
-  if [[ ! -d "$BACKUP_DIR" ]]; then
+  if [[ ! -d $BACKUP_DIR ]]; then
     print_error1 "Error: Backup directory '$BACKUP_DIR' does not exist."
     exit 1
   fi
@@ -110,7 +110,7 @@ sync_files() {
   start_time=$(date +%s)
 
   for FILE_PATTERN in "${files_list[@]}"; do
-    if [[ -z "$FILE_PATTERN" ]]; then
+    if [[ -z $FILE_PATTERN ]]; then
       print_error2 "Empty file pattern encountered. Skipping..."
       continue
     fi
@@ -119,7 +119,7 @@ sync_files() {
     local local_dir
     local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
 
-    if [[ "$DRY_RUN" == true ]]; then
+    if [[ $DRY_RUN == true ]]; then
       print_info1 "🧁 [Dry Run] Would back up: '$FILE_PATTERN' into '$local_dir'"
       continue
     fi
@@ -160,7 +160,7 @@ backup_zfs_info() {
   local type="$1"
   local zfs_dir="$BACKUP_DIR/$type/zfs-configs"
 
-  if [[ "$DRY_RUN" == true ]]; then
+  if [[ $DRY_RUN == true ]]; then
     print_info1 "🧁 [Dry Run] Would run remote ZFS commands and store output to '$zfs_dir'"
     return
   fi
@@ -187,7 +187,7 @@ restore_files() {
   start_time=$(date +%s)
 
   for FILE_PATTERN in "${files_list[@]}"; do
-    if [[ -z "$FILE_PATTERN" ]]; then
+    if [[ -z $FILE_PATTERN ]]; then
       print_error2 "Empty file pattern encountered. Skipping..."
       continue
     fi
@@ -196,7 +196,7 @@ restore_files() {
     local local_dir
     local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
 
-    if [[ "$DRY_RUN" == true ]]; then
+    if [[ $DRY_RUN == true ]]; then
       print_info1 "🧁 [Dry Run] Would restore: '$local_dir/$(basename "$FILE_PATTERN")' to '$REMOTE_HOST:$(dirname "$FILE_PATTERN")/'"
       continue
     fi
@@ -234,7 +234,7 @@ restore_zfs_info() {
 
   print_info1 "💡 Manual ZFS restore instructions"
 
-  if [[ ! -d "$zfs_dir" ]]; then
+  if [[ ! -d $zfs_dir ]]; then
     print_error2 "ZFS backup directory not found: $zfs_dir"
     return
   fi
@@ -278,7 +278,7 @@ restore_zfs_info() {
 # Function to list SSH hosts from ~/.ssh/config using fzf
 choose_remote_host() {
   local ssh_config=~/.ssh/config
-  if [[ ! -f "$ssh_config" ]]; then
+  if [[ ! -f $ssh_config ]]; then
     echo "No SSH config found at $ssh_config" >&2
     exit 1
   fi
@@ -287,7 +287,7 @@ choose_remote_host() {
   local host
   host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
 
-  if [[ -z "$host" ]]; then
+  if [[ -z $host ]]; then
     echo "No remote host selected. Exiting." >&2
     exit 1
   fi
@@ -356,7 +356,7 @@ parse_args() {
   done
 
   # If REMOTE_HOST was not provided, prompt via fzf
-  if [[ -z "$REMOTE_HOST" ]]; then
+  if [[ -z $REMOTE_HOST ]]; then
     choose_remote_host
   fi
 }
@@ -399,7 +399,7 @@ check_dependencies
 validate_remote_host
 check_remote_rsync
 
-if [[ "$RESTORE_MODE" == true ]]; then
+if [[ $RESTORE_MODE == true ]]; then
   main_restore
 else
   main_backup

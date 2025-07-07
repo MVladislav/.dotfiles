@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-#PATH='/usr/bin:/usr/local/bin:~/.local/bin'
 
 if [[ $# -eq 1 ]]; then
   selected=$1

@@ -77,20 +77,20 @@ manage_vm() {
   response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/current" "GET")
   status=$(echo "$response" | jq -r '.data.qmpstatus')
 
-  if [[ "$PVE_VM_PROCESS" == "stop" ]]; then
-    if [[ "$status" == "running" ]]; then
-      print_info1 "Stopping VM ..."
+  if [[ $PVE_VM_PROCESS == "stop" ]]; then
+    if [[ $status == "running" ]]; then
+      print_info "Stopping VM ..."
       api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/shutdown" "POST" >/dev/null
     else
-      print_info1 "VM is not running."
+      print_info "VM is not running."
     fi
     exit 0
   fi
 
-  if [[ "$status" == "stopped" ]]; then
-    print_info1 "VM is stopped. Starting VM ..."
+  if [[ $status == "stopped" ]]; then
+    print_info "VM is stopped. Starting VM ..."
     api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/start" "POST" >/dev/null
-    print_info1 "Waiting 3 seconds before attempting a Spice connection ..."
+    print_info "Waiting 3 seconds before attempting a Spice connection ..."
     sleep 3
   fi
 }
@@ -133,16 +133,14 @@ check_dependencies() {
 
 # Function to validate VM ID
 validate_vmid() {
-  if [[ ! "$PVE_VMID" =~ ^[0-9]+$ ]]; then
+  if [[ ! $PVE_VMID =~ ^[0-9]+$ ]]; then
     print_error1 "Invalid VM ID. VM ID must be a number."
   fi
 }
 
 # ******************************************************************************
 
-print_info1() { echo -e "$1"; }
-print_info2() { echo -e "🔭 $1"; }
-print_info3() { echo -e "$1"; }
+print_info() { echo -e "$1"; }
 print_error1() {
   echo -e "🔴 ERROR: $1" >&2
   exit 1
@@ -150,15 +148,15 @@ print_error1() {
 print_error2() { echo -e "🔴 ERROR: $1" >&2; }
 
 usage() {
-  print_info3 "📖 Description:"
-  print_info3 "     This script interacts with a Proxmox Virtual Environment (PVE) to manage VMs via the PVE API."
-  print_info3 "     It can start, stop, and connect to VMs using virt-viewer or a similar tool."
-  print_info3 ""
-  print_info3 "📖 Usage: $0 [options]"
-  print_info3 "📖 Options:"
-  print_info3 "     -h, --help          Show this help message and exit"
-  print_info3 "     -id, --vm-id <ID>   Specify the VM ID"
-  print_info3 "     -s, --stop          Stop the specified VM"
+  print_info "📖 Description:"
+  print_info "     This script interacts with a Proxmox Virtual Environment (PVE) to manage VMs via the PVE API."
+  print_info "     It can start, stop, and connect to VMs using virt-viewer or a similar tool."
+  print_info ""
+  print_info "📖 Usage: $0 [options]"
+  print_info "📖 Options:"
+  print_info "     -h, --help          Show this help message and exit"
+  print_info "     -id, --vm-id <ID>   Specify the VM ID"
+  print_info "     -s, --stop          Stop the specified VM"
 }
 
 parse_args() {

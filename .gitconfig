@@ -6,6 +6,8 @@
   # gpgsign = true
 [gpg]
   format = ssh
+[safe]
+	# directory = *
 [core]
   hooksPath = ~/.git-hooks
   compression = 9

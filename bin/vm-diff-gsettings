@@ -81,7 +81,7 @@ log "Comparing the two states..."
 # diff returns non-zero if differences are found so we use || true to avoid exit on diff
 diff --color=auto -u "$BEFORE_FILE" "$AFTER_FILE" >"$DIFF_FILE" || true
 
-if [[ -s "$DIFF_FILE" ]]; then
+if [[ -s $DIFF_FILE ]]; then
   log "Differences detected. Diff file saved to: $DIFF_FILE"
   echo "Differences found. You can view the changes with: cat $DIFF_FILE"
 else

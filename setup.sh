@@ -100,7 +100,7 @@ LN_LOGSEQ_PATH="${HOME}/.logseq"
 # ******************************************************************************
 
 main() {
-  if [[ "$INSTALL_SOURCE_FROM" != "source" && "$INSTALL_SOURCE_FROM" != "release" ]]; then
+  if [[ $INSTALL_SOURCE_FROM != "source" && $INSTALL_SOURCE_FROM != "release" ]]; then
     print_error "❌ Invalid value for INSTALL_SOURCE_FROM: $INSTALL_SOURCE_FROM"
     exit 1
   fi
@@ -215,7 +215,7 @@ check_for_newer_tag() {
   local TAGS_JSON
   TAGS_JSON=$(curl -sL "https://api.github.com/repos/$REPO_NAME/tags")
 
-  if [[ -z "$TAGS_JSON" || "$TAGS_JSON" == *"API rate limit exceeded"* ]]; then
+  if [[ -z $TAGS_JSON || $TAGS_JSON == *"API rate limit exceeded"* ]]; then
     print_error "⚠️ GitHub API rate limit exceeded or no response for $REPO_NAME."
     return 0
   fi
@@ -223,7 +223,7 @@ check_for_newer_tag() {
   # Extract tag names, optionally filtering by TAG_FILTER
   local TAGS
   TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
-  if [[ -n "$TAG_FILTER" ]]; then
+  if [[ -n $TAG_FILTER ]]; then
     TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
   fi
 
@@ -232,24 +232,24 @@ check_for_newer_tag() {
   LATEST_TAG=$(echo "$TAGS" | sort -V | tail -n1)
 
   # Fallback: no matching tags → try latest release
-  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
     LATEST_TAG=$(curl -sL "https://api.github.com/repos/$REPO_NAME/releases/latest" |
       jq -r '.tag_name')
     # If a filter was provided, ensure the release tag matches it
-    if [[ -n "$TAG_FILTER" && ! "$LATEST_TAG" =~ $TAG_FILTER ]]; then
+    if [[ -n $TAG_FILTER && ! $LATEST_TAG =~ $TAG_FILTER ]]; then
       print_info2 "⚠️ No releases matching filter '$TAG_FILTER' for $REPO_NAME."
       return 0
     fi
   fi
 
   # Final validation
-  if [[ -z "$LATEST_TAG" || "$LATEST_TAG" == "null" ]]; then
+  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
     print_error "⚠️ No tags or releases found for $REPO_NAME."
     return 0
   fi
 
   # Compare and report
-  if [[ "$CURRENT_TAG" != "$LATEST_TAG" ]]; then
+  if [[ $CURRENT_TAG != "$LATEST_TAG" ]]; then
     print_info2 "⬆️ A newer version for '$REPO_NAME' is available: $LATEST_TAG (current: $CURRENT_TAG)"
     print_info2 "    https://github.com/$REPO_NAME/releases/tag/$LATEST_TAG"
   else
@@ -608,7 +608,7 @@ setup_gitconfig() {
 
   print_read "  ✏️ Enter your Git user.email: "
   read -r git_user_email
-  if [[ ! "$git_user_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+  if [[ ! $git_user_email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
     print_error "  ❌ That doesn't look like a valid email. Please try again."
     return 1
   fi

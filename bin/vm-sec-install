@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin
 set -euo pipefail
 IFS=$'\n\t'

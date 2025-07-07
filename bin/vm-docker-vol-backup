@@ -7,7 +7,7 @@ IFS=$'\n\t'
 trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" ERR
 
 # Check if the script is run with sudo
-if [[ "$EUID" -ne 0 ]]; then
+if [[ $EUID -ne 0 ]]; then
   echo "-> This script must be run with sudo."
   exit 1
 fi
@@ -50,14 +50,14 @@ service_backup() {
 # ------------------------------------------------------------------------------
 
 service_scale_down() {
-  if [[ -z "$DOCKER_RUNNING_SERVICE" ]]; then
+  if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
     echo "-> No running services found, nothing will be scaled down."
   else
     # Collect the original scale (replicas) of services with replicas > 0
     for service in $DOCKER_RUNNING_SERVICE; do
       local replicas=0
       replicas=$(docker service inspect --format "{{.Spec.Mode.Replicated.Replicas}}" "$service")
-      if [[ "$replicas" -gt 0 ]]; then
+      if [[ $replicas -gt 0 ]]; then
         local service_name=""
         service_name=$(docker service inspect --format "{{.Spec.Name}}" "$service")
         DOCKER_ORIGINAL_SCALES+=("$service_name:$replicas")
@@ -81,7 +81,7 @@ service_scale_down() {
 
 service_scale_up() {
   # Scale services back to their original replicas
-  if [[ -z "$DOCKER_RUNNING_SERVICE" ]]; then
+  if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
     echo "-> No running services found before, nothing to scale back up."
   else
     if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then

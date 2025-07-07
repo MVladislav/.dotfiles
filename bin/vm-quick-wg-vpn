@@ -59,7 +59,7 @@ check_requirements() {
 
 # Check if WireGuard config file exists
 check_config_file_exists() {
-  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf" && [[ ! -f "$WG_CONF_PATH" ]]; then
+  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf" && [[ ! -f $WG_CONF_PATH ]]; then
     exit_with_error "WireGuard config file not found in: $WG_CONF_PATH or /etc/wireguard/$WG_INTERFACE.conf"
   fi
   log "INFO" "Configuration file found."
@@ -67,7 +67,7 @@ check_config_file_exists() {
 
 # Move WireGuard config file into place
 move_wireguard_conf() {
-  if [[ -f "$WG_CONF_PATH" ]]; then
+  if [[ -f $WG_CONF_PATH ]]; then
     log "INFO" "Moving WireGuard config file to /etc/wireguard/"
     sudo mv "$WG_CONF_PATH" "/etc/wireguard/$WG_INTERFACE.conf"
     sudo chmod 600 "/etc/wireguard/$WG_INTERFACE.conf"
@@ -107,7 +107,7 @@ setup_kill_switch() {
   WG_ENDPOINT_IP=${WG_ENDPOINT%%:*}
   WG_PORT=${WG_ENDPOINT##*:}
 
-  [[ -z "$WG_ENDPOINT_IP" || -z "$WG_PORT" ]] && exit_with_error "Invalid Endpoint in WireGuard config, missing IP or PORT."
+  [[ -z $WG_ENDPOINT_IP || -z $WG_PORT ]] && exit_with_error "Invalid Endpoint in WireGuard config, missing IP or PORT."
 
   # Reset UFW and apply basic deny policies
   sudo ufw disable >/dev/null
@@ -143,7 +143,7 @@ setup_kill_switch() {
 
   # Allow DNS requests through the VPN
   VPN_DNS=$(sudo grep -E "^DNS" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2 | cut -d, -f1 | xargs)
-  [[ -z "$VPN_DNS" ]] && VPN_DNS="9.9.9.9"
+  [[ -z $VPN_DNS ]] && VPN_DNS="9.9.9.9"
   sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp >/dev/null
 
   sudo ufw enable

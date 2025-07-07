@@ -12,6 +12,7 @@ command -v code >/dev/null 2>&1 || {
   exit 1
 }
 
+# shellcheck disable=SC1091
 source "$HOME/.profile-secrets"
 
 if [[ $# -eq 1 ]]; then

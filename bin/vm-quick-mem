@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# mem_report.sh - List top memory-consuming processes with detailed metrics
-
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -52,7 +50,7 @@ display_collect() {
 
     if [[ -r "/proc/$pid/cmdline" ]]; then
       cmd=$(tr '\0' ' ' <"/proc/$pid/cmdline" | awk '{print $1}')
-      if [[ -z "$cmd" ]]; then
+      if [[ -z $cmd ]]; then
         cmd=$(awk '/^Name:/ {print $2; exit}' "$status")
       fi
     else
