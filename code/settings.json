@@ -40,7 +40,7 @@
   "editor.cursorBlinking": "smooth",
   "editor.cursorStyle": "line",
   "editor.cursorWidth": 2,
-  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.defaultFormatter": null,
   "editor.detectIndentation": false,
   "editor.find.cursorMoveOnType": false,
   "editor.foldingMaximumRegions": 65000,
@@ -379,10 +379,10 @@
   },
   "yaml.maxItemsComputed": 99999,
   "[json]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[jsonc]": {
-    "editor.defaultFormatter": "vscode.json-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[xml]": {
     "editor.defaultFormatter": "redhat.vscode-xml"
@@ -443,6 +443,7 @@
     },
     "editor.formatOnType": true
   },
+  // "python.languageServer": "None",
   "python.analysis.ignore": ["*"],
   "python.analysis.typeCheckingMode": "basic",
   "python.analysis.completeFunctionParens": true,
@@ -460,6 +461,13 @@
     ".vscode/*.py",
     "**/tests/**"
   ],
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.allTargets": true,
+  "rust-analyzer.check.features": "all",
+  "rust-analyzer.check.extraArgs": ["--target-dir", ".rust-analyzer/target"],
   "[shellscript]": {
     "editor.defaultFormatter": "foxundermoon.shell-format",
     "files.eol": "\n"
@@ -494,17 +502,18 @@
     // "editor.defaultFormatter": ""
   },
   "[javascript]": {
-    // "editor.defaultFormatter": ""
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "javascript.preferences.quoteStyle": "single",
   "javascript.preferences.useAliasesForRenames": false,
   "javascript.updateImportsOnFileMove.enabled": "always",
+  "javascript.preferences.importModuleSpecifier": "non-relative",
   "[typescript]": {
-    "editor.defaultFormatter": "vscode.typescript-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "typescript.preferences.quoteStyle": "single",
   "typescript.preferences.useAliasesForRenames": false,
-  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.preferences.importModuleSpecifier": "non-relative",
   "typescript.updateImportsOnFileMove.enabled": "always",
   // "typescript.tsdk": "workflowenginegui\\node_modules\\typescript\\lib",
   "typescript.suggest.paths": false,
@@ -515,13 +524,14 @@
   "html.format.enable": true,
   "html.format.wrapAttributes": "force-expand-multiline",
   "[css]": {
-    "editor.defaultFormatter": "vscode.css-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "css.lint.important": "warning",
   "[scss]": {
-    "editor.defaultFormatter": "vscode.css-language-features"
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "scss.lint.important": "warning",
+  "eslint.useFlatConfig": true,
   "eslint.options": {
     "env": {
       "es6": true
