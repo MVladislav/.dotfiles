@@ -48,6 +48,7 @@ RUN_SETUP_CODE=1
 RUN_SETUP_ZED=1
 RUN_SETUP_PROFILES=1
 RUN_SETUP_LOGSEQ=1
+RUN_SETUP_GITCONFIG=1
 
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
@@ -120,6 +121,7 @@ main() {
   [[ $RUN_SETUP_ZED -eq 1 ]] && setup_zed
   [[ $RUN_SETUP_PROFILES -eq 1 ]] && setup_profiles
   [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
+  [[ $RUN_SETUP_GITCONFIG -eq 1 ]] && setup_gitconfig
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
@@ -168,11 +170,11 @@ install_dependencies_needs() {
   # Only run sudo update and install if any package is missing.
   if [[ ${#packages_to_install[@]} -gt 0 ]]; then
     $RUN_WITH_SUDO apt-get update -qqq || {
-      print_error "Failed to update package list"
+      print_error "❌ Failed to update package list"
       exit 1
     }
     $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
-      print_error "Failed to install packages"
+      print_error "❌ Failed to install packages"
       exit 1
     }
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
@@ -190,7 +192,7 @@ install_dependencies_needs_rm() {
 
   print_notes "   📥 Removing build dependencies..."
   $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
-    print_error "Failed to remove packages"
+    print_error "❌ Failed to remove packages"
     return 1
   }
   $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
@@ -597,6 +599,61 @@ setup_logseq() {
   print_info2 "🚀 LOGSEQ :: All symlinks created."
 }
 
+# GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
+setup_gitconfig() {
+  print_info2 "🚀 GITCONFIG :: Starting global Git configuration"
+
+  print_read "  ✏️ Enter your Git user.name: "
+  read -r git_user_name
+
+  print_read "  ✏️ Enter your Git user.email: "
+  read -r git_user_email
+  if [[ ! "$git_user_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+    print_error "  ❌ That doesn't look like a valid email. Please try again."
+    return 1
+  fi
+
+  print_info2 "  🔍 Scanning '~/.ssh' for available public keys"
+  mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub")
+
+  if [ ${#ssh_keys[@]} -gt 0 ]; then
+    git_signing_key="$(printf '%s\n' "${ssh_keys[@]}" | fzf --prompt='Select signing key: ')"
+  else
+    print_info2 "  ⚠️ No SSH public keys found in '~/.ssh'."
+    print_read "  ✏️ Enter path to your Git signing key manually (or leave empty to skip): "
+    read -e -r git_signing_key
+  fi
+
+  if [ -n "$git_signing_key" ]; then
+    git_signing_key="$(echo "$git_signing_key" | xargs)"
+    signing_key_path_expanded="${git_signing_key/#\~/$HOME}"
+    if [ ! -f "$signing_key_path_expanded" ]; then
+      print_error "  ⚠️ File '$git_signing_key' does not exist"
+      return 1
+    fi
+  fi
+
+  print_info2 "  ⚙️ GITCONFIG :: Copying './.gitconfig' to '${HOME}/.gitconfig'"
+  rm -f "${HOME}/.gitconfig"
+  cp "${PWD}/.gitconfig" "${HOME}/.gitconfig"
+
+  print_info2 "  ⚙️ GITCONFIG :: Apply git configuration"
+  git config --global user.name "$git_user_name"
+  git config --global user.email "$git_user_email"
+
+  if [ -n "$git_signing_key" ]; then
+    git config --global user.signingkey "$git_signing_key"
+    git config --global commit.gpgsign true
+    print_info2 "  ⚙️ GITCONFIG :: GPG signing enabled using key: '$git_signing_key'"
+  else
+    git config --global --unset user.signingkey 2>/dev/null || true
+    git config --global commit.gpgsign false
+    print_info2 "  ⚙️ GITCONFIG :: GPG signing disabled"
+  fi
+
+  print_info2 "🚀 GITCONFIG :: Setup complete"
+}
+
 # ******************************************************************************
 
 # CODE :: install ext ----------------------------------------------------------
@@ -729,6 +786,7 @@ install_btop() {
 
 print_info() { echo -e "${BPURPLE}$1${NC}"; }
 print_info2() { echo -e "${BYELLOW}$1${NC}"; }
+print_read() { printf "%b%s%b" "${BYELLOW}" "$1" "${NC}"; }
 print_notes() { echo -e "${BCYAN}$1${NC}"; }
 print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
@@ -761,6 +819,7 @@ usage() {
   print_info "     -nsz,          --not-setup-zed                 Skip setup_zed"
   print_info "     -nsp,          --not-setup-profiles            Skip setup_profiles"
   print_info "     -nsl,          --not-setup-logseq              Skip setup_logseq"
+  print_info "     -nsg,          --not-setup-gitconfig           Skip setup_gitconfig"
   print_info "     -ds,           --disable-setups                Skip all setup"
   print_info "     -ice,          --install-code-ext              Run install install_code_ext"
   print_info "     -ifont,        --install-fonts                 Run install install_fonts"
@@ -827,6 +886,9 @@ parse_args() {
     -nsl | --not-setup-logseq)
       RUN_SETUP_LOGSEQ=0
       ;;
+    -nsg | --not-setup-gitconfig)
+      RUN_SETUP_GITCONFIG=0
+      ;;
     -ds | --disable-setups)
       RUN_SETUP_BIN=0
       RUN_SETUP_TMUX=0
@@ -835,6 +897,7 @@ parse_args() {
       RUN_SETUP_ZED=0
       RUN_SETUP_PROFILES=0
       RUN_SETUP_LOGSEQ=0
+      RUN_SETUP_GITCONFIG=0
       ;;
     -ice | --install-code-ext)
       RUN_INSTALL_CODE_EXT=1

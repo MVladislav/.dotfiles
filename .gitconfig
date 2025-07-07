@@ -1,9 +1,9 @@
-# [user]
-#   email = groot@home.local
-#   name = groot
-#   signingkey = ~/.ssh/id_ed25519_github.pub
-# [commit]
-#   gpgsign = true
+[user]
+  # email = groot@home.local
+  # name = groot
+  # signingkey = ~/.ssh/id_ed25519_github.pub
+[commit]
+  # gpgsign = true
 [gpg]
   format = ssh
 [core]
@@ -48,11 +48,11 @@
   branch = false
   tag = false
   # diff = diff-so-fancy | $PAGER
-# [diff-so-fancy]
-#   markEmptyLines = false
-# [interactive]
-#   diffFilter = diff-so-fancy --patch
-#   singlekey = true
+[diff-so-fancy]
+  # markEmptyLines = false
+[interactive]
+  # diffFilter = diff-so-fancy --patch
+  # singlekey = true
 [color "diff"]
   meta = black bold
   frag = magenta
