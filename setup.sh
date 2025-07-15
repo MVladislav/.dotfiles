@@ -688,10 +688,10 @@ install_code_ext() {
 
 # FONTS :: add fonts -----------------------------------------------------------
 install_fonts() {
-  print_info2 "\n🚀 FONTS :: Download some nerd fonts"
+  print_info2 "\n🚀 FONTS :: Downloading some fonts"
 
   local packages_tools=()
-  local packages_build=(curl)
+  local packages_build=(curl file unzip)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   FONTS_URLS=(
@@ -702,26 +702,55 @@ install_fonts() {
     "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
     "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
     "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
+    "https://github.com/fonsecapeter/brass_mono/releases/download/v1.101/BrassMono.zip"
   )
-  FONTS_DIR="${HOME}/.local/share/fonts/nerd-fonts"
-  mkdir -p "$FONTS_DIR"
+  local fonts_dir="${HOME}/.local/share/fonts"
 
   for url in "${FONTS_URLS[@]}"; do
     file_name=$(basename "$url")
+    temp_file="/tmp/$file_name"
 
     print_info2 "  - ⬇️ Downloading $file_name... ($url)"
-    curl -sL -o "/tmp/$file_name" "$url" || {
+    curl -sL -o "$temp_file" "$url" || {
       print_error "Failed to download $file_name"
       return 1
     }
 
-    print_info2 "  - ⬇️ Extracting $file_name..."
-    tar -xf "/tmp/$file_name" -C "$FONTS_DIR" || {
-      print_error "Failed to extract $file_name"
-      return 1
-    }
+    # Extract the GitHub repo name from the URL (if it's from GitHub)
+    if [[ "$url" =~ github.com/([^/]+)/([^/]+) ]]; then
+      repo_name="${BASH_REMATCH[2]}" # This grabs the repo name after the user/organization
+    else
+      # Default fallback if it's not from GitHub
+      repo_name="custom-font"
+    fi
 
-    rm "/tmp/$file_name"
+    local repo_dir="$fonts_dir/$repo_name"
+    mkdir -p "$repo_dir"
+
+    # Determine the file type (archive type)
+    archive_type=$(file --mime-type -b "$temp_file")
+
+    print_info2 "  - 📦 Extracting $file_name..."
+    case "$archive_type" in
+    application/x-xz) # .tar.xz
+      tar -xf "$temp_file" -C "$repo_dir" || {
+        print_error "Failed to extract $file_name"
+        return 1
+      }
+      ;;
+    application/zip) # .zip
+      unzip -q "$temp_file" -d "$repo_dir" || {
+        print_error "Failed to extract $file_name"
+        return 1
+      }
+      ;;
+    *)
+      print_error "Unsupported archive type: $archive_type for $file_name"
+      return 1
+      ;;
+    esac
+
+    rm "$temp_file"
   done
 
   install_dependencies_needs_rm
