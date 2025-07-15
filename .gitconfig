@@ -27,7 +27,7 @@
   autoStash = true
   missingCommitsCheck = warn
 [branch]
-  sort = -committerdatei
+  sort = -committerdate
 [tag]
   sort = -taggerdate
 [advice]
