@@ -34,6 +34,7 @@
   addEmptyPathspec = false
   pushNonFastForward = false
   statusHints = false
+  detachedHead = false
 [status]
   branch = true
   showStash = true
