@@ -217,6 +217,7 @@ restore_files() {
     total_size=$((total_size + size))
   done
 
+  restore_info
   restore_zfs_info "$type"
 
   end_time=$(date +%s)
@@ -226,6 +227,14 @@ restore_files() {
   print_info2 "Total size transferred: $((total_size / 1024)) KB"
   print_info2 "Total errors encountered: $total_errors"
   print_info2 "Elapsed time: ${elapsed_time}s\n"
+}
+
+restore_info() {
+  echo -e "\n🧠 You need run following parts manually:\n"
+  echo "1️⃣  Mounting point restores:"
+  echo "    systemctl daemon-reload"
+  echo "    systemctl enable mnt-pve-*"
+  echo "    systemctl start mnt-pve-*"
 }
 
 restore_zfs_info() {
