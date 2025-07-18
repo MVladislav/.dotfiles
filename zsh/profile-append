@@ -396,6 +396,43 @@ vm_my_bios() {
     printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
   done
 }
+vm_my_memory() {
+  echo -e "\\n${BRED}RAM Info:$NC"
+  echo -e "  - Total RAM              : $(free -h | awk '/^Mem:/ {print $2}')"
+
+  # Use dmidecode to get detailed memory device info
+  sudo dmidecode --type 17 | awk '
+    BEGIN { dev_num = 0 }
+    /^Memory Device$/ { dev_num++; in_device=1; next }
+    /^$/ { in_device=0 }
+    in_device {
+      if ($0 ~ /Size:/ && $2 != "No")         size = substr($0, index($0,$2))
+      if ($0 ~ /Type:/ && $2 != "Unknown")    type = substr($0, index($0,$2))
+      if ($0 ~ /Speed:/ && $2 != "Unknown")   speed = substr($0, index($0,$2))
+      if ($0 ~ /Locator:/)                    locator = substr($0, index($0,$2))
+      if ($0 ~ /Manufacturer:/)               mfg = substr($0, index($0,$2))
+      if ($0 ~ /Part Number:/)                part = substr($0, index($0,$3))
+      if ($0 ~ /Data Width:/)                 width = substr($0, index($0,$3))
+    }
+    in_device && /Configured Memory Speed:/ { conf_speed = substr($0, index($0,$4)) }
+    in_device && /Form Factor:/ { form = substr($0, index($0,$3)) }
+    !in_device && size {
+      print "  - Device #" dev_num ":"
+      print "      Size         : " size
+      print "      Type         : " type
+      print "      Speed        : " speed
+      if (conf_speed) print "      Config Speed : " conf_speed
+      print "      Locator      : " locator
+      print "      Manufacturer : " mfg
+      print "      Part Number  : " part
+      if (form) print "      Form Factor  : " form
+      if (width) print "      Data Width   : " width
+      print ""
+      size = type = speed = locator = mfg = part = conf_speed = form = width = ""
+    }
+  '
+}
+
 
 vm_ii() {
   echo -e "\\n${BRED}You are logged on:$NC $(hostname)"
