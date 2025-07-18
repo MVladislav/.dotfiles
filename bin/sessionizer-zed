@@ -16,21 +16,21 @@ command -v flatpak >/dev/null 2>&1 || {
 source "$HOME/.profile-secrets"
 
 if [[ $# -eq 1 ]]; then
-  TMUX_WORKSPACES=("$1")
-elif [[ -z ${TMUX_WORKSPACES+x} || ! "$(declare -p TMUX_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
-  TMUX_WORKSPACES=("$HOME")
+  SESSION_WORKSPACES=("$1")
+elif [[ -z ${SESSION_WORKSPACES+x} || ! "$(declare -p SESSION_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
+  SESSION_WORKSPACES=("$HOME")
 fi
 
-TMUX_WORKSPACES_EXPAND=()
-for pattern in "${TMUX_WORKSPACES[@]}"; do
+SESSION_WORKSPACES_EXPAND=()
+for pattern in "${SESSION_WORKSPACES[@]}"; do
   for path in $pattern; do
-    [[ -d $path ]] && TMUX_WORKSPACES_EXPAND+=("$path")
+    [[ -d $path ]] && SESSION_WORKSPACES_EXPAND+=("$path")
   done
 done
 
 selected=$(
   find \
-    "${TMUX_WORKSPACES_EXPAND[@]}" \
+    "${SESSION_WORKSPACES_EXPAND[@]}" \
     -mindepth 1 -maxdepth 1 -type d | fzf
 )
 
