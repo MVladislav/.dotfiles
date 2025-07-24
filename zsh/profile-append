@@ -67,14 +67,14 @@ fi
 ##
 ######################################################################
 export GOPATH="$HOME/.go"
-addToPath "/usr/local/go/bin"
+addToPath '/usr/local/go/bin'
 addToPath "$GOPATH/bin"
 
 NPM_PACKAGES="${HOME}/.npm-packages"
 if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
   export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
 fi
-addToPathFront "/snap/node/current/bin"
+addToPathFront '/snap/node/current/bin'
 addToPath "$NPM_PACKAGES/bin"
 
 export GEM_HOME="$HOME/.gems"
@@ -143,22 +143,38 @@ find-l() {
 ### DOCKER ###
 alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
-alias docker-swarm-compose='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | sed '\''s|mode: "\([0-9]\+\)"|mode: \1|'\'' | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
-alias docker-swarm='docker compose --compatibility config | sed '\''s|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'\'' | sed '\''1{/^name:/d}'\'' | sed '\''s/published: "\(.*\)"/published: \1/'\'' | sed '\''s|mode: "\([0-9]\+\)"|mode: \1|'\'' | docker stack deploy --resolve-image=always --with-registry-auth --detach=false --compose-file -'
-
-docker-swarm-compose2() {
-  local COMPOSE_FILE="docker-compose.yaml"
-  if [ $# -gt 1 ]; then
+docker-swarm-compose() {
+  local COMPOSE_FILE='docker-compose.yaml'
+  local RESOLVE_IMAGE='never' # never | always
+  if [ $# -eq 0 ]; then
+    echo "Usage: $0 [<FILE>] [never|always] <NAME>"
+    return 1
+  elif [ $# -gt 2 ] && [ -f "$1" ] && { [ "$2" = "never" ] || [ "$2" = "always" ]; }; then
+    COMPOSE_FILE="$1"
+    RESOLVE_IMAGE="$2"
+    shift 2
+  elif [ $# -gt 1 ] && [ -f "$1" ]; then
     COMPOSE_FILE="$1"
     shift
   fi
 
-  echo "Using compose file: $COMPOSE_FILE"
+  echo "Creating '$1' with compose file: '$COMPOSE_FILE' :: [resolve=$RESOLVE_IMAGE]"
   docker compose --file "$COMPOSE_FILE" --compatibility config |
     sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' |
     sed '1{/^name:/d}' |
     sed 's/published: "\(.*\)"/published: \1/' |
-    docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file - "$@"
+    sed 's|mode: "\([0-9]\+\)"|mode: \1|' |
+    docker stack deploy --resolve-image="$RESOLVE_IMAGE" --with-registry-auth --detach=false --compose-file - "$@"
+
+  # docker compose --file "$COMPOSE_FILE" --compatibility config --format json |
+  #   jq 'del(.name) |
+  #     .services |= map_values(.deploy.resources.limits.cpus |= tostring |
+  #     .deploy.resources.reservations.cpus |= tostring |
+  #     if .ports then .ports |= map(.published |= tonumber) else . end |
+  #     if .devices then .devices |= map("\(.source):\(.target)") else . end) |
+  #     walk(if type == "object" then with_entries(select(.value != null)) else . end)' |
+  #   yq -P |
+  #   docker stack deploy --resolve-image="$RESOLVE_IMAGE" --with-registry-auth --detach=false --compose-file - "$@"
 }
 
 docker-context() {
@@ -168,7 +184,6 @@ docker-context() {
   fi
   docker context create "$1" --docker "host=ssh://$2"
 }
-# alias docker-swarm-compose='docker compose --compatibility config --format json | jq '\''del(.name) | .services |= map_values(.deploy.resources.limits.cpus |= tostring | .deploy.resources.reservations.cpus |= tostring | if .ports then .ports |= map(.published |= tonumber) else . end | if .devices then .devices |= map("\(.source):\(.target)") else . end) | walk(if type == "object" then with_entries(select(.value != null)) else . end)'\'' | yq -P | docker stack deploy --resolve-image=never --with-registry-auth --detach=false --compose-file -'
 
 # shellcheck disable=SC2139
 alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:24.04"
@@ -202,7 +217,7 @@ alias vm_url_decode='python3 -c "import sys, urllib.parse as ul; print(ul.unquot
 alias vm_url_encode='python3 -c "import sys, urllib.parse as ul; print(ul.quote_plus(sys.argv[1]))"'
 alias vm_reverse='python3 -c "import sys; print(sys.argv[1][::-1])"'
 
-alias vm_hun_to_min="python3 -c 'import sys;x = sys.argv[1].split(\":\");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(x3, \":: \", f\"{divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m\")'"
+alias vm_hun_to_min='python3 -c '\''import sys;x = sys.argv[1].split(":");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(f"{x3}m :: {divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m")'\'''
 
 # $sudo apt install xclip
 # $pip3 install pyperclip
@@ -260,6 +275,8 @@ vm_update_clean_all() {
   echo -e "You could also run additional updates:"
   echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
   echo -e "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
+
+  [ -f /var/run/reboot-required ] && echo && cat /var/run/reboot-required
 }
 
 ### OTHER ###
@@ -310,8 +327,8 @@ alias du-l='du -hs * .* 2>/dev/null | sort -h'
 alias du-g='du -hs /boot /dev /etc /home /opt /root /snap /srv /sys /tmp /usr /var 2>/dev/null | sort -h'
 alias ip='ip -c'
 
-alias chmod_ux="chmod u+x"
-alias vm_ux_term="tr -d '\r' <"
+alias chmod_ux='chmod u+x'
+alias vm_ux_term='tr -d '\''\r'\'' <'
 
 alias vm_random='openssl rand -base64'
 vm_random2() {
@@ -482,9 +499,9 @@ vm_ii() {
 ## - check outdated git repos
 ##
 ######################################################################
-alias gl1="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)' --all"
-alias gl2="git log --graph --abbrev-commit --decorate --format=format:'%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)' --all"
-alias gl3="git log --graph --all --pretty=format:'%C(magenta)%h %C(white) %an  %ar%C(auto)  $D%n%s%n'"
+alias gl1='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'\'' --all'
+alias gl2='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n'\'''\''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'\'' --all'
+alias gl3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
 
 alias gpre='pre-commit run --files $(git ls-files | tr "\n" " ")'
 alias grei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
