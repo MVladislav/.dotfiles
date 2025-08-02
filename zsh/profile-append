@@ -144,37 +144,73 @@ find-l() {
 alias docker='DOCKER_BUILDKIT=1 docker'
 alias docker-compose='docker compose'
 docker-swarm-compose() {
-  local COMPOSE_FILE='docker-compose.yaml'
-  local RESOLVE_IMAGE='never' # never | always
-  if [ $# -eq 0 ]; then
-    echo "Usage: $0 [<FILE>] [never|always] <NAME>"
-    return 1
-  elif [ $# -gt 2 ] && [ -f "$1" ] && { [ "$2" = "never" ] || [ "$2" = "always" ]; }; then
-    COMPOSE_FILE="$1"
-    RESOLVE_IMAGE="$2"
-    shift 2
-  elif [ $# -gt 1 ] && [ -f "$1" ]; then
-    COMPOSE_FILE="$1"
-    shift
+  local COMPOSE_FILES=()
+  local RESOLVE_IMAGE="never"
+  local ARGS=()
+
+  # 1) Parse flags and collect everything else into ARGS
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -f|--file)
+        if [[ -n "${2:-}" && -f "$2" ]]; then
+          COMPOSE_FILES+=("$2")
+          shift 2
+        else
+          echo "Error: Missing or invalid file after $1" >&2
+          return 1
+        fi
+        ;;
+      never|always)
+        RESOLVE_IMAGE="$1"
+        shift
+        ;;
+      *)
+        ARGS+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  # 2) Default compose file if none provided
+  if [[ "${#COMPOSE_FILES[@]}" -eq 0 ]]; then
+    COMPOSE_FILES=(docker-compose.yaml)
   fi
 
-  echo "Creating '$1' with compose file: '$COMPOSE_FILE' :: [resolve=$RESOLVE_IMAGE]"
-  docker compose --file "$COMPOSE_FILE" --compatibility config |
-    sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' |
-    sed '1{/^name:/d}' |
-    sed 's/published: "\(.*\)"/published: \1/' |
-    sed 's|mode: "\([0-9]\+\)"|mode: \1|' |
-    docker stack deploy --resolve-image="$RESOLVE_IMAGE" --with-registry-auth --detach=false --compose-file - "$@"
+  # 3) Ensure we have at least a stack name
+  if [[ "${#ARGS[@]}" -lt 1 ]]; then
+    echo "Usage: docker-swarm-compose [-f <file> ...] [never|always] <STACK_NAME> [extra args...]" >&2
+    return 1
+  fi
 
-  # docker compose --file "$COMPOSE_FILE" --compatibility config --format json |
-  #   jq 'del(.name) |
-  #     .services |= map_values(.deploy.resources.limits.cpus |= tostring |
-  #     .deploy.resources.reservations.cpus |= tostring |
-  #     if .ports then .ports |= map(.published |= tonumber) else . end |
-  #     if .devices then .devices |= map("\(.source):\(.target)") else . end) |
-  #     walk(if type == "object" then with_entries(select(.value != null)) else . end)' |
-  #   yq -P |
-  #   docker stack deploy --resolve-image="$RESOLVE_IMAGE" --with-registry-auth --detach=false --compose-file - "$@"
+  # 4) Re-assign positional params to what’s in ARGS
+  set -- "${ARGS[@]}"
+
+  # 5) Extract stack name & extra args
+  local STACK_NAME="$1"
+  shift
+  local EXTRA_ARGS=( "$@" )
+
+  echo "Deploying stack '$STACK_NAME' with files: ${COMPOSE_FILES[*]} :: [resolve=$RESOLVE_IMAGE]"
+
+  # 6) Build the '-f file' args for docker compose
+  local FILE_ARGS=()
+  for f in "${COMPOSE_FILES[@]}"; do
+    FILE_ARGS+=(-f "$f")
+  done
+
+  # 7) Pipe the final config into docker stack deploy
+  docker compose "${FILE_ARGS[@]}" --compatibility config \
+    | sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' \
+    | sed '1{/^name:/d}' \
+    | sed 's/published: "\(.*\)"/published: \1/' \
+    | sed 's|mode: "\([0-9]\+\)"|mode: \1|' \
+    | docker stack deploy \
+        --resolve-image="$RESOLVE_IMAGE" \
+        --with-registry-auth \
+        --detach=false \
+        --compose-file - \
+        "$STACK_NAME" \
+        "${EXTRA_ARGS[@]}"
 }
 
 docker-context() {
