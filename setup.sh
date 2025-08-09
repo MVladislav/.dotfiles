@@ -633,9 +633,9 @@ setup_gitconfig() {
     fi
   fi
 
-  print_info2 "  ⚙️ GITCONFIG :: Copying './.gitconfig' to '${HOME}/.gitconfig'"
+  print_info2 "  ⚙️ GITCONFIG :: Copying './git/.gitconfig' to '${HOME}/.gitconfig'"
   rm -f "${HOME}/.gitconfig"
-  cp "${PWD}/.gitconfig" "${HOME}/.gitconfig"
+  cp "${PWD}/git/.gitconfig" "${HOME}/.gitconfig"
 
   print_info2 "  ⚙️ GITCONFIG :: Apply git configuration"
   git config --global user.name "$git_user_name"
