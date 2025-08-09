@@ -486,46 +486,88 @@ vm_my_memory() {
   '
 }
 
-
 vm_ii() {
-  echo -e "\\n${BRED}You are logged on:$NC $(hostname)"
+  local run_bios=false
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -b|--bios) run_bios=true; shift ;;
+      -h|--help) echo "Usage: $0 [--bios|-b]"; return 0 ;;
+      *) echo "Unknown option: $1" >&2; return 2 ;;
+    esac
+  done
+
+  echo -e "\\n${BRED}You are logged on:$NC $(hostname -f 2>/dev/null || hostname)"
   echo -e "\\n${BRED}Additional information:$NC"
-  echo -e "  - description           : $(lsb_release -d | cut -d':' -f2- | xargs)"
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo -e "  - description           : ${PRETTY_NAME:-$NAME}"
+  else
+    echo -e "  - description           : $(lsb_release -d 2>/dev/null | cut -d: -f2- | xargs || echo 'Unknown')"
+  fi
   echo -e "  - kernel name           : $(uname -s)"
   echo -e "  - network node hostname : $(uname -n)"
   echo -e "  - kernel release        : $(uname -r)"
   echo -e "  - kernel version        : $(uname -v)"
   echo -e "  - machine hardware name : $(uname -m)"
-  echo -e "  - processor type        : $(uname -p)"
-  echo -e "  - hardware platform     : $(uname -i)"
-  echo -e "  - operating system      : $(uname -o)"
-  echo -e "  - secure boot status    : $(mokutil --sb-state 2>/dev/null || echo "Not available")"
+  echo -e "  - processor type        : $(uname -p 2>/dev/null || echo 'Unknown')"
+  echo -e "  - hardware platform     : $(uname -i 2>/dev/null || echo 'Unknown')"
+  echo -e "  - operating system      : $(uname -o 2>/dev/null || echo 'Unknown')"
+
+  if command -v mokutil >/dev/null 2>&1; then
+    echo -e "  - secure boot status    : $(mokutil --sb-state 2>/dev/null || echo 'Not available')"
+  else
+    echo -e "  - secure boot status    : mokutil missing"
+  fi
+
+
+  echo -e "\\n${BRED}GPU information:$NC"
+  if command -v vulkaninfo >/dev/null 2>&1; then
+    echo -e "  - Vulkan instance       : $(vulkaninfo 2>/dev/null | awk -F': ' '/Vulkan Instance Version/ {print $2; exit}')"
+  fi
+  if command -v glxinfo >/dev/null 2>&1; then
+    echo -e "  - Mesa version          : $(glxinfo -B 2>/dev/null | awk -F'Mesa ' '/OpenGL version string/ {print $2; exit}')"
+    echo -e "  - OpenGL renderer       : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/ {print $2; exit}')"
+    echo -e "  - OpenGL version        : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL version string/ {print $2; exit}')"
+  fi
 
   echo -e "\\n${BRED}Users logged on:$NC"
-  echo "  $(w -h)"
+  if command -v w >/dev/null 2>&1; then
+    echo -e "  $(w -h)"
+  else
+    echo -e "  w: command not found"
+  fi
 
   echo -e "\\n${BRED}Current date:$NC"
-  echo "  $(date)"
+  echo -e "  $(date)"
 
   echo -e "\\n${BRED}Machine stats:$NC"
-  echo "  $(uptime | xargs)"
+  echo -e "  $(uptime | xargs)"
 
-  echo -e "\\n${BRED}Machine BIOS:$NC"
-  vm_my_bios
+  if [[ "$run_bios" == true ]]; then
+    echo -e "\\n${BRED}Machine BIOS:$NC"
+    vm_my_bios
+  fi
+
   echo -e "\\n${BRED}CPU:$NC"
-  # https://github.com/platomav/CPUMicrocodes/tree/master/AMD
-  echo -e "  - microcode : $(grep microcode /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
-  echo -e "  - family    : $(grep 'cpu family' /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
-  echo -e "  - model     : $(grep -oP 'model\s*:\s*\K\d+' /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
-  echo -e "  - stepping  : $(grep stepping /proc/cpuinfo | head -n1 | cut -d":" -f2 | xargs)"
+  echo -e "  - CPU cores (online)    : $(nproc --all 2>/dev/null || echo 'Unknown')"
+  if command -v lscpu >/dev/null 2>&1; then
+    echo -e "  - CPU model             : $(lscpu | awk -F: '/Model name/ {print $2; exit}' | xargs)"
+  fi
+  echo -e "  - microcode             : $(awk -F: '/microcode/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - family                : $(awk -F: '/cpu family/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - model                 : $(awk -F: '/model name|model/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - stepping              : $(awk -F: '/stepping/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
 
   echo -e "\\n${BRED}Public facing IP Address:$NC"
-  echo "  $(vm_my_ip)"
-  echo "  $(vm_my_host)"
-  echo "  $(vm_my_country)"
-  echo "  $(vm_my_ua)"
+  echo -e "  $(vm_my_ip 2>/dev/null || echo 'Unavailable')"
+  echo -e "  $(vm_my_host 2>/dev/null || echo 'Unavailable')"
+  echo -e "  $(vm_my_country 2>/dev/null || echo 'Unavailable')"
+  echo -e "  $(vm_my_ua 2>/dev/null || echo 'Unavailable')"
   echo
 }
+
 
 ######################################################################
 ##
