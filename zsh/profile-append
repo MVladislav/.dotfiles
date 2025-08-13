@@ -116,8 +116,8 @@ alias catt='batcat -p -P --color always'
 alias catt-b='batcat -P --color always'
 
 ### CP as RSYNC ###
-alias cp-r='rsync --info=progress2 -auz --stats'
-alias cp-ra='rsync --info=progress2 -az --stats'
+alias cp-r='rsync --info=progress2 -auz --no-o --no-g --no-perms --no-times --stats'
+alias cp-ra='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
 alias scp-r='rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x"'
 alias scp-ra='rsync --info=progress2 -az -e "ssh -T -o Compression=no -x"'
 
