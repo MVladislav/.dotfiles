@@ -439,7 +439,8 @@ vm_speed_pub() {
 ## ii: display useful host related information
 ##
 ######################################################################
-alias vm_my_ip='curl -s ifconfig.io/ip'
+alias vm_my_ip_4='curl -4 -s ifconfig.io/ip'
+alias vm_my_ip_6='curl -6 -s ifconfig.io/ip'
 alias vm_my_host='curl -s ifconfig.io/host'
 alias vm_my_country='curl -s ifconfig.io/country_code'
 alias vm_my_ua='curl -s ifconfig.io/ua'
@@ -561,7 +562,8 @@ vm_ii() {
   echo -e "  - stepping              : $(awk -F: '/stepping/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
 
   echo -e "\\n${BRED}Public facing IP Address:$NC"
-  echo -e "  $(vm_my_ip 2>/dev/null || echo 'Unavailable')"
+  echo -e "  $(vm_my_ip_4 2>/dev/null || echo 'Unavailable')"
+  echo -e "  $(vm_my_ip_6 2>/dev/null || echo 'Unavailable')"
   echo -e "  $(vm_my_host 2>/dev/null || echo 'Unavailable')"
   echo -e "  $(vm_my_country 2>/dev/null || echo 'Unavailable')"
   echo -e "  $(vm_my_ua 2>/dev/null || echo 'Unavailable')"
