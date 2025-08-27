@@ -266,8 +266,10 @@ initialize_base() {
 
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
-  print_info2 "\n📥 DEPS :: install some base services :: [rsync fzf eza bat ripgrep fd-find xclip]"
-  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf eza bat ripgrep fd-find xclip 1>/dev/null
+  print_info2 "\n📥 DEPS :: install some base services :: [curl git jq rsync fzf xclip]"
+  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf xclip 1>/dev/null
+  print_info2 "\n📥 DEPS :: install some base services :: [eza bat ripgrep fd-find]"
+  $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
   print_info2 "📥 DEPS :: disable rsync systemd service"
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
@@ -476,11 +478,14 @@ install_dependencies_ghostty() {
 
 # BIN :: CREATE LINKS ----------------------------------------------------------
 setup_bin() {
-  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/'"
+  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/vm/*'"
   mkdir -p "$USER_LOCAL_PREFIX_BIN"
-  for script in "$PWD"/bin/*; do
-    ln -sf "$script" "${USER_LOCAL_PREFIX_BIN}/$(basename "$script")" || print_error "  ❌ Failed to link $script"
-  done
+
+  rm -f "${USER_LOCAL_PREFIX_BIN}/vm"
+  ln -sf "$PWD/bin" "${USER_LOCAL_PREFIX_BIN}/vm"
+  # for script in "$PWD"/bin/*; do
+  #   ln -sf "$script" "${USER_LOCAL_PREFIX_BIN}/$(basename "$script")" || print_error "  ❌ Failed to link $script"
+  # done
   print_info2 "🚀 BIN :: All symlinks created."
 }
 

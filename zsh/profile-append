@@ -49,6 +49,9 @@ addToPathFront() {
 ##
 ######################################################################
 addToPathFront "$HOME/.local/bin"
+if [ -d "$HOME/.local/bin/vm" ]; then
+  addToPathFront "$HOME/.local/bin/vm"
+fi
 if [ -d /etc/zsh/profile.d ]; then
   if ls /etc/zsh/profile.d/*.sh 1>/dev/null 2>&1; then
     for i in /etc/zsh/profile.d/*.sh; do
@@ -116,12 +119,27 @@ alias catt='batcat -p -P --color always'
 alias catt-b='batcat -P --color always'
 
 ### CP as RSYNC ###
-alias cp-r='rsync --info=progress2 -auz --no-o --no-g --no-perms --no-times --stats'
-alias cp-ra='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
-alias scp-r='rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x"'
-alias scp-ra='rsync --info=progress2 -az -e "ssh -T -o Compression=no -x"'
+alias rsync-d='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
+alias cp-r='rsync-d -u'
+alias cp-ra='rsync-d'
+alias scp-r='rsync-d -u -e "ssh -T -o Compression=no -x"'
+alias scp-ra='rsync-d -e "ssh -T -o Compression=no -x"'
+
+### GREP ###
+alias grep='grep --color'
+alias grep-s='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
+alias grep-q='grep -rwi'
+if command -v ripgrep $>/dev/null; then
+  # https://github.com/BurntSushi/ripgrep
+  alias rg='ripgrep'
+  alias rg-q='rg -wi'
+fi
 
 ### FIND ###
+if command -v fd-find &>/dev/null; then
+  # https://github.com/sharkdp/fd
+  alias fd='fd-find --hidden --no-ignore'
+fi
 alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
 find-g() {
   sudo /usr/bin/find / \
@@ -316,9 +334,6 @@ vm_update_clean_all() {
 }
 
 ### OTHER ###
-alias grep='grep --color'
-alias sgrep='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
-
 alias pigz='pigz -k -p$(nproc)'
 tar-p() {
   if [ "$#" -lt 1 ]; then
@@ -938,11 +953,11 @@ vm_convert_video() {
   local output="${input%.*}.mp4"
 
   local codec="libx265" # libx264 | libx265
-  local quality=32      # Lower quality for better file size
+  local quality=23      # Lower quality for better file size
   local fps=60
 
-  ffmpeg -y -i "$input" \
-    -vaapi_device /dev/dri/renderD128 \
+  # -vaapi_device /dev/dri/renderD128 \
+  ffmpeg -y -v error -hide_banner -i "$input" \
     -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
     -map 0:0 -c:v "$codec" \
     -map 0:a? -c:a copy \
@@ -964,26 +979,27 @@ vm_convert_gif() {
   local temp_video="${input%.*}.mp4"
   local palette="/tmp/palette.png"
 
-  local codec="libx265" # libx264 | libx265
-  local quality=32      # Lower quality for better file size
+  local codec="libx264" # libx264 | libx265
+  local quality=23      # Lower quality for better file size
   local fps=10          # Reduce fps to optimize GIF size
-  local scale=320       # Lower resolution for smaller GIF size
+  local scale=512       # Lower resolution for smaller GIF size
 
-  ffmpeg -y -i "$input" \
-    -vaapi_device /dev/dri/renderD128 \
+  # -vaapi_device /dev/dri/renderD128 \
+  ffmpeg -y -v error -hide_banner -i "$input" \
     -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
     -map 0:0 -c:v "$codec" \
     -map 0:a? -c:a copy \
     -crf "$quality" \
     -pix_fmt yuv420p \
     -preset fast \
-    -r 30 \
-    "$temp_video"
+    -r 60 \
+    "$temp_video" > /dev/null 2>&1 \
+    || { echo "Failed to convert video!"; return 1; }
 
-  ffmpeg -y -i "$temp_video" -vf "fps=$fps,scale=$scale:-1:flags=lanczos,palettegen=stats_mode=diff" "$palette"
-  ffmpeg -y -i "$temp_video" -i "$palette" -filter_complex "fps=$fps,scale=$scale:-1:flags=lanczos[x];[x][1:v]paletteuse" "$output"
-
-  rm "$palette"
+  ffmpeg -y -v error -hide_banner -i "$temp_video" -vf "fps=$fps,scale=$scale:-1:flags=lanczos,palettegen=stats_mode=diff" "$palette" > /dev/null 2>&1 \
+  || { echo "Failed to convert palette!"; return 1; }
+  ffmpeg -y -v error -hide_banner -i "$temp_video" -i "$palette" -filter_complex "fps=$fps,scale=$scale:-1:flags=lanczos[x];[x][1:v]paletteuse" > /dev/null 2>&1 "$output" \
+  || { echo "Failed to convert gif!"; rm "$palette"; return 1; }
 }
 
 ######################################################################
