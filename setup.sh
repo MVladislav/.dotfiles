@@ -56,6 +56,8 @@ RUN_INSTALL_BTOP=0
 RUN_INSTALL_BTOP_AMD=0
 RUN_INSTALL_BTOP_INTEL=0
 
+RUN_INSTALL_GH=0
+
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
 VERSION_NVIM=v0.11.3
@@ -127,81 +129,14 @@ main() {
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
   [[ $RUN_INSTALL_BTOP -eq 1 ]] && install_btop
 
+  [[ $RUN_INSTALL_GH -eq 1 ]] && download_github_binary 'https://github.com/cli/cli' 'gh_.*_linux_amd64\.tar\.gz'
+
   print_info2 "\n✅ All finished!"
 }
 
 # ******************************************************************************
 
-install_dependencies_needs() {
-  print_notes "   📥 Installing build dependencies..."
-  DEPS_PACKAGES_TO_REMOVE=()
-  local packages_tools=("${!1}")
-  local packages_build=("${!2}")
-
-  local packages_to_install=()
-
-  # Check packages_tools: install if missing, but never mark for removal.
-  for pkg in "${packages_tools[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
-      packages_to_install+=("$pkg")
-    fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    # fi
-  done
-
-  # Check packages_build: install if missing and add to removal list.
-  for pkg in "${packages_build[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
-      packages_to_install+=("$pkg")
-      DEPS_PACKAGES_TO_REMOVE+=("$pkg")
-    fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    #   DEPS_PACKAGES_TO_REMOVE+=("$pkg")
-    # fi
-  done
-
-  print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
-  print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
-
-  # Only run sudo update and install if any package is missing.
-  if [[ ${#packages_to_install[@]} -gt 0 ]]; then
-    $RUN_WITH_SUDO apt-get update -qqq || {
-      print_error "❌ Failed to update package list"
-      exit 1
-    }
-    $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
-      print_error "❌ Failed to install packages"
-      exit 1
-    }
-    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-    print_notes "   📥 Build dependencies installed"
-  else
-    print_notes "   📥 All dependencies already installed. Skipping dependencies installation."
-  fi
-}
-
-install_dependencies_needs_rm() {
-  if [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -eq 0 ]]; then
-    print_notes "   📥 No packages to remove."
-    return 0
-  fi
-
-  print_notes "   📥 Removing build dependencies..."
-  $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
-    print_error "❌ Failed to remove packages"
-    return 1
-  }
-  $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
-  $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
-}
-
+# BASE :: check if new version available ---------------------------------------
 check_for_newer_tag() {
   local REPO_URL="$1"
   local CURRENT_TAG="$2"
@@ -257,12 +192,12 @@ check_for_newer_tag() {
   fi
 }
 
-# ******************************************************************************
-
 # BASE :: some general needed prepares -----------------------------------------
 initialize_base() {
   mkdir -p "$HOME/.config" 1>/dev/null
 }
+
+# ******************************************************************************
 
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
@@ -826,6 +761,171 @@ print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
 # ******************************************************************************
 
+install_dependencies_needs() {
+  print_notes "   📥 Installing build dependencies..."
+  DEPS_PACKAGES_TO_REMOVE=()
+  local packages_tools=("${!1}")
+  local packages_build=("${!2}")
+
+  local packages_to_install=()
+
+  # Check packages_tools: install if missing, but never mark for removal.
+  for pkg in "${packages_tools[@]}"; do
+    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+      packages_to_install+=("$pkg")
+    fi
+    # # TODO: possible speedup
+    # if ! dpkg -l | grep -q "^ii  $pkg "; then
+    #   packages_to_install+=("$pkg")
+    # fi
+  done
+
+  # Check packages_build: install if missing and add to removal list.
+  for pkg in "${packages_build[@]}"; do
+    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+      packages_to_install+=("$pkg")
+      DEPS_PACKAGES_TO_REMOVE+=("$pkg")
+    fi
+    # # TODO: possible speedup
+    # if ! dpkg -l | grep -q "^ii  $pkg "; then
+    #   packages_to_install+=("$pkg")
+    #   DEPS_PACKAGES_TO_REMOVE+=("$pkg")
+    # fi
+  done
+
+  print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
+  print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+
+  # Only run sudo update and install if any package is missing.
+  if [[ ${#packages_to_install[@]} -gt 0 ]]; then
+    $RUN_WITH_SUDO apt-get update -qqq || {
+      print_error "❌ Failed to update package list"
+      exit 1
+    }
+    $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
+      print_error "❌ Failed to install packages"
+      exit 1
+    }
+    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+    print_notes "   📥 Build dependencies installed"
+  else
+    print_notes "   📥 All dependencies already installed. Skipping dependencies installation."
+  fi
+}
+
+install_dependencies_needs_rm() {
+  if [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -eq 0 ]]; then
+    print_notes "   📥 No packages to remove."
+    return 0
+  fi
+
+  print_notes "   📥 Removing build dependencies..."
+  $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
+    print_error "❌ Failed to remove packages"
+    return 1
+  }
+  $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
+  $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
+
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+}
+
+download_github_binary() {
+  # "Usage: download_github_binary <repo_url> <binary_regex> [output_dir]"
+  local repo_url="$1"
+  local binary_regex="$2"
+  local out_dir="${3:-$USER_LOCAL_PREFIX_BIN}"
+
+  if [[ -z "$repo_url" || -z "$binary_regex" ]]; then
+    print_error "❌ Missing argument."
+    return 1
+  fi
+
+  # Check for required tools
+  for cmd in curl jq; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      print_error "❌ Required command '$cmd' not found."
+      return 1
+    fi
+  done
+
+  # Extract owner/repo from URL
+  local repo_path
+  if [[ "$repo_url" =~ ^https://github\.com/([^/]+)/([^/]+)(\.git)?/?$ ]]; then
+    local owner="${BASH_REMATCH[1]}"
+    local repo="${BASH_REMATCH[2]}"
+    repo_path="${owner}/${repo}"
+  else
+    print_error "❌ Could not parse GitHub repository path from URL."
+    return 1
+  fi
+
+  print_info2 "\n🚀 BINARY :: Fetching latest release for '$repo_path'..."
+
+  # Get the asset URL matching regex
+  local api_url="https://api.github.com/repos/$repo_path/releases/latest"
+  echo "$api_url"
+  local asset_url
+  asset_url=$(curl -s "$api_url" | jq -r --arg regex "$binary_regex" '
+    .assets[] | select(.name | test($regex)) | .browser_download_url
+  ' 2>/dev/null | head -n 1) || { print_error "   ❌ Failed to jq GitHub-api '$api_url' for asset."; return 1; }
+
+  if [[ -z "$asset_url" || "$asset_url" == "null" ]]; then
+    print_error "   ❌ No asset matching regex '$binary_regex' found in latest release."
+    return 1
+  fi
+
+  print_info2 "   🔍 Found asset '$asset_url'"
+
+  # Create temp dir and download asset
+  local tmp_dir
+  tmp_dir=$(mktemp -d)
+  local file_name="${asset_url##*/}"
+
+  print_info2 "   ⬇️ Downloading to '$tmp_dir' dir..."
+  curl -sL "$asset_url" -o "$tmp_dir/$file_name"
+
+  mkdir -p "$out_dir"
+
+  # Handle archive or direct binary
+  local bin_path=""
+  if [[ "$file_name" == *.tar.gz || "$file_name" == *.tgz ]]; then
+    print_info2 "   ⚙️ Extracting 'tar.gz'..."
+    tar -xzf "$tmp_dir/$file_name" -C "$tmp_dir"
+  elif [[ "$file_name" == *.zip ]]; then
+    print_info2 "   ⚙️ Extracting 'zip'..."
+    unzip -q "$tmp_dir/$file_name" -d "$tmp_dir"
+  fi
+  # Search for actual binary using `file` command
+  bin_path=$(find "$tmp_dir" -type f | while read -r f; do
+    if file "$f" | grep -qE 'ELF|Mach-O|PE32'; then
+      echo "$f"
+      break
+    fi
+  done)
+
+  if [[ -z "$bin_path" ]]; then
+    print_error "   ❌ No binary file detected in asset."
+    return 1
+  fi
+
+  local bin_name
+  bin_name=$(basename "$bin_path")
+
+  print_info2 "   📌 Installing '$bin_name' to '$out_dir'..."
+  mv "$bin_path" "$out_dir/$bin_name"
+  chmod 744 "$out_dir/$bin_name"
+
+  # # Cleanup
+  # rm -rf "$tmp_dir"
+
+  print_info2 "🚀 BINARY :: '$repo_path : $bin_name' installed!"
+}
+
+
+# ******************************************************************************
+
 # Function to show usage information
 usage() {
   print_info "📑 Usage: $0 [options]"
@@ -860,6 +960,7 @@ usage() {
   print_info "     -ibtop,        --install-btop                  Run install install_btop"
   print_info "     -ibtop-amd,    --install-btop-amd              Run install install_btop with AMD GPU support"
   print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
+  print_info "     -igh,          --install-github-cli            Run install gh-cli-binary from github releases"
   print_info "     -upc,          --update-check                  Check if new version for builds exists"
   print_info "     -s                                             Use 'source' instead 'release' for install services"
 }
@@ -950,6 +1051,9 @@ parse_args() {
     -ibtop-intel | --install-btop-intel)
       RUN_INSTALL_BTOP=1
       RUN_INSTALL_BTOP_INTEL=1
+      ;;
+    -igh | --install-github-cli)
+      RUN_INSTALL_GH=1
       ;;
     -s)
       INSTALL_SOURCE_FROM=source
