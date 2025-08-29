@@ -129,16 +129,15 @@ alias scp-ra='rsync-d -e "ssh -T -o Compression=no -x"'
 alias grep='grep --color'
 alias grep-s='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 alias grep-q='grep -rwi'
-if command -v ripgrep $>/dev/null; then
+if command -v rg &>/dev/null; then
   # https://github.com/BurntSushi/ripgrep
-  alias rg='ripgrep'
   alias rg-q='rg -wi'
 fi
 
 ### FIND ###
-if command -v fd-find &>/dev/null; then
+if command -v fdfind &>/dev/null; then
   # https://github.com/sharkdp/fd
-  alias fd='fd-find --hidden --no-ignore'
+  alias fd='fdfind --hidden --no-ignore'
 fi
 alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
 find-g() {
