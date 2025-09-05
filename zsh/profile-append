@@ -593,15 +593,15 @@ vm_ii() {
 ## - check outdated git repos
 ##
 ######################################################################
-alias gl1='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'\'' --all'
-alias gl2='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n'\'''\''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'\'' --all'
-alias gl3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
+alias git_log1='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'\'' --all'
+alias git_log2='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n'\'''\''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'\'' --all'
+alias git_log3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
 
-alias gpre='pre-commit run --files $(git ls-files | tr "\n" " ")'
-alias grei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
+alias git_pre='pre-commit run --files $(git ls-files | tr "\n" " ")'
+alias git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
 
-alias gss='git status --short'
-alias gd='git diff --output-indicator-new=" " --output-indicator-old=" "'
+alias git_ss='git status --short'
+alias git_diff='git diff --output-indicator-new=" " --output-indicator-old=" "'
 
 vm_git_diff() {
   if command -v delta >/dev/null 2>&1; then

@@ -35,12 +35,12 @@ if [[ -z $selected ]]; then
   exit 0
 fi
 
-if [[ "$TERM_PROGRAM" == "Ghostty" || "$TERM" == "xterm-ghostty" ]]; then
+if [[ "${TERM_PROGRAM:-}" == "Ghostty" || "$TERM" == "xterm-ghostty" ]]; then
   echo "Running in Ghostty"
-elif [[ "$TERM_PROGRAM" == "gnome-terminal" || "$TERM" == "xterm-256color" ]]; then
+elif [[ "${TERM_PROGRAM:-}" == "gnome-terminal" || "$TERM" == "xterm-256color" ]]; then
   echo "Running in GNOME Terminal or similar"
 else
-  echo "Unknown terminal: TERM_PROGRAM='$TERM_PROGRAM', TERM='$TERM'"
+  echo "Unknown terminal: TERM_PROGRAM='${TERM_PROGRAM:-}', TERM='$TERM'"
 fi
 
 echo "$selected"
