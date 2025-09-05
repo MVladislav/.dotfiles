@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$' '
+
+# Ensure we're in a Git repo
+if ! git rev-parse --is-inside-work-tree &>/dev/null; then
+  echo "Not inside a Git repository."
+  exit 1
+fi
+
+# Auto-detect default branch (like origin/main or origin/master)
+# default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+default_branch=${default_branch:-main}
+
+# List all branches sorted by recent commits
+branches=$(git branch --all --sort=-committerdate | sed 's|^[* ] ||' | grep -v 'HEAD' | uniq)
+
+# Choose source (usually default) and target (e.g., release)
+source_branch=$(echo "$branches" | fzf --prompt="Select SOURCE branch (base): " --query="$default_branch")
+[ -z "$source_branch" ] && { echo "No source branch selected."; exit 1; }
+
+target_branch=$(echo "$branches" | fzf --prompt="Select TARGET branch (compare): ")
+[ -z "$target_branch" ] && { echo "No target branch selected."; exit 1; }
+
+echo "🔍 Comparing: $source_branch → $target_branch"
+echo
+
+# Get commits between branches
+commits=$(git log "$source_branch".."$target_branch" --no-merges --pretty=format:"%s|%h" --reverse)
+
+if [ -z "$commits" ]; then
+  echo "✅ No new commits between these branches."
+  exit 0
+fi
+
+# Prepare grouped release notes
+declare -A groups
+groups=(
+  [feat]="✨ Features"
+  [fix]="🐛 Fixes"
+  [docs]="📝 Documentation"
+  [refactor]="♻️ Refactoring"
+  [perf]="⚡ Performance"
+  [test]="✅ Tests"
+  [chore]="🔧 Chores"
+  [other]="📦 Other"
+)
+
+# Date & version heading
+today=$(date +"%Y-%m-%d")
+version_source=$(basename "$source_branch")
+version_target=$(basename "$target_branch")
+
+echo "# 🚀 Release \`$version_source..$version_target\` - $today"
+echo "## What's Changed"
+echo
+
+# Initialize group arrays
+declare -A grouped_commits
+for key in "${!groups[@]}"; do
+  grouped_commits["$key"]=""
+done
+
+# Group commits
+while IFS="|" read -r message hash; do
+  message=$(echo "$message" | sed -E 's/\s+/ /g' | sed 's/^ *//;s/ *$//')  # Clean spacing
+  hash=$(echo "$hash" | cut -c1-7)
+
+  # Try to extract type (feat, fix, etc.)
+  if [[ "$message" =~ ^([a-zA-Z]+)(\(.+\))?: ]]; then
+    type="${BASH_REMATCH[1]}"
+    body="${message#*: }"
+  else
+    type="other"
+    body="$message"
+  fi
+
+  # Add PR number if present (like (#123))
+  if [[ "$body" =~ \(#([0-9]+)\) ]]; then
+    pr_number="#${BASH_REMATCH[1]}"
+  else
+    pr_number=""
+  fi
+
+  # Final formatted line
+  line="- $body ($hash) $pr_number"
+  key=${type,,}  # normalize to lowercase
+
+  if [[ -n "${groups[$key]}" ]]; then
+    grouped_commits["$key"]+="$line"$'\n'
+  else
+    grouped_commits["other"]+="$line"$'\n'
+  fi
+done <<< "$commits"
+
+# Print grouped sections
+for key in feat fix docs refactor perf test chore other; do
+  if [ -n "${grouped_commits[$key]}" ]; then
+    echo "### ${groups[$key]}"
+    echo "${grouped_commits[$key]}"
+  fi
+done
+
+# Add "Full Changelog" link placeholder
+echo "**Full Changelog**: https://github.com/<owner>/<repo>/compare/v<version_source>...v<version_target>"
