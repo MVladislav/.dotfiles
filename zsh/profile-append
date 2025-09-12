@@ -584,6 +584,77 @@ vm_ii() {
   echo
 }
 
+######################################################################
+##
+## history: cleanup history file
+##
+######################################################################
+vm_zsh_history_cleanup() {
+    local histfile="${HOME}/.zsh_history"
+    local timestamp="$(date +%Y%m%d-%H%M%S)"
+    local backup="${histfile}.bak-${timestamp}"
+    local deduped="${HOME}/.zsh_history.deduped"
+
+    local opt_multiline=false
+    local opt_apply=false
+    local opt_help=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -m|--multiline) opt_multiline=true ;;
+            -a|--apply)     opt_apply=true ;;
+            -h|--help)      opt_help=true ;;
+            *) echo "Unknown option: $1"; return 1 ;;
+        esac
+        shift
+    done
+
+    if $opt_help; then
+        echo "Usage: $0 [options]"
+        echo
+        echo "Options:"
+        echo "  -m,--multiline    Remove multi-line commands"
+        echo "  -a,--apply        Replace original history with deduped version"
+        echo "  -h, --help        Show this help message"
+        echo
+        echo "By default:"
+        echo "  - Creates a backup at ${backup}"
+        echo "  - Removes duplicates and writes cleaned file to ${deduped}"
+        return 0
+    fi
+
+    # always backup first
+    cp -a "${histfile}" "${backup}" || {
+        echo "Error: Could not backup history file."
+        return 1
+    }
+    echo "Backup created at: ${backup}"
+
+    # remove duplicates
+    sed ':start; /\\$/ { N; s/\\\n/\\\x00/; b start }' "${histfile}" \
+      | nl -nrz \
+      | tac \
+      | sort -t';' -u -k2 \
+      | sort \
+      | cut -d$'\t' -f2- \
+      | tr '\000' '\n' \
+      > "${deduped}"
+
+    echo "Deduplicated history written to: ${deduped}"
+
+    # optionally strip multiline entries
+    if $opt_multiline; then
+        sed -n '/^: /{N;/\n: /p;}' "${histfile}" > "${deduped}"
+        echo "History without multiline commands written to: ${deduped}"
+    fi
+
+    # apply deduped history in-place
+    if $opt_apply; then
+        mv "${deduped}" "${histfile}"
+        echo "Replaced original history with deduped version."
+        echo "Reload into current shell with: fc -R ${histfile}"
+    fi
+}
 
 ######################################################################
 ##
