@@ -15,47 +15,95 @@ return {
   },
 
   config = function()
+    -- =====================
+    -- Formatters (conform)
+    -- =====================
     require("conform").setup({
       formatters_by_ft = {
       }
     })
-    local cmp = require('cmp')
+
+    -- =====================
+    -- Completion (nvim-cmp)
+    -- =====================
+    local cmp = require("cmp")
     local cmp_lsp = require("cmp_nvim_lsp")
+
     local capabilities = vim.tbl_deep_extend(
       "force",
       {},
       vim.lsp.protocol.make_client_capabilities(),
-      cmp_lsp.default_capabilities())
+      cmp_lsp.default_capabilities()
+    )
 
+    -- Optional performance tweak
+    capabilities.textDocument.semanticTokens = nil
+
+    -- =====================
+    -- Fidget (LSP progress)
+    -- =====================
     require("fidget").setup({})
+
+    -- =====================
+    -- Mason setup
+    -- =====================
     require("mason").setup()
 
+    -- =====================
+    -- Reusable on_attach
+    -- =====================
+    local on_attach = function(_, bufnr)
+      local opts = function(desc)
+        return { buffer = bufnr, desc = desc }
+      end
+
+      -- LSP keymaps
+      vim.keymap.set("n", "gd", vim.lsp.buf.definition, opts("Go to definition"))
+      vim.keymap.set("n", "K", vim.lsp.buf.hover, opts("Hover documentation"))
+      vim.keymap.set("n", "<leader>vws", vim.lsp.buf.workspace_symbol, opts("Workspace symbols"))
+      vim.keymap.set("n", "<leader>vd", vim.diagnostic.open_float, opts("Show diagnostics"))
+      vim.keymap.set("n", "<leader>vca", vim.lsp.buf.code_action, opts("Code action"))
+      vim.keymap.set("n", "<leader>vrr", vim.lsp.buf.references, opts("Find references"))
+      vim.keymap.set("n", "<leader>vrn", vim.lsp.buf.rename, opts("Rename symbol"))
+      vim.keymap.set("i", "<C-h>", vim.lsp.buf.signature_help, opts("Signature help"))
+
+      -- Diagnostics navigation
+      vim.keymap.set("n", "[d", vim.diagnostic.goto_prev, opts("Previous diagnostic"))
+      vim.keymap.set("n", "]d", vim.diagnostic.goto_next, opts("Next diagnostic"))
+    end
+
+    -- =====================
+    -- Mason-lspconfig
+    -- =====================
     -- nvim-lint:
     -- - 'ansible_lint',
     -- - "mypy",
     -- - "ruff",
     -- - "shellcheck"
-
     require("mason-lspconfig").setup({
       ensure_installed = {
         "ansiblels",
         "bashls",
-        "docker-compose-language-service",
+        "docker_compose_language_service",
         "dockerls",
         "lua_ls",
         "ruff",
         "yamlls",
       },
       handlers = {
-        function(server_name) -- default handler (optional)
-          require("lspconfig")[server_name].setup {
-            capabilities = capabilities
-          }
+        function(server_name)
+          require("lspconfig")[server_name].setup({
+            capabilities = capabilities,
+            on_attach = on_attach,
+          })
         end,
 
+        -- Zig special case
         zls = function()
           local lspconfig = require("lspconfig")
           lspconfig.zls.setup({
+            on_attach = on_attach,
+            capabilities = capabilities,
             root_dir = lspconfig.util.root_pattern(".git", "build.zig", "zls.json"),
             settings = {
               zls = {
@@ -68,47 +116,55 @@ return {
           vim.g.zig_fmt_parse_errors = 0
           vim.g.zig_fmt_autosave = 0
         end,
+
+        -- Lua special case
         ["lua_ls"] = function()
           local lspconfig = require("lspconfig")
-          lspconfig.lua_ls.setup {
+          lspconfig.lua_ls.setup({
+            on_attach = on_attach,
             capabilities = capabilities,
             settings = {
               Lua = {
                 runtime = { version = "Lua 5.1" },
                 diagnostics = {
                   globals = { "bit", "vim", "it", "describe", "before_each", "after_each" },
-                }
-              }
-            }
-          }
+                },
+              },
+            },
+          })
         end,
       }
     })
 
+    -- =====================
+    -- Completion setup
+    -- =====================
     local cmp_select = { behavior = cmp.SelectBehavior.Select }
 
     cmp.setup({
       snippet = {
         expand = function(args)
-          require('luasnip').lsp_expand(args.body) -- For `luasnip` users.
+          require("luasnip").lsp_expand(args.body)
         end,
       },
       mapping = cmp.mapping.preset.insert({
-        ['<C-p>'] = cmp.mapping.select_prev_item(cmp_select),
-        ['<C-n>'] = cmp.mapping.select_next_item(cmp_select),
-        ['<C-x>'] = cmp.mapping.confirm({ select = true }),
+        ["<C-p>"] = cmp.mapping.select_prev_item(cmp_select),
+        ["<C-n>"] = cmp.mapping.select_next_item(cmp_select),
+        ["<C-x>"] = cmp.mapping.confirm({ select = true }),
         ["<C-Space>"] = cmp.mapping.complete(),
       }),
       sources = cmp.config.sources({
-        { name = 'nvim_lsp' },
-        { name = 'luasnip' }, -- For luasnip users.
+        { name = "nvim_lsp" },
+        { name = "luasnip" },
       }, {
-        { name = 'buffer' },
-      })
+        { name = "buffer" },
+      }),
     })
 
+    -- =====================
+    -- Diagnostics UI
+    -- =====================
     vim.diagnostic.config({
-      -- update_in_insert = true,
       float = {
         focusable = false,
         style = "minimal",
@@ -117,6 +173,17 @@ return {
         header = "",
         prefix = "",
       },
+    })
+
+    -- =====================
+    -- Format-on-save
+    -- =====================
+    local VmGroup = vim.api.nvim_create_augroup("vm", { clear = true })
+    vim.api.nvim_create_autocmd("BufWritePre", {
+      group = VmGroup,
+      callback = function(args)
+        require("conform").format({ bufnr = args.buf })
+      end,
     })
   end
 }
