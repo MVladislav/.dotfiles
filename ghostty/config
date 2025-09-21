@@ -19,6 +19,7 @@ bold-is-bright = true
 
 window-width = 130
 window-height = 32
+# maximize = true
 
 mouse-hide-while-typing = true
 # window-decoration = false
@@ -53,4 +54,4 @@ keybind = super+ctrl+left=goto_split:left
 keybind = ctrl+shift+x=close_surface
 keybind = ctrl+shift+y=clear_screen
 
-# keybind = global:ctrl+t=toggle_quick_terminal
+# keybind = global:ctrl+shift+alt+t=toggle_quick_terminal

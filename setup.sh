@@ -60,17 +60,18 @@ RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
 INSTALL_SOURCE_FROM=release # source | release
-VERSION_NVIM=v0.11.3
+VERSION_NVIM=v0.11.4
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
-VERSION_ZIG_V=0.13.0
-VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
-VERSION_GHOSTTY=v1.1.3
+VERSION_ZIG_V=0.14.1
+# VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
+VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
+VERSION_GHOSTTY=v1.2.0
 VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
-VERSION_BTOP=v1.4.4
+VERSION_BTOP=v1.4.5
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-6.4.3
+VERSION_RSMI=rocm-7.0.1
 VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
@@ -365,7 +366,7 @@ install_dependencies_ghostty() {
 
   # Define packages needed for tmux and install
   local packages_tools=()
-  local packages_build=(curl git libgtk-4-dev libadwaita-1-dev)
+  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   local ZIG_COMMAND=zig
