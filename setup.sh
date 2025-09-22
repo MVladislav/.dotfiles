@@ -365,7 +365,7 @@ install_dependencies_ghostty() {
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
 
   # Define packages needed for tmux and install
-  local packages_tools=()
+  local packages_tools=(libgtk4-layer-shell0)
   local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
