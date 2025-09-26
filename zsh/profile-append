@@ -92,13 +92,24 @@ export RUSTUP_HOME="$HOME/.rustup"
 ##
 ######################################################################
 ### SSH ###
-vm_ssh_xterm() {
+vm_xterm_cp_ssh() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <SSH_HOST>"
     return 1
   fi
 
   infocmp -x | ssh "$1" -- tic -x -
+}
+vm_xterm_cp_local() {
+  term_dir=$(echo "$TERM" | cut -c1)
+  term_path="${TERMINFO:-$HOME/.terminfo}/$term_dir/$TERM"
+
+  if [ ! -f "$term_path" ]; then
+    echo "Terminfo for $TERM not found at $term_path"
+    return 1
+  fi
+
+  sudo install -D "$term_path" "/etc/terminfo/$term_dir/$TERM"
 }
 
 ### LS as EZA ###
