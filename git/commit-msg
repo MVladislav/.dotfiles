@@ -93,55 +93,50 @@ def validate_commit_message(msg: str) -> bool:
 # -------------------------------
 # Main
 # -------------------------------
-def main():
-    with open(sys.argv[1], "r", encoding="utf-8") as f:
-        first_line = f.readline().strip()
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    first_line = f.readline().strip()
 
-    if not first_line:
-        sys.stderr.write("\n❌ Commit message is empty!\n")
-        sys.stderr.write(f"   See: {GUIDELINE_LINK}\n\n")
-        sys.exit(1)
+if not first_line:
+    sys.stderr.write("\n❌ Commit message is empty!\n")
+    sys.stderr.write(f"   See: {GUIDELINE_LINK}\n\n")
+    sys.exit(1)
 
-    if not validate_commit_message(first_line):
-        sys.stderr.write("\n❌ Invalid commit message format!\n")
-        sys.stderr.write(f'   Your message: "{first_line}"\n\n')
+if not validate_commit_message(first_line):
+    sys.stderr.write("\n❌ Invalid commit message format!\n")
+    sys.stderr.write(f'   Your message: "{first_line}"\n\n')
 
-        ctype, cscope = parse_type_scope(first_line)
+    ctype, cscope = parse_type_scope(first_line)
 
-        if ctype and ctype not in TYPES:
-            s = suggest(ctype, TYPES)
-            if s:
-                sys.stderr.write(f'   Did you mean type: "{s}"?\n')
+    if ctype and ctype not in TYPES:
+        s = suggest(ctype, TYPES)
+        if s:
+            sys.stderr.write(f'   Did you mean type: "{s}"?\n')
 
-        if cscope and SCOPES and cscope not in SCOPES:
-            s = suggest(cscope, SCOPES)
-            if s:
-                sys.stderr.write(f'   Did you mean scope: "{s}"?\n')
+    if cscope and SCOPES and cscope not in SCOPES:
+        s = suggest(cscope, SCOPES)
+        if s:
+            sys.stderr.write(f'   Did you mean scope: "{s}"?\n')
 
-        sys.stderr.write("\nExpected format:\n")
-        sys.stderr.write("   <type>(<scope>): <message>\n\n")
-        sys.stderr.write("Examples:\n")
-        sys.stderr.write("   feat(auth): add JWT authentication\n")
-        sys.stderr.write("   fix(#123): correct null pointer issue\n")
-        sys.stderr.write("   chore(release): bump version to 0.2.2\n\n")
-        sys.stderr.write(f"Allowed types: {', '.join(TYPES)}\n")
-        if SCOPES:
-            sys.stderr.write(f"Allowed scopes: {', '.join(SCOPES)}\n")
-        else:
-            sys.stderr.write("Scopes: any lowercase identifier is allowed\n")
-        sys.stderr.write(f"\n➡ Refer to commit guide: {GUIDELINE_LINK}\n\n")
-        sys.exit(1)
+    sys.stderr.write("\nExpected format:\n")
+    sys.stderr.write("   <type>(<scope>): <message>\n\n")
+    sys.stderr.write("Examples:\n")
+    sys.stderr.write("   feat(auth): add JWT authentication\n")
+    sys.stderr.write("   fix(#123): correct null pointer issue\n")
+    sys.stderr.write("   chore(release): bump version to 0.2.2\n\n")
+    sys.stderr.write(f"Allowed types: {', '.join(TYPES)}\n")
+    if SCOPES:
+        sys.stderr.write(f"Allowed scopes: {', '.join(SCOPES)}\n")
+    else:
+        sys.stderr.write("Scopes: any lowercase identifier is allowed\n")
+    sys.stderr.write(f"\n➡ Refer to commit guide: {GUIDELINE_LINK}\n\n")
+    sys.exit(1)
 
-    # Warn if `release:` was used instead of `chore(release):`
-    if first_line.startswith("release:"):
-        sys.stderr.write(
-            "\nℹ️  Note: `release:` is accepted, but `chore(release): ...` "
-            "is preferred for better compatibility with semantic-release & changelogs.\n\n"
-        )
+# Warn if `release:` was used instead of `chore(release):`
+if first_line.startswith("release:"):
+    sys.stderr.write(
+        "\nℹ️  Note: `release:` is accepted, but `chore(release): ...` "
+        "is preferred for better compatibility with semantic-release & changelogs.\n\n"
+    )
 
-    sys.stderr.write("\n✅ Commit message looks good!\n\n")
-    sys.exit(0)
-
-
-if __name__ == "__main__":
-    main()
+sys.stderr.write("\n✅ Commit message looks good!\n\n")
+sys.exit(0)
