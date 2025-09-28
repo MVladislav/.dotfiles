@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# ----------------------------------------------------------------------
+# Pre-commit hook
+# - Verifies git email
+# - Runs pre-commit hooks if configured
+# - Checks non-ASCII filenames
+# - Checks whitespace errors
+# ----------------------------------------------------------------------
+
+set -e  # exit immediately if a command exits with a non-zero status
+exec 1>&2  # redirect stdout to stderr
+
+# -------------------------------
+# 1. Verify git user email
+# -------------------------------
+EMAIL_REGEX="^[a-z0-9!#\$%&'*+/=?^_\`{|}~-]+(\.[a-z0-9!#$%&'*+/=?^_\`{|}~-]+)*@([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
+EMAIL=$(git config --global user.email || echo "")
+
+if [[ -z "$EMAIL" ]] || ! [[ "$EMAIL" =~ $EMAIL_REGEX ]]; then
+    echo "[ERROR] Invalid or missing git email: '$EMAIL'"
+    echo "Please configure a valid company email:"
+    echo '   git config --global user.email "<user>@example.local"'
+    exit 1
+else
+    echo "[INFO] Verified git email: $EMAIL"
+fi
+
+# -------------------------------
+# 2. Run pre-commit framework hooks
+# -------------------------------
+PRE_COMMIT_PYTHON=/usr/bin/python3
+PRE_COMMIT_CONFIG=".pre-commit-config.yaml"
+USER_HOOK_DIR="$HOME/.git-hooks"
+
+# Base arguments
+HOOK_ARGS=(hook-impl --skip-on-missing-config --config="$PRE_COMMIT_CONFIG" --hook-type=pre-commit)
+
+# Include optional user-level hooks if the directory exists
+if [ -d "$USER_HOOK_DIR" ]; then
+    HOOK_ARGS+=(--hook-dir "$USER_HOOK_DIR")
+fi
+
+# Execute pre-commit
+if [ -x "$PRE_COMMIT_PYTHON" ]; then
+    exec "$PRE_COMMIT_PYTHON" -m pre_commit "${HOOK_ARGS[@]}" "$@"
+elif command -v pre-commit >/dev/null 2>&1; then
+    exec pre-commit "${HOOK_ARGS[@]}" "$@"
+else
+    echo "[ERROR] pre-commit not found. Did you forget to install it or activate your virtualenv?"
+    exit 1
+fi
+
+# -------------------------------
+# 3. Non-ASCII filenames check
+# -------------------------------
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    against=HEAD
+else
+    against=$(git hash-object -t tree /dev/null)
+fi
+
+ALLOW_NONASCII=$(git config --type=bool hooks.allownonascii || echo "false")
+if [ "$ALLOW_NONASCII" != "true" ]; then
+    NON_ASCII_COUNT=$(git diff --cached --name-only --diff-filter=A -z $against |
+        LC_ALL=C tr -d '[ -~]\0' | wc -c)
+    if [ "$NON_ASCII_COUNT" -ne 0 ]; then
+        cat <<EOF
+[ERROR] Attempt to add a non-ASCII file name.
+
+This can cause problems on other platforms. To disable this check:
+  git config hooks.allownonascii true
+EOF
+        exit 1
+    fi
+fi
+
+# -------------------------------
+# 4. Whitespace errors check
+# -------------------------------
+git diff-index --check --cached $against --

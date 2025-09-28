@@ -138,11 +138,15 @@ alias scp-ra='rsync-d -e "ssh -T -o Compression=no -x"'
 
 ### GREP ###
 alias grep='grep --color'
-alias grep-s='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
-alias grep-q='grep -rwi'
+alias grep-q='grep -rwih'
+alias grep-r='grep -rwi'
+alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 if command -v rg &>/dev/null; then
   # https://github.com/BurntSushi/ripgrep
-  alias rg-q='rg -wi'
+  alias rg-q='rg -wiIN'
+  alias rg-r='rg -wi'
+  alias rg-d='rg -n -H -C 5 --glob "!.git/*" --glob "!.svn/*" --glob "!CVS/*"'
+  alias rg-github='rg -ioPIN "https://github\.com/[^/\s]+/[^/\s]+"'
 fi
 
 ### FIND ###
@@ -1024,6 +1028,44 @@ vm_convert_docs_to_md() {
 ##
 ##
 ######################################################################
+vm_reduce_img_size() {
+  local input="$1"
+  local ext="${input##*.}"
+  ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+  local output="${input%.*}-small.${ext}"
+
+  case "$ext" in
+    jpg|jpeg)
+      convert "$input" -resize 1024x \
+        -strip \
+        -interlace Plane \
+        -sampling-factor 4:2:0 \
+        -quality 75 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    png)
+      convert "$input" -resize 1024x \
+        -strip \
+        -define png:compression-level=9 \
+        -define png:compression-strategy=1 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    webp)
+      convert "$input" -resize 1024x \
+        -strip \
+        -quality 75 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    *)
+      echo "Unsupported format: $ext"
+      return 1
+      ;;
+  esac
+}
+
 vm_convert_video() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <VIDEO>"

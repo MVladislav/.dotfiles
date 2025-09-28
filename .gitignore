@@ -12,10 +12,13 @@
 
 !README.md
 !setup.sh
+!setup-sec.sh
 
 !git/
 git/**
 !git/.gitconfig
+!git/commit-msg
+!git/pre-commit
 
 !zsh/
 zsh/**

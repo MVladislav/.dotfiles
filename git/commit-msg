@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""
+Git commit-msg hook:
+    .git/hooks/commit-msg
+Validate commit messages against conventional guidelines.
+"""
+
+import difflib
+import re
+import sys
+
+# -------------------------------
+# Configurable options
+# -------------------------------
+MIN_MESSAGE_LENGTH = 3
+GUIDELINE_LINK = "https://www.conventionalcommits.org/en/v1.0.0/"
+
+# -------------------------------
+# Commit types (Conventional Commits)
+# -------------------------------
+TYPES = [
+    "init",  # Initial commit of a project or repository setup
+    "docs",  # Documentation only changes (README, guides, comments)
+    "refactor",  # Code change that neither fixes a bug nor adds a feature
+    "update",  # Minor updates, e.g., version bumps, minor config changes
+    "merge",  # Merge branch or PR, usually from feature into main
+    "security",  # Fix or update related to security issues
+    "build",  # Changes affecting build system or external dependencies (e.g., Docker, CI)
+    "test",  # Adding or fixing tests
+    "fix",  # Bug fix related to an issue (requires issue number, e.g., fix(#123))
+    "publish",  # Publishing artifacts or releases
+    "ci",  # Changes to CI/CD configuration (GitHub Actions, pre-commit, etc.)
+    "feat",  # A new feature
+    "perf",  # Performance improvement
+    "chore",  # Routine tasks, maintenance, version bumps, minor housekeeping
+    "revert",  # Reverting a previous commit
+    "style",  # Code style changes (formatting, white-space, semicolons)
+    "release",  # Explicit release commit (optional, use chore(release) preferred)
+]
+
+# -------------------------------
+# Optional scopes (areas/modules affected)
+# -------------------------------
+SCOPES = [
+    "core",  # Core functionality of the application/library
+    "docs",  # Documentation (README, guides, API docs)
+    "tests",  # Test code, unit tests, integration tests
+    "ci",  # Continuous integration scripts and configs
+    "deps",  # Dependencies (update/install/remove)
+    "infra",  # Infrastructure, deployment, scripts, servers
+    "config",  # Configuration files, environment setup, settings
+    "api",  # API code (REST, GraphQL, endpoints)
+    "auth",  # Authentication/authorization modules
+    "release",  # Release process / version bumps
+]
+
+# -------------------------------
+# Regex patterns
+# -------------------------------
+TYPE_REGEX = "|".join(TYPES)
+SCOPE_REGEX = "|".join(SCOPES) if SCOPES else r"[a-z0-9_\-\.]+"
+MESSAGE_REGEX = rf"^({TYPE_REGEX})(\({SCOPE_REGEX}\))?: .{{{MIN_MESSAGE_LENGTH},}}"
+
+FIX_REGEX = r"^fix\(#\d+\): .+"
+
+
+# -------------------------------
+# Helpers
+# -------------------------------
+def suggest(word: str, valid: list[str]) -> str | None:
+    """Return closest suggestion if available."""
+    matches = difflib.get_close_matches(word, valid, n=1, cutoff=0.6)
+    return matches[0] if matches else None
+
+
+def parse_type_scope(msg: str) -> tuple[str | None, str | None]:
+    """Extract type and scope (if present) from commit message."""
+    m = re.match(r"^([a-zA-Z0-9_\-]+)(?:\(([a-zA-Z0-9_\-\.]+)\))?:", msg)
+    if m:
+        return m.group(1), m.group(2)
+    return None, None
+
+
+def validate_commit_message(msg: str) -> bool:
+    """Check if commit message matches our rules."""
+    if msg.startswith("fix:"):
+        return False  # Block lazy 'fix:' messages with no issue number
+    if re.match(FIX_REGEX, msg):
+        return True  # Accept 'fix(#123): ...'
+    return re.match(MESSAGE_REGEX, msg) is not None
+
+
+# -------------------------------
+# Main
+# -------------------------------
+def main():
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        first_line = f.readline().strip()
+
+    if not first_line:
+        sys.stderr.write("\n❌ Commit message is empty!\n")
+        sys.stderr.write(f"   See: {GUIDELINE_LINK}\n\n")
+        sys.exit(1)
+
+    if not validate_commit_message(first_line):
+        sys.stderr.write("\n❌ Invalid commit message format!\n")
+        sys.stderr.write(f'   Your message: "{first_line}"\n\n')
+
+        ctype, cscope = parse_type_scope(first_line)
+
+        if ctype and ctype not in TYPES:
+            s = suggest(ctype, TYPES)
+            if s:
+                sys.stderr.write(f'   Did you mean type: "{s}"?\n')
+
+        if cscope and SCOPES and cscope not in SCOPES:
+            s = suggest(cscope, SCOPES)
+            if s:
+                sys.stderr.write(f'   Did you mean scope: "{s}"?\n')
+
+        sys.stderr.write("\nExpected format:\n")
+        sys.stderr.write("   <type>(<scope>): <message>\n\n")
+        sys.stderr.write("Examples:\n")
+        sys.stderr.write("   feat(auth): add JWT authentication\n")
+        sys.stderr.write("   fix(#123): correct null pointer issue\n")
+        sys.stderr.write("   chore(release): bump version to 0.2.2\n\n")
+        sys.stderr.write(f"Allowed types: {', '.join(TYPES)}\n")
+        if SCOPES:
+            sys.stderr.write(f"Allowed scopes: {', '.join(SCOPES)}\n")
+        else:
+            sys.stderr.write("Scopes: any lowercase identifier is allowed\n")
+        sys.stderr.write(f"\n➡ Refer to commit guide: {GUIDELINE_LINK}\n\n")
+        sys.exit(1)
+
+    # Warn if `release:` was used instead of `chore(release):`
+    if first_line.startswith("release:"):
+        sys.stderr.write(
+            "\nℹ️  Note: `release:` is accepted, but `chore(release): ...` "
+            "is preferred for better compatibility with semantic-release & changelogs.\n\n"
+        )
+
+    sys.stderr.write("\n✅ Commit message looks good!\n\n")
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

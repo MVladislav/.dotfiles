@@ -542,7 +542,18 @@ setup_logseq() {
 
 # GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
 setup_gitconfig() {
-  print_info2 "🚀 GITCONFIG :: Starting global Git configuration"
+  print_info2 "\n🚀 GIT :: setup git..."
+  LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
+  LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
+
+  print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
+  rm -f "${LN_GIT_HOOK_COMMIT_MSG}"
+  ln -sf "${PWD}/git/commit-msg" "${LN_GIT_HOOK_COMMIT_MSG}"
+  print_info2 "🚀 GITHOOKS :: Create symlink for './git/pre-commit' as '$LN_GIT_HOOK_PRE_COMMIT'"
+  rm -f "${LN_GIT_HOOK_PRE_COMMIT}"
+  ln -sf "${PWD}/git/pre-commit" "${LN_GIT_HOOK_PRE_COMMIT}"
+
+  print_info2 "🚀 GITCONFIG :: Starting global Git configuration..."
 
   print_read "  ✏️ Enter your Git user.name: "
   read -r git_user_name
@@ -592,7 +603,7 @@ setup_gitconfig() {
     print_info2 "  ⚙️ GITCONFIG :: GPG signing disabled"
   fi
 
-  print_info2 "🚀 GITCONFIG :: Setup complete"
+  print_info2 "🚀 GIT :: Setup complete!"
 }
 
 # ******************************************************************************
