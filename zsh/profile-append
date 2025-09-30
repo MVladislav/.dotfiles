@@ -339,6 +339,8 @@ vm_update_clean_all() {
   print_separator
   update_and_clean "flatpak" "sudo flatpak update" "sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*"
   print_separator
+  update_and_clean "flatpak [user]" "flatpak --user update" "flatpak --user uninstall --unused"
+  print_separator
 
   echo -e "You could also run additional updates:"
   echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
