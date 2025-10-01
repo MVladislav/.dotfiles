@@ -12,21 +12,30 @@ fi
 # default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
 default_branch=${default_branch:-main}
 
+# List all tags
+tags=$(git tag --sort=-creatordate)
 # List all branches sorted by recent commits
 branches=$(git branch --all --sort=-committerdate | sed 's|^[* ] ||' | grep -v 'HEAD' | uniq)
+# Combine and label them for selection
+combined_refs=$( (echo "$branches" | sed 's|^|branch: |'; echo "$tags" | sed 's|^|tag: |') | sort )
 
 # Choose source (usually default) and target (e.g., release)
-source_branch=$(echo "$branches" | fzf --prompt="Select SOURCE branch (base): " --query="$default_branch")
-[ -z "$source_branch" ] && { echo "No source branch selected."; exit 1; }
+source_ref=$(echo "$combined_refs" | fzf --prompt="Select SOURCE branch (base): ") #  --query="$default_branch"
+[ -z "$source_ref" ] && { echo "No source branch selected."; exit 1; }
+target_ref=$(echo "$combined_refs" | fzf --prompt="Select TARGET branch (compare): ")
+[ -z "$target_ref" ] && { echo "No target branch selected."; exit 1; }
 
-target_branch=$(echo "$branches" | fzf --prompt="Select TARGET branch (compare): ")
-[ -z "$target_branch" ] && { echo "No target branch selected."; exit 1; }
+# Extract actual ref names (strip prefix)
+source_ref=${source_ref#branch: }
+source_ref=${source_ref#tag: }
+target_ref=${target_ref#branch: }
+target_ref=${target_ref#tag: }
 
-echo "🔍 Comparing: $source_branch → $target_branch"
+echo "🔍 Comparing: $source_ref → $target_ref"
 echo
 
 # Get commits between branches
-commits=$(git log "$source_branch".."$target_branch" --no-merges --pretty=format:"%s|%h" --reverse)
+commits=$(git log "$source_ref".."$target_ref" --no-merges --pretty=format:"%s|%h|%an|%ae" --reverse)
 
 if [ -z "$commits" ]; then
   echo "✅ No new commits between these branches."
@@ -48,8 +57,8 @@ groups=(
 
 # Date & version heading
 today=$(date +"%Y-%m-%d")
-version_source=$(basename "$source_branch")
-version_target=$(basename "$target_branch")
+version_source=$(basename "$source_ref")
+version_target=$(basename "$target_ref")
 
 echo "# 🚀 Release \`$version_source..$version_target\` - $today"
 echo "## What's Changed"
@@ -62,7 +71,7 @@ for key in "${!groups[@]}"; do
 done
 
 # Group commits
-while IFS="|" read -r message hash; do
+while IFS="|" read -r message hash author_name author_email; do
   message=$(echo "$message" | sed -E 's/\s+/ /g' | sed 's/^ *//;s/ *$//')  # Clean spacing
   hash=$(echo "$hash" | cut -c1-7)
 
@@ -82,8 +91,16 @@ while IFS="|" read -r message hash; do
     pr_number=""
   fi
 
+  # Format author
+  author_display="- by ${author_name}" # <${author_email}>
+
   # Final formatted line
-  line="- $body ($hash) $pr_number"
+  line="- $body ($hash)"
+  if [[ -n "$pr_number" && "$body" != *"$pr_number"* ]]; then
+    line+=" $pr_number"
+  fi
+  line+=" $author_display"
+
   key=${type,,}  # normalize to lowercase
 
   if [[ -n "${groups[$key]}" ]]; then

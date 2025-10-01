@@ -58,7 +58,7 @@ SCOPES = [
 # Regex patterns
 # -------------------------------
 TYPE_REGEX = "|".join(TYPES)
-SCOPE_REGEX = "|".join(SCOPES) if SCOPES else r"[a-z0-9_\-\.]+"
+SCOPE_REGEX = f"(?:{'|'.join(SCOPES)})" if SCOPES else r"[a-z0-9_\-\.]+"
 MESSAGE_REGEX = rf"^({TYPE_REGEX})(\({SCOPE_REGEX}\))?: .{{{MIN_MESSAGE_LENGTH},}}"
 
 FIX_REGEX = r"^fix\(#\d+\): .+"
