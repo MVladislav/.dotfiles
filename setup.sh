@@ -71,8 +71,8 @@ VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
 VERSION_BTOP=v1.4.5
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-7.0.1
-VERSION_RSMI_G=https://github.com/RadeonOpenCompute/rocm_smi_lib.git
+VERSION_RSMI=develop # rocm-7.0.1
+VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
 DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
 DEPS_PACKAGES_TO_REMOVE=()
@@ -721,6 +721,7 @@ install_btop() {
   local packages_build=(git build-essential cmake libdrm-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
+  print_notes "   🔽 cloning btop..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
@@ -730,10 +731,19 @@ install_btop() {
     git checkout -q "${VERSION_BTOP}"
   fi
 
+  # git clone https://github.com/ROCm/amdsmi.git
+  # cmake .. -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON
+  # make -j $(nproc) VERBOSE=1
+  # make amd_smi
+
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" lib/rocm_smi_lib
+    print_notes "   🔽 cloning & build rocm..."
+    rm -rf /tmp/rocm-systems lib/rocm_smi_lib 1>/dev/null
+    git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" /tmp/rocm-systems
+    mkdir -p lib/ 1>/dev/null
+    mv /tmp/rocm-systems/projects/rocm-smi-lib lib/rocm_smi_lib
     pushd lib/rocm_smi_lib 1>/dev/null
     mkdir -p build 1>/dev/null
     cd build 1>/dev/null
@@ -743,7 +753,7 @@ install_btop() {
     RSMI_STATIC='true'
   fi
 
-  # Build and install btop
+  print_notes "   🔽 build and install btop..."
   make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
