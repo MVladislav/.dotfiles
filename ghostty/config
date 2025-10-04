@@ -2,7 +2,7 @@
 # reload: default: `ctrl+shift+,` :: key-rebind: `alt+r`
 
 # run: `ghostty +list-themes`
-theme = rose-pine
+theme = Rose Pine
 # theme = GitHub Dark
 # theme = GitHub-Dark-Default
 # theme =  dark:catppuccin-mocha,light:catppuccin-latte
