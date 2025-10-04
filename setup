@@ -132,17 +132,20 @@ initialize_base() {
 
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
-  print_info2 "\n📥 DEPS :: install some base services :: [curl git jq rsync fzf xclip]"
+  print_info2 "\n📥 DEPS :: installing some base services :: [curl git jq rsync fzf xclip]..."
   $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf xclip 1>/dev/null
-  print_info2 "\n📥 DEPS :: install some base services :: [eza bat ripgrep fd-find]"
+  print_info2 "\n📥 DEPS :: installing some base services :: [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
-  print_info2 "📥 DEPS :: disable rsync systemd service"
+  print_info2 "📥 DEPS :: disable rsync systemd service..."
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
   $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
 
   # echo "DEPS :: install npm"
   # $RUN_WITH_SUDO snap install node --classic
+
+  # echo "DEPS :: install rust"
+  # $RUN_WITH_SUDO snap install rustup --classic
 
   # echo "DEPS :: install lazygit with go"
   # $RUN_WITH_SUDO snap install go --classic
@@ -197,10 +200,11 @@ install_dependencies_nvim() {
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
 
   # Define packages needed for build and install
-  local packages_tools=()
+  local packages_tools=(python3-venv)
   local packages_build=(git curl ninja-build gettext cmake build-essential)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
+  print_notes "   💡 Cloning nvim..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
     cd "$DEPS_INSTALL_PATH/nvim"
@@ -211,6 +215,7 @@ install_dependencies_nvim() {
     # git switch -q release-0.10
   fi
 
+  print_notes "   💡 Build and install nvim..."
   # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
   make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
@@ -221,6 +226,7 @@ install_dependencies_nvim() {
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
+  print_notes "   💡 You should also install 'node', which is required by some tools like 'Mason plugins'."
   print_info2 "🚀 NVIM :: nvim installed!"
 }
 
@@ -241,6 +247,7 @@ install_dependencies_zsh() {
     git checkout -q "${VERSION_ZSH}"
     cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
 
+    print_notes "   💡 Build and install zsh..."
     ./Util/preconfig 1>/dev/null
     ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
     make 1>/dev/null
@@ -343,7 +350,7 @@ install_dependencies_ghostty() {
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
-  print_notes '   💡 For better xterm compatibility you can use `vm_xterm_cp_local`[with sudo] and `vm_xterm_cp_ssh`[with ssh]'
+  print_notes '   💡 For better 'xterm compatibility', use `vm_xterm_cp_local` (for sudo session) or `vm_xterm_cp_ssh` (for SSH sessions).'
 
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
 }
@@ -719,9 +726,10 @@ usage() {
   print_info "📑 Usage: $0 [options]"
   print_info "   Examples:"
   print_info "     $0                                             Run only config setups without installations"
-  print_info "     $0 -if                                         Run config setups with fonts install"
-  print_info "     $0 -ds -it                                     Install only additional tools"
-  print_info "     $0 -ds -itmux -invim                           Install only tmux and nvim"
+  print_info "     $0 -itools -ifont                              Run config setups without small additional installs"
+  print_info "     $0 -ifont                                      Run config setups with fonts install"
+  print_info "     $0 -ds -itools                                 Install only additional tools"
+  print_info "     $0 -ds -invim                                  Install only nvim"
   print_info "     $0 -ds -izsh                                   Install only zsh"
   print_info "     $0 -ds -ighost                                 Install only ghostty"
   print_info "     $0 -ds -ibtop                                  Install only btop"
@@ -729,7 +737,7 @@ usage() {
   print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
   print_info "     -h,            --help                          Show this help message and exit"
-  print_info "     -it,           --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  print_info "     -itools,       --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
   print_info "     -itmux,        --install-dependencies-tmux     Install/update service tmux"
   print_info "     -invim,        --install-dependencies-nvim     Install/update service nvim"
   print_info "     -izsh,         --install-dependencies-zsh      Install/update service zsh"
@@ -750,7 +758,7 @@ usage() {
   print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
   print_info "     -igh,          --install-github-cli            Run install gh-cli-binary from github releases"
   print_info "     -upc,          --update-check                  Check if new version for builds exists"
-  print_info "     -s                                             Use 'source' instead 'release' for install services"
+  print_info "     -s                                             Use 'source' instead 'release' used for install services"
 }
 
 # Function to parse command-line arguments
@@ -762,7 +770,7 @@ parse_args() {
       usage
       exit 0
       ;;
-    -it | --install-additional-tools)
+    -itools | --install-additional-tools)
       RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
       ;;
     -itmux | --install-dependencies-tmux)
