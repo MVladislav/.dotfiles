@@ -1,5 +1,5 @@
 # .dotfiles
 
 ```sh
-$bash ./setup.sh
+$bash ./setup
 ```

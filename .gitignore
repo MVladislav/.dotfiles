@@ -11,8 +11,9 @@
 !.yamllint
 
 !README.md
-!setup.sh
-!setup-sec.sh
+!setup-helper
+!setup
+!setup-sec
 
 !git/
 git/**

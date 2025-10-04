@@ -1,38 +1,24 @@
 #!/usr/bin/env bash
 
-PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin
+PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin"
 set -euo pipefail
 IFS=$'\n\t'
 
 cat <<'EOF'
-      .--.
-     |o_o |  HI :)
-     |:_/ |
-    //   \ \
-   (|     | )
-  /'\_   _/`\
-  \___)=(___/
+     .--.
+    |o_o |  Let's get your system ready!
+    |:_/ |
+   //   \ \
+  (|     | )
+ /'\_   _/`\
+ \___)=(___/
 
 EOF
 
-# ******************************************************************************
-
-RUN_WITH_SUDO=''
-IS_SUDO_INSTALL=0
-if command -v sudo &>/dev/null; then
-  RUN_WITH_SUDO=sudo
-  IS_SUDO_INSTALL=1
-fi
+[[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+source "./setup-helper"
 
 # ******************************************************************************
-
-# COLOR ------------------------------------------------------------------------
-# https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
-NC='\033[0m'         # No Color
-BRED='\033[1;31m'    # Red
-BPURPLE='\033[1;35m' # Purple
-BYELLOW='\033[1;33m' # Yellow
-BCYAN='\033[1;36m'   # Cyan
 
 # CONFS :: variables -----------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
@@ -62,6 +48,8 @@ RUN_INSTALL_GH=0
 INSTALL_SOURCE_FROM=release # source | release
 VERSION_NVIM=v0.11.4
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
+VERSION_ZSH=zsh-5.9
+VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
 VERSION_ZIG_V=0.14.1
 # VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
 VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
@@ -74,28 +62,22 @@ VERSION_BTOP_G=https://github.com/aristocratos/btop.git
 VERSION_RSMI=develop # rocm-7.0.1
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
-DEPS_INSTALL_PATH="${HOME}/.tmp" # /tmp
-DEPS_PACKAGES_TO_REMOVE=()
+: "${LN_TMUX_ORIG_BASE:="${HOME}/.tmux"}"
+: "${LN_TMUX_ORIG_TMUX:="${HOME}/.tmux.conf"}"
 
-USER_LOCAL_PREFIX="${HOME}/.local"
-USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
+: "${LN_NVIM_ORIG_BASE:="${HOME}/.config/nvim"}"
 
-: "${LN_TMUX_ORIG_BASE=${HOME}/.tmux}"
-: "${LN_TMUX_ORIG_TMUX=${HOME}/.tmux.conf}"
-
-: "${LN_NVIM_ORIG_BASE=${HOME}/.config/nvim}"
-
-: "${LN_ZSH_OH_FOLDER=${HOME}/.oh-my-zsh}"
+: "${LN_ZSH_OH_FOLDER:="${HOME}/.oh-my-zsh"}"
 LN_ZSHRC="${HOME}/.zshrc"
 LN_PROFILES_01="${HOME}/.profile-append"
 LN_PROFILES_02="${HOME}/.profile-sec"
 
-: "${LN_GHOSTTY_FOLDER=${HOME}/.config/ghostty}"
+: "${LN_GHOSTTY_FOLDER:="${HOME}/.config/ghostty"}"
 
-: "${LN_VS_CODE=${HOME}/.config/Code/User}"
+: "${LN_VS_CODE:="${HOME}/.config/Code/User"}"
 
 LN_ZED_FLATPAK="${HOME}/.var/app/dev.zed.Zed/config/zed"
-: "${LN_ZED=$LN_ZED_FLATPAK}"
+: "${LN_ZED:="$LN_ZED_FLATPAK"}"
 # LN_ZED=${HOME}/.config/zed
 
 LN_LOGSEQ_PATH="${HOME}/.logseq"
@@ -137,62 +119,6 @@ main() {
 
 # ******************************************************************************
 
-# BASE :: check if new version available ---------------------------------------
-check_for_newer_tag() {
-  local REPO_URL="$1"
-  local CURRENT_TAG="$2"
-  local TAG_FILTER="${3:-}"
-
-  # Derive owner/repo from URL
-  local REPO_NAME
-  REPO_NAME=$(echo "$REPO_URL" | sed -E 's|https://github\.com/||; s|\.git$||')
-
-  # Fetch all tags via GitHub API
-  local TAGS_JSON
-  TAGS_JSON=$(curl -sL "https://api.github.com/repos/$REPO_NAME/tags")
-
-  if [[ -z $TAGS_JSON || $TAGS_JSON == *"API rate limit exceeded"* ]]; then
-    print_error "⚠️ GitHub API rate limit exceeded or no response for $REPO_NAME."
-    return 0
-  fi
-
-  # Extract tag names, optionally filtering by TAG_FILTER
-  local TAGS
-  TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
-  if [[ -n $TAG_FILTER ]]; then
-    TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
-  fi
-
-  # Determine the latest tag by version-sort
-  local LATEST_TAG
-  LATEST_TAG=$(echo "$TAGS" | sort -V | tail -n1)
-
-  # Fallback: no matching tags → try latest release
-  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
-    LATEST_TAG=$(curl -sL "https://api.github.com/repos/$REPO_NAME/releases/latest" |
-      jq -r '.tag_name')
-    # If a filter was provided, ensure the release tag matches it
-    if [[ -n $TAG_FILTER && ! $LATEST_TAG =~ $TAG_FILTER ]]; then
-      print_info2 "⚠️ No releases matching filter '$TAG_FILTER' for $REPO_NAME."
-      return 0
-    fi
-  fi
-
-  # Final validation
-  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
-    print_error "⚠️ No tags or releases found for $REPO_NAME."
-    return 0
-  fi
-
-  # Compare and report
-  if [[ $CURRENT_TAG != "$LATEST_TAG" ]]; then
-    print_info2 "⬆️ A newer version for '$REPO_NAME' is available: $LATEST_TAG (current: $CURRENT_TAG)"
-    print_info2 "    https://github.com/$REPO_NAME/releases/tag/$LATEST_TAG"
-  else
-    print_info2 "✅ You already have the latest version for '$REPO_NAME': $CURRENT_TAG"
-  fi
-}
-
 # BASE :: some general needed prepares -----------------------------------------
 initialize_base() {
   mkdir -p "$HOME/.config" 1>/dev/null
@@ -230,7 +156,7 @@ install_dependencies_tmux() {
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
 
-  # Define packages needed for tmux and install
+  # Define packages needed for build and install
   local packages_tools=(libevent-dev)
   local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
   install_dependencies_needs packages_tools[@] packages_build[@]
@@ -266,7 +192,7 @@ install_dependencies_nvim() {
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
 
-  # Define packages needed for nvim and install
+  # Define packages needed for build and install
   local packages_tools=()
   local packages_build=(git curl ninja-build gettext cmake build-essential)
   install_dependencies_needs packages_tools[@] packages_build[@]
@@ -298,30 +224,34 @@ install_dependencies_nvim() {
 install_dependencies_zsh() {
   print_info2 "\n🚀 ZSH :: install zsh ..."
   print_notes "   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=()
+  local packages_build=(gcc make autoconf yodl texinfo libncurses-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # $RUN_WITH_SUDO apt-get install -y gcc make autoconf yodl texinfo libncurses-dev 1>/dev/null
-    # rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
-    # git clone -q https://github.com/zsh-users/zsh "$DEPS_INSTALL_PATH/zsh"
-    # cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
-    # bash ./Util/preconfig 1>/dev/null
-    # bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-    # make 1>/dev/null
-    # # make check 1>/dev/null
-    # make install 1>/dev/null
-    # # make install.info 1>/dev/null
-    # cd - 1>/dev/null
-    # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
+    print_notes "   💡 Cloning zsh..."
+    git clone -q "$VERSION_ZSH_G" "$DEPS_INSTALL_PATH/zsh"
+    git checkout -q "${VERSION_ZSH}"
+    cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
 
-    $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
+    ./Util/preconfig 1>/dev/null
+    ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+    make 1>/dev/null
+    make install 1>/dev/null
+    cd - 1>/dev/null
+    rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+    print_notes "   💡 Installing zsh..."
     $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
   fi
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   local zsh_install_bin_path
   zsh_install_bin_path=$(command -v zsh || echo "/usr/bin/zsh")
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
   print_info2 "🚀 ZSH :: Load git submodules"
   git submodule update -q --init --remote \
@@ -364,7 +294,7 @@ install_dependencies_ghostty() {
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
 
-  # Define packages needed for tmux and install
+  # Define packages needed for build and install
   local packages_tools=(libgtk4-layer-shell0)
   local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
   install_dependencies_needs packages_tools[@] packages_build[@]
@@ -378,6 +308,7 @@ install_dependencies_ghostty() {
     ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
   fi
 
+  print_notes "   💡 Cloning ghostty..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
     cd "$DEPS_INSTALL_PATH/ghostty"
@@ -387,6 +318,7 @@ install_dependencies_ghostty() {
     git checkout -q "$VERSION_GHOSTTY"
   fi
 
+  print_notes "   💡 Build and install ghostty..."
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
@@ -407,6 +339,8 @@ install_dependencies_ghostty() {
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
+  print_notes '   💡 For better xterm compatibility you can use `vm_xterm_cp_local`[with sudo] and `vm_xterm_cp_ssh`[with ssh]'
+
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
 }
 
@@ -414,7 +348,7 @@ install_dependencies_ghostty() {
 
 # BIN :: CREATE LINKS ----------------------------------------------------------
 setup_bin() {
-  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' into '$USER_LOCAL_PREFIX_BIN/vm/*'"
+  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' as '$USER_LOCAL_PREFIX_BIN/vm/*'"
   mkdir -p "$USER_LOCAL_PREFIX_BIN"
 
   rm -f "${USER_LOCAL_PREFIX_BIN}/vm"
@@ -716,12 +650,12 @@ install_btop() {
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
 
-  # Define packages needed for btop and install
+  # Define packages needed for build and install
   local packages_tools=()
   local packages_build=(git build-essential cmake libdrm-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  print_notes "   🔽 cloning btop..."
+  print_notes "   💡 Cloning btop..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
     pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
@@ -731,30 +665,32 @@ install_btop() {
     git checkout -q "${VERSION_BTOP}"
   fi
 
-  # git clone https://github.com/ROCm/amdsmi.git
-  # cmake .. -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON
+  # export ROCM_DIR='lib/rocm_smi_lib'
+  # git clone https://github.com/ROCm/amdsmi.git lib/rocm_smi_lib
+  # mkdir -p "${ROCM_DIR}/build"
+  # cmake .. -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
   # make -j $(nproc) VERBOSE=1
   # make amd_smi
 
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
+  local ROCM_DIR='lib/rocm_smi_lib'
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    print_notes "   🔽 cloning & build rocm..."
-    rm -rf /tmp/rocm-systems lib/rocm_smi_lib 1>/dev/null
+    print_notes "   💡 Cloning & building rocm..."
+    rm -rf $ROCM_DIR /tmp/rocm-systems 1>/dev/null
+    mkdir -p lib 1>/dev/null
     git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" /tmp/rocm-systems
-    mkdir -p lib/ 1>/dev/null
     mv /tmp/rocm-systems/projects/rocm-smi-lib lib/rocm_smi_lib
-    pushd lib/rocm_smi_lib 1>/dev/null
-    mkdir -p build 1>/dev/null
-    cd build 1>/dev/null
+    mkdir -p "${ROCM_DIR}/build" 1>/dev/null
+    pushd "${ROCM_DIR}/build" 1>/dev/null
     cmake .. 1>/dev/null
     make -j "$(nproc)" 1>/dev/null
     popd 1>/dev/null
     RSMI_STATIC='true'
   fi
 
-  print_notes "   🔽 build and install btop..."
-  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
+  print_notes "   💡 Build and install btop..."
+  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ROCM_DIR="$ROCM_DIR" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
   popd 1>/dev/null
@@ -772,179 +708,6 @@ install_btop() {
 
   print_info2 "🚀 BTOP :: btop installed!"
 }
-
-# ******************************************************************************
-
-print_info() { echo -e "${BPURPLE}$1${NC}"; }
-print_info2() { echo -e "${BYELLOW}$1${NC}"; }
-print_read() { printf "%b%s%b" "${BYELLOW}" "$1" "${NC}"; }
-print_notes() { echo -e "${BCYAN}$1${NC}"; }
-print_error() { echo -e "${BRED}$1${NC}" >&2; }
-
-# ******************************************************************************
-
-install_dependencies_needs() {
-  print_notes "   📥 Installing build dependencies..."
-  DEPS_PACKAGES_TO_REMOVE=()
-  local packages_tools=("${!1}")
-  local packages_build=("${!2}")
-
-  local packages_to_install=()
-
-  # Check packages_tools: install if missing, but never mark for removal.
-  for pkg in "${packages_tools[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
-      packages_to_install+=("$pkg")
-    fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    # fi
-  done
-
-  # Check packages_build: install if missing and add to removal list.
-  for pkg in "${packages_build[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
-      packages_to_install+=("$pkg")
-      DEPS_PACKAGES_TO_REMOVE+=("$pkg")
-    fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    #   DEPS_PACKAGES_TO_REMOVE+=("$pkg")
-    # fi
-  done
-
-  print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
-  print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
-
-  # Only run sudo update and install if any package is missing.
-  if [[ ${#packages_to_install[@]} -gt 0 ]]; then
-    $RUN_WITH_SUDO apt-get update -qqq || {
-      print_error "❌ Failed to update package list"
-      exit 1
-    }
-    $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
-      print_error "❌ Failed to install packages"
-      exit 1
-    }
-    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-    print_notes "   📥 Build dependencies installed"
-  else
-    print_notes "   📥 All dependencies already installed. Skipping dependencies installation."
-  fi
-}
-
-install_dependencies_needs_rm() {
-  if [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -eq 0 ]]; then
-    print_notes "   📥 No packages to remove."
-    return 0
-  fi
-
-  print_notes "   📥 Removing build dependencies..."
-  $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
-    print_error "❌ Failed to remove packages"
-    return 1
-  }
-  $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
-  $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
-}
-
-download_github_binary() {
-  # "Usage: download_github_binary <repo_url> <binary_regex> [output_dir]"
-  local repo_url="$1"
-  local binary_regex="$2"
-  local out_dir="${3:-$USER_LOCAL_PREFIX_BIN}"
-
-  if [[ -z "$repo_url" || -z "$binary_regex" ]]; then
-    print_error "❌ Missing argument."
-    return 1
-  fi
-
-  # Check for required tools
-  for cmd in curl jq; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-      print_error "❌ Required command '$cmd' not found."
-      return 1
-    fi
-  done
-
-  # Extract owner/repo from URL
-  local repo_path
-  if [[ "$repo_url" =~ ^https://github\.com/([^/]+)/([^/]+)(\.git)?/?$ ]]; then
-    local owner="${BASH_REMATCH[1]}"
-    local repo="${BASH_REMATCH[2]}"
-    repo_path="${owner}/${repo}"
-  else
-    print_error "❌ Could not parse GitHub repository path from URL."
-    return 1
-  fi
-
-  print_info2 "\n🚀 BINARY :: Fetching latest release for '$repo_path'..."
-
-  # Get the asset URL matching regex
-  local api_url="https://api.github.com/repos/$repo_path/releases/latest"
-  echo "$api_url"
-  local asset_url
-  asset_url=$(curl -s "$api_url" | jq -r --arg regex "$binary_regex" '
-    .assets[] | select(.name | test($regex)) | .browser_download_url
-  ' 2>/dev/null | head -n 1) || { print_error "   ❌ Failed to jq GitHub-api '$api_url' for asset."; return 1; }
-
-  if [[ -z "$asset_url" || "$asset_url" == "null" ]]; then
-    print_error "   ❌ No asset matching regex '$binary_regex' found in latest release."
-    return 1
-  fi
-
-  print_info2 "   🔍 Found asset '$asset_url'"
-
-  # Create temp dir and download asset
-  local tmp_dir
-  tmp_dir=$(mktemp -d)
-  local file_name="${asset_url##*/}"
-
-  print_info2 "   ⬇️ Downloading to '$tmp_dir' dir..."
-  curl -sL "$asset_url" -o "$tmp_dir/$file_name"
-
-  mkdir -p "$out_dir"
-
-  # Handle archive or direct binary
-  local bin_path=""
-  if [[ "$file_name" == *.tar.gz || "$file_name" == *.tgz ]]; then
-    print_info2 "   ⚙️ Extracting 'tar.gz'..."
-    tar -xzf "$tmp_dir/$file_name" -C "$tmp_dir"
-  elif [[ "$file_name" == *.zip ]]; then
-    print_info2 "   ⚙️ Extracting 'zip'..."
-    unzip -q "$tmp_dir/$file_name" -d "$tmp_dir"
-  fi
-  # Search for actual binary using `file` command
-  bin_path=$(find "$tmp_dir" -type f | while read -r f; do
-    if file "$f" | grep -qE 'ELF|Mach-O|PE32'; then
-      echo "$f"
-      break
-    fi
-  done)
-
-  if [[ -z "$bin_path" ]]; then
-    print_error "   ❌ No binary file detected in asset."
-    return 1
-  fi
-
-  local bin_name
-  bin_name=$(basename "$bin_path")
-
-  print_info2 "   📌 Installing '$bin_name' to '$out_dir'..."
-  mv "$bin_path" "$out_dir/$bin_name"
-  chmod 744 "$out_dir/$bin_name"
-
-  # # Cleanup
-  # rm -rf "$tmp_dir"
-
-  print_info2 "🚀 BINARY :: '$repo_path : $bin_name' installed!"
-}
-
 
 # ******************************************************************************
 
@@ -1094,6 +857,7 @@ parse_args() {
       RUN_SETUP_GITCONFIG=0
 
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
+      check_for_newer_tag "$VERSION_ZSH_G" "$VERSION_ZSH"
       check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
       check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
       check_for_newer_tag "$VERSION_BTOP_G" "$VERSION_BTOP"

@@ -1,0 +1,275 @@
+#!/usr/bin/env bash
+
+PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin"
+set -euo pipefail
+IFS=$'\n\t'
+
+cat <<'EOF'
+      .--.               [ SECURITY ]
+     |o_o )
+     |:_/ |        .---.
+    //   \ \      /     \
+   (|  ⌂  | )     | [🔒] |
+  /'\_   _/`\     \     /
+  \___)=(___/      '---'
+
+EOF
+
+[[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+source "./setup-helper"
+
+# ******************************************************************************
+
+# CONFS :: variables -----------------------------------------------------------
+VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
+VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
+
+RUN_INSTALL_ROCM=0
+RUN_INSTALL_JOHN=0
+RUN_INSTALL_HASHCAT=0
+RUN_INSTALL_TOOLS=0
+RUN_LOAD_LISTS=0
+RUN_LOAD_NMAP_SCRIPTS=0
+
+# ******************************************************************************
+
+main() {
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+
+  [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
+  [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
+  [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
+  [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
+  [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
+  [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
+
+  print_info2 "\n✅ All finished!"
+}
+
+# ******************************************************************************
+
+install_rocm() {
+  print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
+
+  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_6.3.60304-1_all.deb \
+    -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  sudo apt-get install "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  sudo apt-get update
+  sudo apt-get install rocm
+  sudo amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
+
+  print_info2 "🚀 ROCM :: AMD ROCm support installed!"
+}
+
+install_john() {
+  print_info2 "\n🚀 JTR :: Installing John the Ripper with AMD ROCm support..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
+
+  # Define packages needed for john, including ROCm build requirements and install
+  local packages_tools=()
+  local packages_build=(
+    build-essential git pkg-config libssl-dev
+    libnss3-dev libkrb5-dev libgmp-dev libz-dev libbz2-dev
+    # rocm-dev hip-dev
+    ## libpcap-dev ocl-icd-opencl-dev
+    ## opencl-headers cmake g++-multilib libnuma-dev libpci-dev rocm-llvm-dev
+  )
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  # Build John the Ripper
+  rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
+  git clone -q https://github.com/openwall/john.git -b bleeding-jumbo "$DEPS_INSTALL_PATH/john"
+  pushd "$DEPS_INSTALL_PATH/john/src" 1>/dev/null
+
+  # Configure with local ROCm OpenCL
+  ./configure \
+    LDFLAGS="-L/opt/rocm/lib" \
+    CPPFLAGS="-I/opt/rocm/include" \
+    --prefix="$USER_LOCAL_PREFIX" \
+    --exec_prefix="$USER_LOCAL_PREFIX_BIN" \
+    --enable-opencl \
+    1>/dev/null
+
+  make -s clean 1>/dev/null
+  make -sj"$(nproc)" 1>/dev/null
+  make -sj"$(nproc)" strip 1>/dev/null
+
+  # Copy the "run" directory (which contains additional tools) to a persistent location.
+  if [ -d "$DEPS_INSTALL_PATH/john/run" ]; then
+    rm -rf ../run/*.dSYM
+    mkdir -p "$USER_LOCAL_PREFIX_BIN"
+    mv ../run/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} "$USER_LOCAL_PREFIX_BIN"
+    mkdir -p "$USER_LOCAL_PREFIX/share/john"
+    cp -a ../run/* "$USER_LOCAL_PREFIX/share/john"
+    mv "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX_BIN"
+  fi
+
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any were installed by this script
+  install_dependencies_needs_rm
+
+  # - https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html
+  # - https://dfir.science/2014/07/how-to-cracking-zip-and-rar-protected.html
+  print_info2 "🚀 JTR :: John the Ripper with AMD ROCm support installed!"
+  print_notes "   💡 Verify OpenCL devices with: john --list=opencl-devices"
+  print_notes "   💡 Use '--device=X' to select AMD GPU (check device numbers)"
+}
+
+install_hashcat() {
+  print_info2 "\n🚀 HC :: Installing HashCat..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
+
+  local packages_tools=()
+  local packages_build=(git build-essential)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+  git clone -q https://github.com/hashcat/hashcat.git "$DEPS_INSTALL_PATH/hashcat"
+  pushd "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+
+  make -s clean 1>/dev/null
+  make -sj"$(nproc)" 1>/dev/null
+  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
+
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any were installed by this script
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 HC :: HashCat installed!"
+}
+
+install_tools() {
+  print_info2 "\n🚀 TOOLS :: Installing additional tools..."
+
+  print_notes "   ⬇️ Install 'jq'"
+  $RUN_WITH_SUDO apt install jq
+
+  print_notes "   ⬇️ Install 'monolith'"
+  $RUN_WITH_SUDO apt install monolith # saving complete web pages as a single HTML file
+
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+
+  go_github_commit_date_and_download() {
+    IFS='/' read -r owner repo addition <<<"$1"
+    echo 'LAST COMMIT' "[${repo}] ::" "$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')"
+    local package_path="${owner}/${repo}"
+    if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
+    print_notes "   ⬇️ Install '${package_path}'"
+    go install "github.com/${package_path}@${2:-latest}"
+  }
+
+  go_github_commit_date_and_download 'charmbracelet/gum'
+  go_github_commit_date_and_download 'projectdiscovery/httpx/cmd/httpx'
+  go_github_commit_date_and_download 'projectdiscovery/katana/cmd/katana'
+  go_github_commit_date_and_download 'hahwul/dalfox/v2'
+  go_github_commit_date_and_download 'OJ/gobuster/v3'
+  go_github_commit_date_and_download 'ffuf/ffuf/vm'
+  go_github_commit_date_and_download 'dwisiswant0/unew'
+  go_github_commit_date_and_download 'BishopFox/sj'
+  go_github_commit_date_and_download 'tomnomnom/waybackurls'
+  go_github_commit_date_and_download 'tomnomnom/gf'
+
+  print_info2 "🚀 TOOLS :: Additional tools installed!"
+
+  print_info2 "\n🚀 TOOLS :: Extend manually install:"
+  print_info2 "     - https://addons.mozilla.org/en-US/firefox/addon/hackbar/"
+}
+
+# ******************************************************************************
+
+load_lists() {
+  print_info2 "\n🚀 TOOLS :: Clone lists..."
+
+  print_notes "   ⬇️ Clone 'SecLists'"
+  git clone -q https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
+  print_notes "   ⬇️ Clone 'PayloadsAllTheThings'"
+  git clone -q https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
+
+  print_info2 "🚀 TOOLS :: List cloning done!"
+}
+
+load_nmap_scripts() {
+  print_info2 "\n🚀 NMAP :: Clone more nmap scripts..."
+
+  print_notes "   ⬇️ Clone 'vulnersCom/nmap-vulners'"
+  $RUN_WITH_SUDO git clone https://github.com/vulnersCom/nmap-vulners /usr/share/nmap/scripts/nmap-vulners
+  print_notes "   ⬇️ Clone 'scipag/vulscan'"
+  $RUN_WITH_SUDO git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
+
+  print_notes "   💡 Update nmap scripts"
+  nmap --script-updatedb 1>/dev/null
+
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_info2 "🚀 NMAP :: Scripts cloning done!"
+}
+
+# ******************************************************************************
+
+# Function to show usage information
+usage() {
+  print_info "📑 Usage: $0 [options]"
+  print_info "   Options:"
+  print_info "     -h,         --help                      Show this help message and exit"
+  print_info "     -irocm,     --install-rocm              Install RCOM"
+  print_info "     -ijohn,     --install-john-the-ripper   Install John the Ripper"
+  print_info "     -ihashcat,  --install-hashcat           Install HastCat"
+  print_info "     -itools,    --install-additional-tools  Install additional tools"
+  print_info "     -llists,    --load-lists                Load/Clone lists"
+  print_info "     -lnmap,     --load-nmap-scripts         Load/Clone more NMAP scripts"
+}
+
+# Function to parse command-line arguments
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -irocm | --install-rocm)
+      # RUN_INSTALL_ROCM=1
+      echo "ROCM installer is work in progress"
+      ;;
+    -ijohn | --install-john-the-ripper)
+      # RUN_INSTALL_JOHN=1
+      echo "John installer is work in progress"
+      ;;
+    -ihashcat | --install-hashcat)
+      # RUN_INSTALL_HASHCAT=1
+      echo "Hashcat installer is work in progress"
+      ;;
+    -itools | --install-additional-tools)
+      RUN_INSTALL_TOOLS=1
+      ;;
+    -llists | --load-lists)
+      RUN_LOAD_LISTS=1
+      ;;
+    -lnmap | --load-nmap-scripts)
+      RUN_LOAD_NMAP_SCRIPTS=1
+      ;;
+    *)
+      print_error "❌ Unknown option: $key"
+      usage
+      exit 1
+      ;;
+    esac
+    shift
+  done
+}
+
+# ******************************************************************************
+
+print_info2 "▶️ Starting script $0 ..."
+
+# Parse command-line arguments
+parse_args "$@"
+
+main
+exit 0
