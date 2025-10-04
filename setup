@@ -82,6 +82,10 @@ LN_ZED_FLATPAK="${HOME}/.var/app/dev.zed.Zed/config/zed"
 
 LN_LOGSEQ_PATH="${HOME}/.logseq"
 
+GIT_HOOK_FOLDER="${HOME}/.git-hooks"
+LN_GIT_HOOK_COMMIT_MSG="$GIT_HOOK_FOLDER/commit-msg"
+LN_GIT_HOOK_PRE_COMMIT="$GIT_HOOK_FOLDER/pre-commit"
+
 # ******************************************************************************
 
 main() {
@@ -477,8 +481,7 @@ setup_logseq() {
 # GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
 setup_gitconfig() {
   print_info2 "\n🚀 GIT :: setup git..."
-  LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
-  LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
+  mkdir -p "$GIT_HOOK_FOLDER"
 
   print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
   rm -f "${LN_GIT_HOOK_COMMIT_MSG}"
