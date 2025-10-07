@@ -67,7 +67,7 @@ VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
 : "${LN_NVIM_ORIG_BASE:="${HOME}/.config/nvim"}"
 
-: "${LN_ZSH_OH_FOLDER:="${HOME}/.oh-my-zsh"}"
+LN_ZSH="${HOME}/.zsh"
 LN_ZSHRC="${HOME}/.zshrc"
 LN_PROFILES_01="${HOME}/.profile-append"
 LN_PROFILES_02="${HOME}/.profile-sec"
@@ -266,24 +266,22 @@ install_dependencies_zsh() {
 
   print_info2 "🚀 ZSH :: Load git submodules"
   git submodule update -q --init --remote \
-    zsh/oh-my-zsh \
     zsh/themes/spaceship \
-    zsh/themes/headline \
     zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting
+    zsh/plugins/zsh-syntax-highlighting \
+    zsh/plugins/zsh-history-substring-search
 
-  rm -f "$LN_ZSH_OH_FOLDER" 1>/dev/null
+  mkdir -p "$LN_ZSH/custom/"{themes,plugins}
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
+  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme" 1>/dev/null
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
+  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
 
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/oh-my-zsh' as '$LN_ZSH_OH_FOLDER'"
-  ln -sf "${PWD}/zsh/oh-my-zsh" "$LN_ZSH_OH_FOLDER"
-
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH_OH_FOLDER/custom/themes/*'"
-  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/spaceship.zsh-theme" 1>/dev/null
-  ln -sf "${PWD}/zsh/themes/headline/headline.zsh-theme" "$LN_ZSH_OH_FOLDER/custom/themes/headline.zsh-theme" 1>/dev/null
-
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH_OH_FOLDER/custom/plugins/*'"
-  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-autosuggestions"
-  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH_OH_FOLDER/custom/plugins/zsh-syntax-highlighting"
+  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
+  rm -f "${LN_ZSHRC}"
+  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
 
   print_notes "   💡 new installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
 
@@ -429,11 +427,7 @@ setup_zed() {
 
 # PROFILES :: CREATE LINKS -----------------------------------------------------
 setup_profiles() {
-  print_info2 "\n🚀 PROFILES :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
-  rm -f "${LN_ZSHRC}"
-  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-
-  print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-append' as '$LN_PROFILES_01'"
+  print_info2 "\n🚀 PROFILES :: Create symlink for './zsh/profile-append' as '$LN_PROFILES_01'"
   rm -f "${LN_PROFILES_01}"
   ln -sf "${PWD}/zsh/profile-append" "${LN_PROFILES_01}"
   print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-sec' as '$LN_PROFILES_02'"

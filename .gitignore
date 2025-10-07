@@ -27,14 +27,9 @@ zsh/**
 !zsh/profile-append
 !zsh/profile-sec
 
-!zsh/oh-my-zsh
-zsh/oh-my-zsh/**
-
 !zsh/themes/
 zsh/themes/**
 !zsh/themes/.gitempty
-!zsh/themes/headline
-zsh/themes/headline/**
 !zsh/themes/spaceship
 zsh/themes/spaceship/**
 
@@ -45,6 +40,8 @@ zsh/plugins/**
 zsh/plugins/zsh-autosuggestions/**
 !zsh/plugins/zsh-syntax-highlighting
 zsh/plugins/zsh-syntax-highlighting/**
+!zsh/plugins/zsh-history-substring-search
+zsh/plugins/zsh-history-substring-search/**
 
 !ghostty/
 ghostty/**

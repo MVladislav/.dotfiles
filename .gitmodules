@@ -8,11 +8,6 @@
 	url = https://github.com/denysdovhan/spaceship-prompt.git
 	branch = master
 	ignore = dirty
-[submodule "zsh/themes/headline"]
-	path = zsh/themes/headline
-	url = https://github.com/Moarram/headline.git
-	branch = main
-	ignore = dirty
 [submodule "zsh/plugins/zsh-autosuggestions"]
 	path = zsh/plugins/zsh-autosuggestions
 	url = https://github.com/zsh-users/zsh-autosuggestions.git
@@ -23,8 +18,8 @@
 	url = https://github.com/zsh-users/zsh-syntax-highlighting.git
 	branch = master
 	ignore = dirty
-[submodule "zsh/oh-my-zsh"]
-	path = zsh/oh-my-zsh
-	url = https://github.com/robbyrussell/oh-my-zsh.git
+[submodule "zsh/plugins/zsh-history-substring-search"]
+	path = zsh/plugins/zsh-history-substring-search
+	url = https://github.com/zsh-users/zsh-history-substring-search.git
 	branch = master
 	ignore = dirty
