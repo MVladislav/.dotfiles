@@ -146,6 +146,7 @@ install_dependencies_additional() {
 
   # echo "DEPS :: install rust"
   # $RUN_WITH_SUDO snap install rustup --classic
+  # rustup default stable
 
   # echo "DEPS :: install lazygit with go"
   # $RUN_WITH_SUDO snap install go --classic
@@ -236,10 +237,12 @@ install_dependencies_zsh() {
   print_notes "   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
   rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
 
-  # Define packages needed for build and install
-  local packages_tools=()
-  local packages_build=(gcc make autoconf yodl texinfo libncurses-dev)
-  install_dependencies_needs packages_tools[@] packages_build[@]
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    # Define packages needed for build and install
+    local packages_tools=()
+    local packages_build=(gcc make autoconf yodl texinfo libncurses-dev)
+    install_dependencies_needs packages_tools[@] packages_build[@]
+  fi
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     print_notes "   💡 Cloning zsh..."
@@ -292,6 +295,11 @@ install_dependencies_zsh() {
       print_error "  ❌ Failed to change default shell to ZSH. Please run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
     }
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  fi
+
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    # Remove build dependencies if any
+    install_dependencies_needs_rm
   fi
 
   print_info2 "🚀 ZSH :: zsh installed!"

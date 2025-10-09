@@ -51,13 +51,16 @@ main() {
 install_rocm() {
   print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
 
-  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_6.3.60304-1_all.deb \
+  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb \
     -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
-  sudo apt-get install "$DEPS_INSTALL_PATH/amdgpu-install.deb"
-  sudo apt-get update
-  sudo apt-get install rocm
-  sudo amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
+  $RUN_WITH_SUDO apt install -y "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  $RUN_WITH_SUDO apt update
+  $RUN_WITH_SUDO apt install -y python3-setuptools python3-wheel
+  $RUN_WITH_SUDO usermod -a -G render,video $LOGNAME
+  $RUN_WITH_SUDO apt install -y rocm
+  # $RUN_WITH_SUDO amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
 
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_info2 "🚀 ROCM :: AMD ROCm support installed!"
 }
 
@@ -76,15 +79,17 @@ install_john() {
   )
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  # Build John the Ripper
+  print_notes "   💡 Cloning john..."
   rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
   git clone -q https://github.com/openwall/john.git -b bleeding-jumbo "$DEPS_INSTALL_PATH/john"
   pushd "$DEPS_INSTALL_PATH/john/src" 1>/dev/null
 
   # Configure with local ROCm OpenCL
+  local ROCM_FOLDER="/opt/rocm"
+  print_notes "   💡 Build and install john..."
   ./configure \
-    LDFLAGS="-L/opt/rocm/lib" \
-    CPPFLAGS="-I/opt/rocm/include" \
+    LDFLAGS="-L$ROCM_FOLDER/lib" \
+    CPPFLAGS="-I$ROCM_FOLDER/include" \
     --prefix="$USER_LOCAL_PREFIX" \
     --exec_prefix="$USER_LOCAL_PREFIX_BIN" \
     --enable-opencl \
@@ -126,10 +131,12 @@ install_hashcat() {
   local packages_build=(git build-essential)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
+  print_notes "   💡 Cloning hashcat..."
   rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
   git clone -q https://github.com/hashcat/hashcat.git "$DEPS_INSTALL_PATH/hashcat"
   pushd "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
 
+  print_notes "   💡 Build and install hashcat..."
   make -s clean 1>/dev/null
   make -sj"$(nproc)" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
@@ -149,11 +156,10 @@ install_tools() {
 
   print_notes "   ⬇️ Install 'jq'"
   $RUN_WITH_SUDO apt install jq
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   print_notes "   ⬇️ Install 'monolith'"
-  $RUN_WITH_SUDO apt install monolith # saving complete web pages as a single HTML file
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  cargo install monolith # saving complete web pages as a single HTML file
 
   go_github_commit_date_and_download() {
     IFS='/' read -r owner repo addition <<<"$1"
@@ -169,7 +175,7 @@ install_tools() {
   go_github_commit_date_and_download 'projectdiscovery/katana/cmd/katana'
   go_github_commit_date_and_download 'hahwul/dalfox/v2'
   go_github_commit_date_and_download 'OJ/gobuster/v3'
-  go_github_commit_date_and_download 'ffuf/ffuf/vm'
+  go_github_commit_date_and_download 'ffuf/ffuf/v2'
   go_github_commit_date_and_download 'dwisiswant0/unew'
   go_github_commit_date_and_download 'BishopFox/sj'
   go_github_commit_date_and_download 'tomnomnom/waybackurls'
@@ -186,12 +192,12 @@ install_tools() {
 load_lists() {
   print_info2 "\n🚀 TOOLS :: Clone lists..."
 
-  print_notes "   ⬇️ Clone 'SecLists'"
+  print_notes "   ⬇️ Cloning 'SecLists'..."
   git clone -q https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
-  print_notes "   ⬇️ Clone 'PayloadsAllTheThings'"
+  print_notes "   ⬇️ Cloning 'PayloadsAllTheThings'..."
   git clone -q https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
 
-  print_info2 "🚀 TOOLS :: List cloning done!"
+  print_info2 "🚀 TOOLS :: Lists cloning done!"
 }
 
 load_nmap_scripts() {
@@ -203,7 +209,7 @@ load_nmap_scripts() {
   $RUN_WITH_SUDO git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
 
   print_notes "   💡 Update nmap scripts"
-  nmap --script-updatedb 1>/dev/null
+  $RUN_WITH_SUDO nmap --script-updatedb 1>/dev/null
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_info2 "🚀 NMAP :: Scripts cloning done!"

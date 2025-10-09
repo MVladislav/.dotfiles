@@ -35,15 +35,18 @@ if [[ -z $selected ]]; then
   exit 0
 fi
 
-USED_TERMINAL=$(pstree -s $$ | awk -F '---' '{print $3}' | head -n1)
-if [[ "${USED_TERMINAL:-}" == "ghostty" ]]; then
-  echo "Running in Ghostty"
-elif [[ "${USED_TERMINAL:-}" == "gnome-terminal" ]]; then
-  echo "Running in GNOME Terminal"
-elif [[ "${USED_TERMINAL:-}" == "ptyxis" ]]; then
-  echo "Running in Ptyxis"
-else
-  echo "Running in: USED_TERMINAL='${USED_TERMINAL:-}' :: TERM_PROGRAM='${TERM_PROGRAM:-}' :: TERM='$TERM'"
+if command -v pstree >/dev/null 2>&1; then
+  USED_TERMINAL=$(pstree -s $$ | head -n1 | awk -F '---' '{print $3}')
+  USED_SHELL=$(pstree -s $$ | head -n1 | awk -F '---' '{print $NF}' | sed 's/[-+|`].*//')
+  if [[ "${USED_TERMINAL:-}" == "ghostty" ]]; then
+    echo "Running in Ghostty [$USED_SHELL]"
+  elif [[ "${USED_TERMINAL:-}" == "gnome-terminal" ]]; then
+    echo "Running in GNOME Terminal [$USED_SHELL]"
+  elif [[ "${USED_TERMINAL:-}" == "ptyxis" ]]; then
+    echo "Running in Ptyxis [$USED_SHELL]"
+  else
+    echo "Running in: USED_TERMINAL='${USED_TERMINAL:-}' :: TERM_PROGRAM='${TERM_PROGRAM:-}' :: TERM='$TERM'"
+  fi
 fi
 
 echo "$selected"
