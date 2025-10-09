@@ -28,26 +28,32 @@ setopt PUSHD_IGNORE_DUPS          # Prevents duplicate entries in the directory 
 setopt PUSHD_SILENT               # Suppresses the automatic printing of the directory stack after pushd or popd.
 setopt AUTO_CD                    # Move to directories without cd
 
+# ------------------------------------------------------------------------------
+
+zsh_custom="$HOME/.zsh/custom"
+zsh_custom_t="$zsh_custom/themes"
+zsh_custom_p="$zsh_custom/plugins"
+
 # Load the Spaceship theme
-theme_spaceship="$HOME/.zsh/custom/themes/spaceship.zsh-theme"
+theme_spaceship="$zsh_custom_t/spaceship.zsh-theme"
 [[ -e "$theme_spaceship" ]] && source "$theme_spaceship"
 # Optional: Customize Spaceship theme (optional)
 # https://spaceship-prompt.sh/config/prompt/#Prompt-order
 
 # Syntax highlighting plugin
-plugins_zsh_syntax_highlighting="$HOME/.zsh/custom/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+plugins_zsh_syntax_highlighting="$zsh_custom_p/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 [[ -e "$plugins_zsh_syntax_highlighting" ]] && source "$plugins_zsh_syntax_highlighting"
 # Autosuggestions plugin
-plugins_zsh_autosuggestions="$HOME/.zsh/custom/plugins/zsh-autosuggestions/zsh-autosuggestions.zsh"
+plugins_zsh_autosuggestions="$zsh_custom_p/zsh-autosuggestions/zsh-autosuggestions.zsh"
 [[ -e "$plugins_zsh_autosuggestions" ]] && source "$plugins_zsh_autosuggestions"
 # History search plugin
-plugins_zsh_history_substring_search="$HOME/.zsh/custom/plugins/zsh-history-substring-search/zsh-history-substring-search.zsh"
+plugins_zsh_history_substring_search="$zsh_custom_p/zsh-history-substring-search/zsh-history-substring-search.zsh"
 [[ -e "$plugins_zsh_history_substring_search" ]] && source "$plugins_zsh_history_substring_search"
 
 # Enable fzf key bindings and fuzzy completion
-if command -v fzf &>/dev/null; then
-  source <(fzf --zsh)
-fi
+command -v fzf &>/dev/null && source <(fzf --zsh)
+
+# ------------------------------------------------------------------------------
 
 # Set LS_COLORS for directory coloring
 # https://geoff.greer.fm/lscolors/
@@ -57,33 +63,60 @@ export LS_COLORS='no=00:fi=00:di=01;34:ln=00;36:pi=40;33:so=01;35:do=01;35:bd=40
 # Completion system setup
 autoload -Uz compinit && compinit
 
-# Modify completion behavior with menu select and colors
-zstyle ':completion:*' format '%B%F{yellow}%p%f%b'                                # Highlight matched prefix in yellow
-zstyle ':completion:*' menu select                                                # Set number of items in the menu
-zstyle ':completion:*' accept-exact true                                          # Accept exact matches instead of directory change
-[[ -z "$LS_COLORS" ]] || zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"  # Use LS_COLORS for completion coloring
-zstyle ':completion:*' use-cache on
+# Modify completion behavior with menu select and colors (`zstyle -L`)
+zstyle ':completion:*' format '%B%F{yellow}%p%f%b'                                        # Highlight matched prefix in yellow
+zstyle ':completion:*' menu select                                                        # Set number of items in the menu
+# zstyle ':completion:*' accept-exact true                                                # Accept exact matches instead of directory change
+zstyle ':completion:*' special-dirs true                                                  # Complete . and .. special directories
+[[ -z "$LS_COLORS" ]] || zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"          # Use LS_COLORS for completion coloring
+zstyle ':completion:*:cd:*' tag-order local-directories directory-stack path-directories  # disable named-directories autocompletion
+zstyle '*' single-ignored show                                                            # ...
+zstyle ':completion:*' use-cache true
 zstyle ':completion:*' cache-path "$HOME/.zsh/cache"
+zstyle ':completion:*' matcher-list 'm:{[:lower:][:upper:]}={[:upper:][:lower:]}' 'r:|=*' 'l:|=* r:|=*'
+zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#) ([0-9a-z-]#)*=01;34=0=01'
+
+zstyle ':completion:*' use-compctl false
+zstyle ':completion:*:(ssh|scp|scp-r|sftp|rsh|rsync):*' hosts off
+compdef scp-r=scp
+compdef _scp scp-r
 
 # Optional: Install and enable zsh-completions plugin for enhanced completion features
 # git clone https://github.com/zsh-users/zsh-completions.git $ZSH_CUSTOM/plugins/zsh-completions
 # plugins=(zsh-completions)
 
+# ------------------------------------------------------------------------------
+
 # Key bindings for history search
-if [[ -n "$terminfo[kcuu1]" ]]; then
+if [[ -n "$terminfo[kcuu1]" ]] && whence history-substring-search-up &>/dev/null; then
   bindkey -M emacs "$terminfo[kcuu1]" history-substring-search-up # history-search-backward
   bindkey -M viins "$terminfo[kcuu1]" history-substring-search-up # history-search-backward
 fi
-if [[ -n "$terminfo[kcud1]" ]]; then
+if [[ -n "$terminfo[kcud1]" ]] && whence history-substring-search-down &>/dev/null; then
   bindkey -M emacs "$terminfo[kcud1]" history-substring-search-down # history-search-forward
   bindkey -M viins "$terminfo[kcud1]" history-substring-search-down # history-search-forward
 fi
 HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=1
 
-# Bind Alt+Backspace (Esc + Backspace) to backward-kill-shell-word
+# ------------------------------------------------------------------------------
+
+# Set up Alt+Backspace to delete words like in Bash
 autoload -U select-word-style
 select-word-style bash
+
+# Try to load the backward-kill-word-match function
 autoload -U backward-kill-word-match
-zle -N backward-kill-word backward-kill-word-match
-zstyle ':zle:backward-kill-word' word-style standard
-bindkey '^[^?' backward-kill-word
+
+# Only define the widget and bind it if it exists
+if whence backward-kill-word-match &>/dev/null; then
+  zle -N backward-kill-word backward-kill-word-match
+  zstyle ':zle:backward-kill-word' word-style standard
+  bindkey '^[^?' backward-kill-word # (Alt + Backspace)
+fi
+
+# ------------------------------------------------------------------------------
+
+bindkey '^[[1;5D' backward-word   # move by word (Ctrl + Left)
+bindkey '^[[1;5C' forward-word    # move by word (Ctrl + Right)
+bindkey '^[[1;3D' backward-word   # move by word (Alt + Left)
+bindkey '^[[1;3C' forward-word    # move by word (Alt + Right)

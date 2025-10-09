@@ -112,6 +112,11 @@ vm_xterm_cp_local() {
   sudo install -D "$term_path" "/etc/terminfo/$term_dir/$TERM"
 }
 
+### General ###
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
 ### LS as EZA ###
 if command -v eza &>/dev/null; then
   alias ls='eza --color=always --git'
