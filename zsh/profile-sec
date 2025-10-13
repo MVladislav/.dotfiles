@@ -214,12 +214,15 @@ vm_sec_ip_country() {
     return 1
   fi
 
-  local service="http://ip-api.com/json/$1?fields=5254673"
-  local query='[.query, .continent, .country, .city, .isp, .org, .as, .asname] | join(" :: ")'
+  local service1="http://ip-api.com/json/$1?fields=5254673"
+  local query1='[.query, .continent, .country, .city, .isp, .org, .as, .asname] | join(" :: ")'
   #local service="https://ipapi.co/$1/json"
   #local query='[.country, .city, .asn, .org] | join(" :: ")'
+  local service2="https://ipinfo.io/$1/json"
+  local query2='[.hostname, .country, .region, .city, .asn, .org, .postal] | join(" :: ")'
 
-  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service" | jq "$query"
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service1" | jq "$query1"
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service2" | jq "$query2"
 }
 
 vm_sec_ip_country_batch() {

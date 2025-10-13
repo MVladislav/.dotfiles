@@ -138,8 +138,12 @@ alias catt-b='batcat -P --color always'
 alias rsync-d='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
 alias cp-r='rsync-d -u'
 alias cp-ra='rsync-d'
-alias scp-r='rsync-d -u -e "ssh -T -o Compression=no -x"'
-alias scp-ra='rsync-d -e "ssh -T -o Compression=no -x"'
+scp-r() {
+  rsync-d -u -e "ssh -T -o Compression=no -x" "$@"
+}
+scp-ra() {
+  rsync-d -e "ssh -T -o Compression=no -x" "$@"
+}
 
 ### GREP ###
 alias grep='grep --color'
@@ -427,6 +431,7 @@ vm_quick_android_emulator() {
 }
 
 ### TOOLS ###
+alias vm_curl_test='curl -s -o /dev/null -w "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n"'
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
 alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
 alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
@@ -475,12 +480,11 @@ vm_speed_pub() {
 ## ii: display useful host related information
 ##
 ######################################################################
-alias vm_my_ip_4='curl -4 -s ifconfig.io/ip'
-alias vm_my_ip_6='curl -6 -s ifconfig.io/ip'
-alias vm_my_host='curl -s ifconfig.io/host'
-alias vm_my_country='curl -s ifconfig.io/country_code'
-alias vm_my_ua='curl -s ifconfig.io/ua'
-alias vm_my_all='curl -s ifconfig.io/all.json | jq'
+alias vm_my_ip_4='curl -4 -s https://ipinfo.io/ip' # 'curl -4 -s ifconfig.io/ip'
+alias vm_my_ip_6='curl -6 -s https://v6.ipinfo.io/ip' # 'curl -6 -s ifconfig.io/ip'
+alias vm_my_country='curl -s https://ipinfo.io/country' #'curl -s ifconfig.io/country_code'
+alias vm_my_org='curl -s https://ipinfo.io/org'
+alias vm_my_all='curl -s https://ipinfo.io/json | jq' # 'curl -s ifconfig.io/all.json | jq'
 vm_my_bios() {
   for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family system-serial-number baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
     printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
@@ -598,11 +602,10 @@ vm_ii() {
   echo -e "  - stepping              : $(awk -F: '/stepping/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
 
   echo -e "\\n${BRED}Public facing IP Address:$NC"
-  echo -e "  $(vm_my_ip_4 2>/dev/null || echo 'Unavailable')"
-  echo -e "  $(vm_my_ip_6 2>/dev/null || echo 'Unavailable')"
-  echo -e "  $(vm_my_host 2>/dev/null || echo 'Unavailable')"
-  echo -e "  $(vm_my_country 2>/dev/null || echo 'Unavailable')"
-  echo -e "  $(vm_my_ua 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_ip_4 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_ip_6 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_country 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_org 2>/dev/null || echo 'Unavailable')"
   echo
 }
 
