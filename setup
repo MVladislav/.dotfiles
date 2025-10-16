@@ -45,7 +45,6 @@ RUN_INSTALL_BTOP_INTEL=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
-INSTALL_SOURCE_FROM=release # source | release
 VERSION_NVIM=v0.11.4
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9

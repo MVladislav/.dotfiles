@@ -28,8 +28,19 @@ RUN_INSTALL_ROCM=0
 RUN_INSTALL_JOHN=0
 RUN_INSTALL_HASHCAT=0
 RUN_INSTALL_TOOLS=0
+RUN_INSTALL_TIO=0
+
 RUN_LOAD_LISTS=0
 RUN_LOAD_NMAP_SCRIPTS=0
+
+VERSION_HASHCAT_G="https://github.com/hashcat/hashcat.git"
+VERSION_HASHCAT="v7.1.2"
+VERSION_TIO_G=https://github.com/tio/tio.git
+VERSION_TIO=v3.9
+VERSION_JTR_G="https://github.com/openwall/john.git"
+VERSION_JTR="bleeding-jumbo"
+
+JTR_ROCM_FOLDER="/opt/rocm"
 
 # ******************************************************************************
 
@@ -40,6 +51,8 @@ main() {
   [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
   [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
   [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
+  [[ $RUN_INSTALL_TIO -eq 1 ]] && install_tio
+
   [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
   [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
 
@@ -62,93 +75,6 @@ install_rocm() {
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_info2 "🚀 ROCM :: AMD ROCm support installed!"
-}
-
-install_john() {
-  print_info2 "\n🚀 JTR :: Installing John the Ripper with AMD ROCm support..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
-
-  # Define packages needed for john, including ROCm build requirements and install
-  local packages_tools=()
-  local packages_build=(
-    build-essential git pkg-config libssl-dev
-    libnss3-dev libkrb5-dev libgmp-dev libz-dev libbz2-dev
-    # rocm-dev hip-dev
-    ## libpcap-dev ocl-icd-opencl-dev
-    ## opencl-headers cmake g++-multilib libnuma-dev libpci-dev rocm-llvm-dev
-  )
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  print_notes "   💡 Cloning john..."
-  rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
-  git clone -q https://github.com/openwall/john.git -b bleeding-jumbo "$DEPS_INSTALL_PATH/john"
-  pushd "$DEPS_INSTALL_PATH/john/src" 1>/dev/null
-
-  # Configure with local ROCm OpenCL
-  local ROCM_FOLDER="/opt/rocm"
-  print_notes "   💡 Build and install john..."
-  ./configure \
-    LDFLAGS="-L$ROCM_FOLDER/lib" \
-    CPPFLAGS="-I$ROCM_FOLDER/include" \
-    --prefix="$USER_LOCAL_PREFIX" \
-    --exec_prefix="$USER_LOCAL_PREFIX_BIN" \
-    --enable-opencl \
-    1>/dev/null
-
-  make -s clean 1>/dev/null
-  make -sj"$(nproc)" 1>/dev/null
-  make -sj"$(nproc)" strip 1>/dev/null
-
-  # Copy the "run" directory (which contains additional tools) to a persistent location.
-  if [ -d "$DEPS_INSTALL_PATH/john/run" ]; then
-    rm -rf ../run/*.dSYM
-    mkdir -p "$USER_LOCAL_PREFIX_BIN"
-    mv ../run/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} "$USER_LOCAL_PREFIX_BIN"
-    mkdir -p "$USER_LOCAL_PREFIX/share/john"
-    cp -a ../run/* "$USER_LOCAL_PREFIX/share/john"
-    mv "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX_BIN"
-  fi
-
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/john" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/john" -v 2>/dev/null | head -n1)'"
-
-  # Remove build dependencies if any were installed by this script
-  install_dependencies_needs_rm
-
-  # - https://rocm.docs.amd.com/projects/install-on-linux/en/latest/install/quick-start.html
-  # - https://dfir.science/2014/07/how-to-cracking-zip-and-rar-protected.html
-  print_info2 "🚀 JTR :: John the Ripper with AMD ROCm support installed!"
-  print_notes "   💡 Verify OpenCL devices with: john --list=opencl-devices"
-  print_notes "   💡 Use '--device=X' to select AMD GPU (check device numbers)"
-}
-
-install_hashcat() {
-  print_info2 "\n🚀 HC :: Installing HashCat..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
-
-  local packages_tools=()
-  local packages_build=(git build-essential)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  print_notes "   💡 Cloning hashcat..."
-  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
-  git clone -q https://github.com/hashcat/hashcat.git "$DEPS_INSTALL_PATH/hashcat"
-  pushd "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
-
-  print_notes "   💡 Build and install hashcat..."
-  make -s clean 1>/dev/null
-  make -sj"$(nproc)" 1>/dev/null
-  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
-
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/hashcat" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hashcat" --version 2>/dev/null | head -n1)'"
-
-  # Remove build dependencies if any were installed by this script
-  install_dependencies_needs_rm
-
-  print_info2 "🚀 HC :: HashCat installed!"
 }
 
 install_tools() {
@@ -189,6 +115,130 @@ install_tools() {
 
 # ******************************************************************************
 
+# SERVICE :: install JOHN ---------------------------------------------------
+install_john() {
+  local s_name_l="john"
+  local s_name_u="JTR"
+  print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
+  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=()
+  local packages_build=(git build-essential pkg-config libssl-dev libnss3-dev libkrb5-dev libgmp-dev libbz2-dev libopencl-clang-dev opencl-headers ocl-icd-opencl-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   💡 Cloning ${s_name_l}..."
+  git clone -q "$VERSION_JTR_G" "$DEPS_INSTALL_PATH/$s_name_l"
+  pushd "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_JTR"
+
+  print_notes "   💡 Build and install ${s_name_l}..."
+  pushd "$DEPS_INSTALL_PATH/$s_name_l/src" 1>/dev/null
+
+  ./configure \
+    LDFLAGS="-L$JTR_ROCM_FOLDER/lib" \
+    CPPFLAGS="-I$JTR_ROCM_FOLDER/include" \
+    --prefix="$USER_LOCAL_PREFIX" \
+    --exec_prefix="$USER_LOCAL_PREFIX_BIN" \
+    --enable-opencl \
+    1>/dev/null
+  make -s clean 1>/dev/null
+  make -sj"$(nproc)" 1>/dev/null
+  make -sj"$(nproc)" strip 1>/dev/null
+
+  # Copy the "run" directory (which contains additional tools) to a persistent location.
+  if [ -d "$DEPS_INSTALL_PATH/john/run" ]; then
+    rm -rf "$DEPS_INSTALL_PATH/john/run"/*.dSYM >/dev/null || true
+    mkdir -p "$USER_LOCAL_PREFIX_BIN"
+    mv -f "$DEPS_INSTALL_PATH/john/run"/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} \
+    "$USER_LOCAL_PREFIX_BIN" >/dev/null || true
+    mkdir -p "$USER_LOCAL_PREFIX/share/john"
+    cp -a "$DEPS_INSTALL_PATH/john/run"/* "$USER_LOCAL_PREFIX/share/john" >/dev/null || true
+    mv -f "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX_BIN" >/dev/null || true
+  fi
+
+  popd 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 $s_name_u :: $s_name_l installed!"
+  print_notes "   💡 Verify OpenCL devices with: john --list=opencl-devices"
+  print_notes "   💡 Use '--device=X' to select AMD GPU (check device numbers)"
+}
+
+# SERVICE :: install HASHCAT ---------------------------------------------------
+install_hashcat() {
+  local s_name_l="hashcat"
+  local s_name_u="HASHCAT"
+  print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=(clinfo pocl-opencl-icd ocl-icd-libopencl1)
+  local packages_build=(git build-essential pkg-config opencl-headers ocl-icd-opencl-dev zlib1g-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   💡 Cloning ${s_name_l}..."
+  git clone -q "$VERSION_HASHCAT_G" "$DEPS_INSTALL_PATH/$s_name_l"
+  pushd "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_HASHCAT"
+
+  print_notes "   💡 Build and install ${s_name_l}..."
+  make -s clean 1>/dev/null
+  make -sj"$(nproc)" SHARED=1 1>/dev/null
+  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  if ! clinfo | grep -q 'Device'; then
+    print_warn "   ⚠️ No OpenCL devices found! Hashcat may not function correctly."
+  fi
+
+  print_info2 "🚀 $s_name_u :: $s_name_l installed!"
+}
+
+# SERVICE :: install TIO ---------------------------------------------------
+install_tio() {
+  print_info2 "\n🚀 TIO :: install tio ..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tio" --version 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/tio" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=()
+  local packages_build=(git meson cmake ninja-build pkg-config libglib2.0-dev liblua5.2-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   💡 Cloning tio..."
+  git clone -q "$VERSION_TIO_G" "$DEPS_INSTALL_PATH/tio"
+  pushd "$DEPS_INSTALL_PATH/tio" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_TIO"
+
+  print_notes "   💡 Build and install tio..."
+  meson setup build --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+  meson compile -C build 1>/dev/null
+  meson install -C build 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/tio" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tio" --version 2>/dev/null | head -n1)'"
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 TIO :: tio installed!"
+}
+
+# ******************************************************************************
+
 load_lists() {
   print_info2 "\n🚀 TOOLS :: Clone lists..."
 
@@ -225,6 +275,7 @@ usage() {
   print_info "     -irocm,     --install-rocm              Install RCOM"
   print_info "     -ijohn,     --install-john-the-ripper   Install John the Ripper"
   print_info "     -ihashcat,  --install-hashcat           Install HastCat"
+  print_info "     -itio,      --install-tio               Install tio"
   print_info "     -itools,    --install-additional-tools  Install additional tools"
   print_info "     -llists,    --load-lists                Load/Clone lists"
   print_info "     -lnmap,     --load-nmap-scripts         Load/Clone more NMAP scripts"
@@ -244,12 +295,13 @@ parse_args() {
       echo "ROCM installer is work in progress"
       ;;
     -ijohn | --install-john-the-ripper)
-      # RUN_INSTALL_JOHN=1
-      echo "John installer is work in progress"
+      RUN_INSTALL_JOHN=1
       ;;
     -ihashcat | --install-hashcat)
-      # RUN_INSTALL_HASHCAT=1
-      echo "Hashcat installer is work in progress"
+      RUN_INSTALL_HASHCAT=1
+      ;;
+    -itio | --install-tio)
+      RUN_INSTALL_TIO=1
       ;;
     -itools | --install-additional-tools)
       RUN_INSTALL_TOOLS=1
@@ -259,6 +311,12 @@ parse_args() {
       ;;
     -lnmap | --load-nmap-scripts)
       RUN_LOAD_NMAP_SCRIPTS=1
+      ;;
+    -s)
+      INSTALL_SOURCE_FROM=source
+      ;;
+    -d | --debug)
+      set -x # Enable debug mode
       ;;
     *)
       print_error "❌ Unknown option: $key"

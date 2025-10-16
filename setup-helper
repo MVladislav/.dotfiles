@@ -34,6 +34,8 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 DEPS_PACKAGES_TO_REMOVE=()
 
+INSTALL_SOURCE_FROM=release # source | release
+
 # ******************************************************************************
 
 print_info() { echo -e "${BPURPLE}$1${NC}"; }
@@ -102,7 +104,7 @@ install_dependencies_needs_rm() {
     return 0
   fi
 
-  print_notes "   📥 Removing build dependencies..."
+  print_notes "   📥 Removing build dependencies: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]..."
   $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
     print_error "❌ Failed to remove packages"
     return 1
