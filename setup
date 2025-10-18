@@ -52,7 +52,7 @@ VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
 VERSION_ZIG_V=0.14.1
 # VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
 VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
-VERSION_GHOSTTY=v1.2.0
+VERSION_GHOSTTY=v1.2.2
 VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
@@ -869,7 +869,7 @@ parse_args() {
       RUN_SETUP_GITCONFIG=0
 
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
-      check_for_newer_tag "$VERSION_ZSH_G" "$VERSION_ZSH"
+      check_for_newer_tag "$VERSION_ZSH_G" "$VERSION_ZSH" "-test"
       check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
       check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
       check_for_newer_tag "$VERSION_BTOP_G" "$VERSION_BTOP"

@@ -229,11 +229,20 @@ check_for_newer_tag() {
     return 0
   fi
 
-  # Extract tag names, optionally filtering by TAG_FILTER
+  # Extract tag names
   local TAGS
   TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
+
+  # Handle tag filtering
   if [[ -n $TAG_FILTER ]]; then
-    TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
+    if [[ $TAG_FILTER == -* ]]; then
+      # Exclude tags matching the pattern
+      local EXCLUDE_FILTER="${TAG_FILTER:1}"
+      TAGS=$(echo "$TAGS" | grep -Ev -- "$EXCLUDE_FILTER" || true)
+    else
+      # Include only matching tags
+      TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
+    fi
   fi
 
   # Determine the latest tag by version-sort
@@ -244,9 +253,14 @@ check_for_newer_tag() {
   if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
     LATEST_TAG=$(curl -sL "https://api.github.com/repos/$REPO_NAME/releases/latest" |
       jq -r '.tag_name')
-    # If a filter was provided, ensure the release tag matches it
-    if [[ -n $TAG_FILTER && ! $LATEST_TAG =~ $TAG_FILTER ]]; then
+    # Ensure the release tag matches the filter (if it's an inclusion filter)
+    if [[ -n $TAG_FILTER && $TAG_FILTER != -* && ! $LATEST_TAG =~ $TAG_FILTER ]]; then
       print_info2 "⚠️ No releases matching filter '$TAG_FILTER' for $REPO_NAME."
+      return 0
+    fi
+    # If exclusion filter, skip if it matches the exclusion
+    if [[ -n $TAG_FILTER && $TAG_FILTER == -* && $LATEST_TAG =~ ${TAG_FILTER:1} ]]; then
+      print_info2 "⚠️ Latest release '$LATEST_TAG' excluded by filter '${TAG_FILTER}'."
       return 0
     fi
   fi
