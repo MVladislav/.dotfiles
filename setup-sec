@@ -23,11 +23,12 @@ source "./setup-helper"
 # CONFS :: variables -----------------------------------------------------------
 VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
 VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
+VM_SEC_NMAP_SCRIPTS='/usr/share/nmap/scripts'
 
 RUN_INSTALL_ROCM=0
+RUN_INSTALL_TOOLS=0
 RUN_INSTALL_JOHN=0
 RUN_INSTALL_HASHCAT=0
-RUN_INSTALL_TOOLS=0
 RUN_INSTALL_TIO=0
 
 RUN_LOAD_LISTS=0
@@ -48,9 +49,9 @@ main() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
+  [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
   [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
   [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
-  [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
   [[ $RUN_INSTALL_TIO -eq 1 ]] && install_tio
 
   [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
@@ -61,6 +62,7 @@ main() {
 
 # ******************************************************************************
 
+# SERVICE :: install ROCM ------------------------------------------------------
 install_rocm() {
   print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
 
@@ -77,6 +79,7 @@ install_rocm() {
   print_info2 "🚀 ROCM :: AMD ROCm support installed!"
 }
 
+# SERVICE :: install TOOLS -----------------------------------------------------
 install_tools() {
   print_info2 "\n🚀 TOOLS :: Installing additional tools..."
 
@@ -113,9 +116,7 @@ install_tools() {
   print_info2 "     - https://addons.mozilla.org/en-US/firefox/addon/hackbar/"
 }
 
-# ******************************************************************************
-
-# SERVICE :: install JOHN ---------------------------------------------------
+# SERVICE :: install JOHN ------------------------------------------------------
 install_john() {
   local s_name_l="john"
   local s_name_u="JTR"
@@ -207,7 +208,7 @@ install_hashcat() {
   print_info2 "🚀 $s_name_u :: $s_name_l installed!"
 }
 
-# SERVICE :: install TIO ---------------------------------------------------
+# SERVICE :: install TIO -------------------------------------------------------
 install_tio() {
   print_info2 "\n🚀 TIO :: install tio ..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tio" --version 2>/dev/null | head -n1)'"
@@ -239,6 +240,7 @@ install_tio() {
 
 # ******************************************************************************
 
+# SOURCE :: load lists ---------------------------------------------------------
 load_lists() {
   print_info2 "\n🚀 TOOLS :: Clone lists..."
 
@@ -250,13 +252,14 @@ load_lists() {
   print_info2 "🚀 TOOLS :: Lists cloning done!"
 }
 
+# SOURCE :: load nmap scripts --------------------------------------------------
 load_nmap_scripts() {
   print_info2 "\n🚀 NMAP :: Clone more nmap scripts..."
 
-  print_notes "   ⬇️ Clone 'vulnersCom/nmap-vulners'"
-  $RUN_WITH_SUDO git clone https://github.com/vulnersCom/nmap-vulners /usr/share/nmap/scripts/nmap-vulners
-  print_notes "   ⬇️ Clone 'scipag/vulscan'"
-  $RUN_WITH_SUDO git clone https://github.com/scipag/vulscan /usr/share/nmap/scripts/vulscan
+  print_notes "   ⬇️ Cloning 'vulnersCom/nmap-vulners'..."
+  $RUN_WITH_SUDO git clone -q https://github.com/vulnersCom/nmap-vulners "$VM_SEC_NMAP_SCRIPTS/nmap-vulners"
+  print_notes "   ⬇️ Cloning 'scipag/vulscan'..."
+  $RUN_WITH_SUDO git clone -q https://github.com/scipag/vulscan "$VM_SEC_NMAP_SCRIPTS/vulscan"
 
   print_notes "   💡 Update nmap scripts"
   $RUN_WITH_SUDO nmap --script-updatedb 1>/dev/null

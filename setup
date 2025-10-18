@@ -131,30 +131,32 @@ initialize_base() {
 
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
-  print_info2 "\n📥 DEPS :: installing some base services :: [curl git jq rsync fzf xclip]..."
+  print_info2 "\n🚀 DEPS :: installing additional base services"
+  print_notes "   📥 installing [curl git jq rsync fzf xclip]..."
   $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf xclip 1>/dev/null
-  print_info2 "\n📥 DEPS :: installing some base services :: [eza bat ripgrep fd-find]..."
+  print_notes "   📥 installing [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
-  print_info2 "📥 DEPS :: disable rsync systemd service..."
+  print_notes "   ⚙️ disable rsync systemd service..."
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
   $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
 
-  # echo "DEPS :: install npm"
+  # print_notes "   📥 install npm..."
   # $RUN_WITH_SUDO snap install node --classic
 
-  # echo "DEPS :: install rust"
+  # print_notes "   📥 install rust..."
   # $RUN_WITH_SUDO snap install rustup --classic
   # rustup default stable
 
-  # echo "DEPS :: install lazygit with go"
+  # print_notes "   📥 install lazygit with go..."
   # $RUN_WITH_SUDO snap install go --classic
   # go install github.com/jesseduffield/lazygit@latest
 
-  # echo "DEPS :: install shellcheck"
+  # print_notes "   📥 install shellcheck..."
   # $RUN_WITH_SUDO snap install shellcheck
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_info2 "🚀 DEPS :: base services installed!"
 }
 
 # SERVICE :: install tmux ------------------------------------------------------
@@ -207,10 +209,10 @@ install_dependencies_nvim() {
   print_notes "   💡 Cloning nvim..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-    cd "$DEPS_INSTALL_PATH/nvim"
+    cd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-    cd "$DEPS_INSTALL_PATH/nvim"
+    cd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
     git checkout -q "$VERSION_NVIM"
     # git switch -q release-0.10
   fi
@@ -246,8 +248,8 @@ install_dependencies_zsh() {
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     print_notes "   💡 Cloning zsh..."
     git clone -q "$VERSION_ZSH_G" "$DEPS_INSTALL_PATH/zsh"
-    git checkout -q "${VERSION_ZSH}"
     cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+    git checkout -q "${VERSION_ZSH}"
 
     print_notes "   💡 Build and install zsh..."
     ./Util/preconfig 1>/dev/null
@@ -558,20 +560,17 @@ install_code_ext() {
   if command -v code &>/dev/null; then
     print_info2 "\n🚀 CODE :: installing code extensions"
 
-    # "adpyke.codesnap" "aykutsarac.jsoncrack-vscode" "benjaminkott.typo3-typoscript"
-    # "chrischinchilla.vscode-pandoc" "davidanson.vscode-markdownlint" "febley.typo3-fluid-snippets"
-    # "gruntfuggly.todo-tree" "james-yu.latex-workshop" "mechatroner.rainbow-csv"
-    # "ms-python.vscode-pylance" "ms-vscode.live-server" "ralffreit.typo3snippets"
-    # "rangav.vscode-thunder-client" "redhat.java" "ryanluker.vscode-coverage-gutters"
-    # "simonsiefke.svg-preview" "sumneko.lua" "wholroyd.jinja"
+    # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
+    # "github.copilot" "github.copilot-chat"
+    # "ms-python.debugpy" "ms-python.mypy-type-checker" "ms-python.vscode-pylance" "ms-python.vscode-python-envs"
     VS_CODE_EXTS=(
-      "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf" "bibhasdn.unique-lines"
-      "bierner.markdown-preview-github-styles" "charliermarsh.ruff" "donjayamanne.githistory" "eamodio.gitlens"
-      "esbenp.prettier-vscode" "foxundermoon.shell-format" "ms-python.python" "mushan.vscode-paste-image"
-      "pkief.material-icon-theme" "redhat.ansible" "redhat.vscode-xml" "redhat.vscode-yaml"
-      "samuelcolvin.jinjahtml" "silofy.hackthebox" "streetsidesoftware.code-spell-checker"
-      "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml" "timonwong.shellcheck"
-      "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
+      "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf"
+      "astral-sh.ty" "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
+      "donjayamanne.githistory" "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
+      "ms-python.python"  "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
+      "redhat.vscode-xml" "redhat.vscode-yaml" "samuelcolvin.jinjahtml" "silofy.hackthebox"
+      "streetsidesoftware.code-spell-checker" "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml"
+      "timonwong.shellcheck" "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
     )
 
     for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
