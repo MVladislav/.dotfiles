@@ -3,15 +3,18 @@ PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
 set -euo pipefail
 IFS=$'\n\t'
 
+trap 'log "ERROR" "Unexpected error on line $LINENO (command: $BASH_COMMAND). Check WireGuard and UFW status."' ERR
+
 # Default variables
 WG_CONF_PATH="./wg0.conf"               # Path to WireGuard config file
 WG_INTERFACE="wg0"                      # WireGuard interface name
 PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Private network subnet
 SERVICE_PORT_CAIDO="9999"               # Port for Caido service
+WG_MAIN_PATH=/etc/wireguard
 
 # Get default interface and gateway IP
-DEFAULT_IFACE=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $5}' | head -n1)
-GATEWAY_IP=$(ip route | grep default | grep -E '(enp|eth)' | awk '{print $3}' | head -n1)
+DEFAULT_IFACE=$(ip route show default | grep -iE '(enp|eth|ens)' | awk '{print $5}' | head -n1)
+GATEWAY_IP=$(ip route show default | grep -iE '(enp|eth|ens)' | awk '{print $3}' | head -n1)
 
 SETUP_SYSTEMD=0
 ALLOW_ACCESS_PRIVATE=0
@@ -59,8 +62,8 @@ check_requirements() {
 
 # Check if WireGuard config file exists
 check_config_file_exists() {
-  if ! sudo test -f "/etc/wireguard/$WG_INTERFACE.conf" && [[ ! -f $WG_CONF_PATH ]]; then
-    exit_with_error "WireGuard config file not found in: $WG_CONF_PATH or /etc/wireguard/$WG_INTERFACE.conf"
+  if ! sudo test -f "$WG_MAIN_PATH/$WG_INTERFACE.conf" && ! test -f "$WG_CONF_PATH"; then
+    exit_with_error "WireGuard config file not found in: $WG_CONF_PATH or $WG_MAIN_PATH/$WG_INTERFACE.conf"
   fi
   log "INFO" "Configuration file found."
 }
@@ -68,10 +71,11 @@ check_config_file_exists() {
 # Move WireGuard config file into place
 move_wireguard_conf() {
   if [[ -f $WG_CONF_PATH ]]; then
-    log "INFO" "Moving WireGuard config file to /etc/wireguard/"
-    sudo mv "$WG_CONF_PATH" "/etc/wireguard/$WG_INTERFACE.conf"
-    sudo chmod 600 "/etc/wireguard/$WG_INTERFACE.conf"
-    sudo chown root:root "/etc/wireguard/$WG_INTERFACE.conf"
+    log "INFO" "Moving WireGuard config file to $WG_MAIN_PATH/"
+    sudo rm -f "$WG_MAIN_PATH/$WG_INTERFACE.conf"
+    sudo cp "$WG_CONF_PATH" "$WG_MAIN_PATH/$WG_INTERFACE.conf"
+    sudo chmod 600 "$WG_MAIN_PATH/$WG_INTERFACE.conf"
+    sudo chown root:root "$WG_MAIN_PATH/$WG_INTERFACE.conf"
   fi
 }
 
@@ -84,7 +88,7 @@ setup_wireguard() {
   sudo ip route replace "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP" >/dev/null
 
   # Check if the WireGuard interface is already up
-  if sudo wg show "$WG_INTERFACE" >/dev/null 2>&1; then
+  if ip link show "$WG_INTERFACE" | grep -iq "state UP"; then
     log "INFO" "WireGuard interface $WG_INTERFACE is already running. Restarting it."
     sudo wg-quick down "$WG_INTERFACE" >/dev/null
     sleep 2
@@ -103,9 +107,13 @@ setup_kill_switch() {
   log "INFO" "Configuring UFW kill switch."
 
   # Extract endpoint details
-  WG_ENDPOINT=$(sudo grep -E "^Endpoint" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2 | xargs)
+  WG_ENDPOINT=$(sudo grep -iE "^Endpoint" "$WG_MAIN_PATH/$WG_INTERFACE.conf" | cut -d= -f2 | xargs)
   WG_ENDPOINT_IP=${WG_ENDPOINT%%:*}
   WG_PORT=${WG_ENDPOINT##*:}
+
+  if ! [[ $WG_ENDPOINT_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    WG_ENDPOINT_IP=$(getent ahosts "$WG_ENDPOINT_IP" | awk '/STREAM/ {print $1; exit}')
+  fi
 
   [[ -z $WG_ENDPOINT_IP || -z $WG_PORT ]] && exit_with_error "Invalid Endpoint in WireGuard config, missing IP or PORT."
 
@@ -142,11 +150,11 @@ setup_kill_switch() {
   [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]] && sudo ufw allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" >/dev/null
 
   # Allow DNS requests through the VPN
-  VPN_DNS=$(sudo grep -E "^DNS" "/etc/wireguard/$WG_INTERFACE.conf" | cut -d= -f2 | cut -d, -f1 | xargs)
+  VPN_DNS=$(sudo grep -iE "^DNS" "$WG_MAIN_PATH/$WG_INTERFACE.conf" | cut -d= -f2 | cut -d, -f1 | xargs)
   [[ -z $VPN_DNS ]] && VPN_DNS="9.9.9.9"
   sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp >/dev/null
 
-  sudo ufw enable
+  sudo ufw --force enable 1>/dev/null
   log "INFO" "Kill switch configured. All traffic is forced through VPN."
 }
 
@@ -169,7 +177,8 @@ Wants=network-online.target
 
 [Service]
 ExecStart=/opt/vm-quick-wg-vpn
-Type=simple
+Type=oneshot
+RemainAfterExit=yes
 User=root
 
 [Install]
