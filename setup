@@ -575,7 +575,7 @@ install_code_ext() {
 
     for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
       print_info2 "  📌 install extionsion '$vs_code_ext'"
-      code --force --install-extension "$vs_code_ext" 1>/dev/null
+      code --force --install-extension "$vs_code_ext" 1>/dev/null || true
     done
   else
     print_error "👎CODE :: code is not installed, extension install will skipped!"
