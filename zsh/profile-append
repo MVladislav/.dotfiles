@@ -440,19 +440,19 @@ alias vm_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest
 # https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
 vm_speed_pub() {
   if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0)]"
+    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]"
     return 1
   fi
 
   local servers=(
     'a209.speedtest.wobcom.de:5201' # 1
     'a205.speedtest.wobcom.de:5201' # 2
-    'speedtest.lu.buyvm.net:5201'   # 3
-    'iperf3.moji.fr:5201'           # 4
-    'ping.online.net:5001'          # 5 change
-    'speedtest.init7.net:5201'      # 6
+    'speedtest.wobcom.de:5201'      # 3
+    'speedtest.myloc.de:5201'       # 4
+    'speedtest.lu.buyvm.net:5201'   # 5
+    'iperf3.moji.fr:5201'           # 6
     'speedtest.shinternet.ch:5200'  # 7
-    'speedtest.serverius.net:5002'  # 8 change
+    'speedtest.init7.net:5201'      # 8
   )
 
   local num="$1"
