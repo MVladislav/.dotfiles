@@ -213,17 +213,63 @@ vm_sec_ip_country() {
     echo "Usage: $0 <IP>"
     return 1
   fi
+  local ip="$1"
+  local ua="${VM_SEC_USER_AGENT:-vmsec/1.0}"
 
-  local service1="http://ip-api.com/json/$1?fields=5254673"
-  local query1='[.query, .continent, .country, .city, .isp, .org, .as, .asname] | join(" :: ")'
-  #local service="https://ipapi.co/$1/json"
+  local service1="http://ip-api.com/json/$ip?fields=5254673"
+  local query1='[
+    (.query // "N/A"),
+    (.continent // "N/A"),
+    (.country // "N/A"),
+    (.city // "N/A"),
+    (.isp // "N/A"),
+    (.org // "N/A"),
+    (.as // "N/A"),
+    (.asname // "N/A")
+  ] | join(" :: ")'
+  #local service="https://ipapi.co/$ip/json"
   #local query='[.country, .city, .asn, .org] | join(" :: ")'
-  local service2="https://ipinfo.io/$1/json"
-  local query2='[.hostname, .country, .region, .city, .asn, .org, .postal] | join(" :: ")'
+  local service2="https://ipinfo.io/$ip/json"
+  local query2='[
+    (.hostname // "N/A"),
+    (.country // "N/A"),
+    (.region // "N/A"),
+    (.city // "N/A"),
+    (.asn // "N/A"),
+    (.org // "N/A"),
+    (.postal // "N/A")
+  ] | join(" :: ")'
 
-  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service1" | jq "$query1"
-  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "$service2" | jq "$query2"
+  curl -H "User-Agent: $ua" -s "$service1" | jq "$query1"
+  curl -H "User-Agent: $ua" -s "$service2" | jq "$query2"
+
+  if [[ -n $ABUSE_IP_DB_API_TOKEN ]]; then
+    local query3='.data | [
+      (.isWhitelisted),
+      (.isTor),
+      (.abuseConfidenceScore // "N/A"),
+      (.usageType // "N/A"),
+      (.countryCode // "N/A"),
+      (.countryName // "N/A"),
+      (.isp // "N/A"),
+      (.domain // "N/A")
+    ] | join(" :: ")'
+    local query4='.data.reports[:10][] | "  - " + (.comment | split("\n") | join("\n     "))'
+    local abused_json
+    abused_json=$(curl -G https://api.abuseipdb.com/api/v2/check -s \
+      -H "User-Agent: $ua" \
+      -H "Accept: application/json" \
+      -H "Key: $ABUSE_IP_DB_API_TOKEN" \
+      -d verbose \
+      -d maxAgeInDays=90 \
+      --data-urlencode "ipAddress=$ip")
+    printf '%s' "$abused_json" | jq "$query3"
+    printf '%s' "$abused_json" | jq -r "$query4"
+  fi
 }
+
+
+
 
 vm_sec_ip_country_batch() {
   if [ "$#" -lt 1 ]; then
