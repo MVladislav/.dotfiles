@@ -25,9 +25,6 @@ BCYAN='\033[1;36m'   # Cyan
 
 # ******************************************************************************
 
-: "${VM_SEC_OPT:="${HOME}/opt"}"
-: "${VM_SEC_TMP:="${HOME}/.tmp"}" # /tmp
-
 DEPS_INSTALL_PATH="${VM_SEC_TMP}"
 USER_LOCAL_PREFIX="${HOME}/.local"
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"

@@ -20,10 +20,14 @@ source "./setup-helper"
 
 # ******************************************************************************
 
+: "${VM_SEC_OPT:="${HOME}/opt"}"
+: "${VM_SEC_TMP:="${HOME}/.tmp"}" # /tmp
+
 # CONFS :: variables -----------------------------------------------------------
 VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
 VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
 VM_SEC_NMAP_SCRIPTS='/usr/share/nmap/scripts'
+VM_SEC_EXT_BROWSER="${VM_SEC_OPT}/sec/BrowserExt"
 
 RUN_INSTALL_ROCM=0
 RUN_INSTALL_TOOLS=0
@@ -33,6 +37,7 @@ RUN_INSTALL_TIO=0
 
 RUN_LOAD_LISTS=0
 RUN_LOAD_NMAP_SCRIPTS=0
+RUN_LOAD_EXT_BROWSER=0
 
 VERSION_HASHCAT_G="https://github.com/hashcat/hashcat.git"
 VERSION_HASHCAT="v7.1.2"
@@ -56,6 +61,7 @@ main() {
 
   [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
   [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
+  [[ $RUN_LOAD_EXT_BROWSER -eq 1 ]] && load_ext_browser
 
   print_info2 "\n✅ All finished!"
 }
@@ -266,6 +272,17 @@ load_nmap_scripts() {
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_info2 "🚀 NMAP :: Scripts cloning done!"
+}
+
+# SOURCE :: load nmap scripts --------------------------------------------------
+load_ext_browser() {
+  print_info2 "\n🚀 EXT :: Clone browser extensions..."
+
+  print_notes "   ⬇️ Cloning 'wayback-url-finder'..."
+  $RUN_WITH_SUDO git clone -q https://github.com/coffinxp/wayback-url-finder "$VM_SEC_EXT_BROWSER"
+
+  print_notes "   💡 Do not forget load extensions in your browser!"
+  print_info2 "🚀 EXT :: Browser extensions cloning done!"
 }
 
 # ******************************************************************************
