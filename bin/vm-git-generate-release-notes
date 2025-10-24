@@ -2,49 +2,13 @@
 set -euo pipefail
 IFS=$' '
 
-# Ensure we're in a Git repo
-if ! git rev-parse --is-inside-work-tree &>/dev/null; then
-  echo "Not inside a Git repository."
-  exit 1
-fi
-
-# Auto-detect default branch (like origin/main or origin/master)
-# default_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
-default_branch=${default_branch:-main}
-
-# List all tags
-tags=$(git tag --sort=-creatordate)
-# List all branches sorted by recent commits
-branches=$(git branch --all --sort=-committerdate | sed 's|^[* ] ||' | grep -v 'HEAD' | uniq)
-# Combine and label them for selection
-combined_refs=$( (echo "$branches" | sed 's|^|branch: |'; echo "$tags" | sed 's|^|tag: |') | sort )
-
-# Choose source (usually default) and target (e.g., release)
-source_ref=$(echo "$combined_refs" | fzf --prompt="Select SOURCE branch (base): ") #  --query="$default_branch"
-[ -z "$source_ref" ] && { echo "No source branch selected."; exit 1; }
-target_ref=$(echo "$combined_refs" | fzf --prompt="Select TARGET branch (compare): ")
-[ -z "$target_ref" ] && { echo "No target branch selected."; exit 1; }
-
-# Extract actual ref names (strip prefix)
-source_ref=${source_ref#branch: }
-source_ref=${source_ref#tag: }
-target_ref=${target_ref#branch: }
-target_ref=${target_ref#tag: }
-
-echo "🔍 Comparing: $source_ref → $target_ref"
-echo
-
-# Get commits between branches
-commits=$(git log "$source_ref".."$target_ref" --no-merges --pretty=format:"%s|%h|%an|%ae" --reverse)
-
-if [ -z "$commits" ]; then
-  echo "✅ No new commits between these branches."
-  exit 0
-fi
-
-# Prepare grouped release notes
-declare -A groups
-groups=(
+# -------- Configuration ----------
+# OUT_FILE="release.md"
+DEFAULT_REMOTE=${DEFAULT_REMOTE:-origin}
+DEFAULT_BRANCH=${DEFAULT_BRANCH:-main}
+# DEFAULT_BRANCH=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's|^origin/||')
+# Group labels and order
+declare -A GROUP_LABEL=(
   [feat]="✨ Features"
   [fix]="🐛 Fixes"
   [docs]="📝 Documentation"
@@ -52,71 +16,212 @@ groups=(
   [perf]="⚡ Performance"
   [test]="✅ Tests"
   [chore]="🔧 Chores"
+  [security]="🔒 Security"
+  [init]="📦 Init"
+  [release]="🏷️ Release"
   [other]="📦 Other"
 )
+ORDER=(feat fix docs refactor perf test chore security release init other)
 
-# Date & version heading
-today=$(date +"%Y-%m-%d")
-version_source=$(basename "$source_ref")
-version_target=$(basename "$target_ref")
+# -------- Utilities ----------
+err() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+info() { printf '%s\n' "$*"; }
 
-echo "# 🚀 Release \`$version_source..$version_target\` - $today"
-echo "## What's Changed"
-echo
+require_git() {
+  git rev-parse --is-inside-work-tree &>/dev/null || err "Not a Git repo"
+}
 
-# Initialize group arrays
-declare -A grouped_commits
-for key in "${!groups[@]}"; do
-  grouped_commits["$key"]=""
-done
+get_remote_repo_slug() {
+  local remote_url slug
+  remote_url=$(git remote get-url origin 2>/dev/null) || return 1
+  remote_url="${remote_url%.git}"  # remove .git
+  case "$remote_url" in
+    git@*:*/*)
+      slug="${remote_url#*:}"       # strip "git@github.com:"
+      ;;
+    https://*|http://*|ssh://*)
+      slug="${remote_url#*github.com/}"  # strip URL prefix
+      ;;
+    *)
+      echo "unknown/unknown"
+      return 1
+      ;;
+  esac
+  echo "$slug"
+}
 
-# Group commits
-while IFS="|" read -r message hash author_name author_email; do
-  message=$(echo "$message" | sed -E 's/\s+/ /g' | sed 's/^ *//;s/ *$//')  # Clean spacing
-  hash=$(echo "$hash" | cut -c1-7)
+list_refs_combined() {
+  # heads then tags by recent committer/creatordate
+  git for-each-ref --format='%(refname:short)|%(committerdate:unix)' refs/heads refs/remotes |
+    awk -F'|' '{print $1 " " $2}' |
+    sort -k2 -nr |
+    awk '{print $1}' | uniq
+  git tag --sort=-creatordate
+}
 
-  # Try to extract type (feat, fix, etc.)
-  if [[ "$message" =~ ^([a-zA-Z]+)(\(.+\))?: ]]; then
-    type="${BASH_REMATCH[1]}"
-    body="${message#*: }"
+pick_ref_interactive() {
+  local prompt="$1" default="${2:-}"
+  if command -v fzf >/dev/null; then
+    list_refs_combined | sort -hr | fzf --prompt="$prompt" --query="$default"
+  else
+    err "Interactive selection requires fzf and USE_FZF=1"
+  fi
+}
+
+require_git
+
+# interactive
+BASE_REF=$(pick_ref_interactive "Select BASE: ")
+[[ -n "$BASE_REF" ]] || err "No base selected"
+COMPARE_REF=$(pick_ref_interactive "Select COMPARE: " "$DEFAULT_REMOTE/$DEFAULT_BRANCH")
+[[ -n "$COMPARE_REF" ]] || err "No compare selected"
+
+# Normalize short names for display
+version_base=$(basename "$BASE_REF")
+version_compare=$(basename "$COMPARE_REF")
+info "🔍 Comparing: ${version_base} ← ${version_compare}"
+info
+
+# Get remote slug (owner/repo) for links
+REMOTE_SLUG=$(get_remote_repo_slug)
+# Build compare URL base (if possible)
+if [[ -n "$REMOTE_SLUG" ]]; then
+  COMPARE_URL_BASE="https://github.com/${REMOTE_SLUG}/compare"
+else
+  COMPARE_URL_BASE=""
+fi
+
+# Git log (exclude merges). Use full hash for linkability.
+mapfile -t RAW_LOG < <(git log --no-merges --pretty=format:"%s|%H|%h|%an|%ae" --reverse --left-right "$BASE_REF".."$COMPARE_REF")
+
+if [[ ${#RAW_LOG[@]} -eq 0 ]]; then
+  info "✅ No new commits between ${BASE_REF} and ${COMPARE_REF}."
+  exit 0
+fi
+
+# Helper: extract PR
+extract_pr() {
+  local subj="$1"
+  if [[ "$subj" =~ \(\#([0-9]+)\) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
+  if [[ "$subj" =~ PR[[:space:]]\#([0-9]+) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
+  if [[ "$subj" =~ \#([0-9]+) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
+  printf ""
+}
+
+# Initialize buckets
+declare -A BUCKETS
+declare -A SUBBUCKETS   # key: type:scope -> multiline string
+for k in "${!GROUP_LABEL[@]}"; do BUCKETS["$k"]="" ; done
+
+# Parse commits
+for entry in "${RAW_LOG[@]}"; do
+  IFS='|' read -r subject full_hash short_hash author_name author_email <<< "$entry"
+  subject="${subject#"${subject%%[![:space:]]*}"}"
+  subject="${subject%"${subject##*[![:space:]]}"}"
+
+  # conventional commit parse: type(scope)?: message
+  if [[ "$subject" =~ ^([a-zA-Z0-9]+)(\(.+\))?:[[:space:]]*(.+)$ ]]; then
+    type="${BASH_REMATCH[1],,}"
+    scope="${BASH_REMATCH[2]:-}"
+    [[ -n "$scope" ]] && scope="${scope:1:-1}" || scope=""
+    msg="${BASH_REMATCH[3]}"
   else
     type="other"
-    body="$message"
+    scope=""
+    msg="$subject"
   fi
 
-  # Add PR number if present (like (#123))
-  if [[ "$body" =~ \(#([0-9]+)\) ]]; then
-    pr_number="#${BASH_REMATCH[1]}"
+  # Normalize type to known or other
+  [[ -z "${GROUP_LABEL[$type]:-}" ]] && type="other"
+
+  # Extract PR
+  prnum=$(extract_pr "$subject")
+  pr_part=""
+  if [[ -n "$prnum" && "$prnum" != "0" ]]; then
+    if [[ -n "$REMOTE_SLUG" ]]; then
+      pr_part=" ([#${prnum}](https://github.com/${REMOTE_SLUG}/pull/${prnum}))"
+    else
+      pr_part=" (#${prnum})"
+    fi
+  fi
+
+  # Commit link
+  commit_link=""
+  if [[ -n "$REMOTE_SLUG" ]]; then
+    commit_link=" ([\`${short_hash}\`](https://github.com/${REMOTE_SLUG}/commit/${full_hash}))"
   else
-    pr_number=""
+    commit_link=" (\`${short_hash}\`)"
   fi
 
-  # Format author
-  author_display="- by ${author_name}" # <${author_email}>
+  author_display="by @${author_name}" # <${author_email}>
+  line="- ${msg}${commit_link}${pr_part} - ${author_display}"
 
-  # Final formatted line
-  line="- $body ($hash)"
-  if [[ -n "$pr_number" && "$body" != *"$pr_number"* ]]; then
-    line+=" $pr_number"
-  fi
-  line+=" $author_display"
+  # Handle PR #0 as default scope
+  [[ "$scope" == "#0" ]] && scope="default"
 
-  key=${type,,}  # normalize to lowercase
-
-  if [[ -n "${groups[$key]}" ]]; then
-    grouped_commits["$key"]+="$line"$'\n'
+  # Bucket commits
+  if [[ -n "$scope" ]]; then
+    subkey="${type}:${scope,,}"
+    SUBBUCKETS["$subkey"]+="$line"$'\n'
   else
-    grouped_commits["other"]+="$line"$'\n'
-  fi
-done <<< "$commits"
-
-# Print grouped sections
-for key in feat fix docs refactor perf test chore other; do
-  if [ -n "${grouped_commits[$key]}" ]; then
-    echo "### ${groups[$key]}"
-    echo "${grouped_commits[$key]}"
+    BUCKETS["$type"]+="$line"$'\n'
   fi
 done
 
-# Add "Full Changelog" link placeholder
-echo "**Full Changelog**: https://github.com/<owner>/<repo>/compare/v<version_source>...v<version_target>"
+# Render markdown into variable
+today=$(date +"%Y-%m-%d")
+out=""
+out+="# 🚀 Release \`${version_base}..${version_compare}\` - ${today}"$'\n\n'
+out+="## What's Changed"$'\n\n'
+
+for t in "${ORDER[@]}"; do
+  content="${BUCKETS[$t]:-}"
+  # collect subkeys for type t
+  subkeys=()
+  for k in "${!SUBBUCKETS[@]}"; do
+    if [[ "$k" == "${t}:"* ]]; then subkeys+=("$k"); fi
+  done
+
+  if [[ -z "$content" && ${#subkeys[@]} -eq 0 ]]; then continue; fi
+  out+="### ${GROUP_LABEL[$t]}"$'\n\n'
+  if [[ -n "$content" ]]; then out+="${content}"$'\n'; fi
+
+  # Print sub-scopes
+  if [[ ${#subkeys[@]} -gt 0 ]]; then
+    IFS=$'\n' sorted=($(printf "%s\n" "${subkeys[@]}" | sort))
+    unset IFS
+    for sk in "${sorted[@]}"; do
+      scope_name="${sk#${t}:}"
+      out+="#### ${scope_name}"$'\n\n'
+      out+="${SUBBUCKETS[$sk]}"$'\n'
+    done
+  fi
+done
+
+# Full changelog link
+if [[ -n "$COMPARE_URL_BASE" ]]; then
+  out+="**Full Changelog**: ${COMPARE_URL_BASE}/${version_base}...${version_compare}"$'\n'
+else
+  # attempt remote slug fallback
+  remote_origin=$(git remote get-url "$DEFAULT_REMOTE" 2>/dev/null || true)
+  if [[ -n "$remote_origin" ]]; then
+    out+="**Full Changelog (remote)**: ${remote_origin} compare ${version_base}...${version_compare}"$'\n'
+  else
+    out+="**Full Changelog**: compare ${version_base}...${version_compare}"$'\n'
+  fi
+fi
+
+out+=$'\n\n''---'$'\n\n'
+out+='## Notes'$'\n\n'
+out+='- Update `pyproject.toml` version number.'$'\n'
+out+='- Update **uv.lock** run: `uv sync --all-groups`.'$'\n'
+out+='- Release commit: `chore(release): bump version x.x.x`.'$'\n'
+out+='- Release tag: `git tag -a vx.x.x -m "Release version x.x.x"`.'$'\n'
+
+# Output
+if [[ -n "${OUT_FILE:-}" ]]; then
+  printf '%s\n' "$out" > "$OUT_FILE"
+  info "Wrote release notes to $OUT_FILE"
+else
+  printf '%s\n' "$out"
+fi
