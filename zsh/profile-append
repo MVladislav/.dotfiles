@@ -431,7 +431,50 @@ vm_quick_android_emulator() {
 }
 
 ### TOOLS ###
-alias vm_curl_test='curl -s -o /dev/null -w "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n"'
+vm_test_curl() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: $0 <URL>"
+    return 1
+  fi
+  curl -s -o /dev/null -w \
+  "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
+  "$1"
+}
+vm_test_dns() {
+  local DNS_SERVER="${1:-192.168.1.1}"
+  local DOMAINS=(
+    "example.com" "ubuntu.com" "google.com" "google.de" "youtube.com"
+    "facebook.com" "instagram.com" "chatgpt.com" "x.com" "whatsapp.com"
+    "reddit.com" "wikipedia.org" "amazon.com" "tiktok.com" "pinterest.com"
+  )
+  local TRIES=5
+  local d i total min max success_count output stat qtime avg
+
+  for d in "${DOMAINS[@]}"; do
+    total=0
+    min=100000
+    max=0
+    success_count=0
+
+    for ((i=1;i<=TRIES;i++)); do
+      output=$(dig @"$DNS_SERVER" $d +stats +tries=1 +time=3)
+      stat=$(echo "$output" | awk '/status:/ {print $6}' | tr -d ',')
+      qtime=$(echo "$output" | awk '/Query time:/ {print $4}')
+
+      if [[ "$stat" == "NOERROR" ]]; then
+        success_count=$((success_count + 1))
+        total=$((total + qtime))
+        (( qtime < min )) && min=$qtime
+        (( qtime > max )) && max=$qtime
+      fi
+    done
+
+    if (( success_count > 0 )); then
+      avg=$((total / success_count))
+      echo "$d -> avg=${avg}ms min=${min}ms max=${max}ms"
+    fi
+  done
+}
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
 alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
 alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
