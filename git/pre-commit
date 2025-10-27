@@ -2,7 +2,7 @@
 # ----------------------------------------------------------------------
 # Pre-commit hook
 # - Verifies git email
-# - Runs pre-commit hooks if configured
+# - Runs pre-commit or prek hooks if configured
 # - Checks non-ASCII filenames
 # - Checks whitespace errors
 # ----------------------------------------------------------------------
@@ -26,11 +26,13 @@ else
 fi
 
 # -------------------------------
-# 2. Run pre-commit framework hooks
+# 2. Run pre-commit / prek framework hooks
 # -------------------------------
-PRE_COMMIT_PYTHON=/usr/bin/python3
 PRE_COMMIT_CONFIG=".pre-commit-config.yaml"
 USER_HOOK_DIR="$HOME/.git-hooks"
+
+PRE_COMMIT_CMD=pre-commit
+PREK_CMD=prek
 
 # Base arguments
 HOOK_ARGS=(hook-impl --skip-on-missing-config --config="$PRE_COMMIT_CONFIG" --hook-type=pre-commit)
@@ -40,13 +42,15 @@ if [ -d "$USER_HOOK_DIR" ]; then
     HOOK_ARGS+=(--hook-dir "$USER_HOOK_DIR")
 fi
 
-# Execute pre-commit
-if [ -x "$PRE_COMMIT_PYTHON" ]; then
-    exec "$PRE_COMMIT_PYTHON" -m pre_commit "${HOOK_ARGS[@]}" "$@"
-elif command -v pre-commit >/dev/null 2>&1; then
-    exec pre-commit "${HOOK_ARGS[@]}" "$@"
+# Execute prek or pre-commit
+if command -v "$PREK_CMD" >/dev/null 2>&1; then
+    echo "[INFO] Running $PREK_CMD hooks..."
+    exec "$PREK_CMD" "${HOOK_ARGS[@]}" "$@"
+elif command -v "$PRE_COMMIT_CMD" >/dev/null 2>&1; then
+    echo "[INFO] Running $PRE_COMMIT_CMD hooks..."
+    exec "$PRE_COMMIT_CMD" "${HOOK_ARGS[@]}" "$@"
 else
-    echo "[ERROR] pre-commit not found. Did you forget to install it or activate your virtualenv?"
+    echo "[ERROR] Neither $PRE_COMMIT_CMD nor $PREK_CMD found. Did you forget to install one or activate your environment?"
     exit 1
 fi
 
@@ -61,7 +65,7 @@ fi
 
 ALLOW_NONASCII=$(git config --type=bool hooks.allownonascii || echo "false")
 if [ "$ALLOW_NONASCII" != "true" ]; then
-    NON_ASCII_COUNT=$(git diff --cached --name-only --diff-filter=A -z $against |
+    NON_ASCII_COUNT=$(git diff --cached --name-only --diff-filter=A -z "$against" |
         LC_ALL=C tr -d '[ -~]\0' | wc -c)
     if [ "$NON_ASCII_COUNT" -ne 0 ]; then
         cat <<EOF
@@ -77,4 +81,4 @@ fi
 # -------------------------------
 # 4. Whitespace errors check
 # -------------------------------
-git diff-index --check --cached $against --
+git diff-index --check --cached "$against" --
