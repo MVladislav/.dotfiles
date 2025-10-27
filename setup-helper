@@ -48,8 +48,11 @@ print_error() { echo -e "${BRED}$1${NC}" >&2; }
 install_dependencies_needs() {
   print_notes "   📥 Installing build dependencies..."
   DEPS_PACKAGES_TO_REMOVE=()
-  local packages_tools=("${!1}")
-  local packages_build=("${!2}")
+
+  local -n tools_ref="${1%\[@\]}"
+  local -n build_ref="${2%\[@\]}"
+  local packages_tools=("${tools_ref[@]}")
+  local packages_build=("${build_ref[@]}")
 
   local packages_to_install=()
 
