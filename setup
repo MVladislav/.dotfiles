@@ -635,7 +635,7 @@ install_fonts() {
       }
       ;;
     application/zip) # .zip
-      unzip -q "$temp_file" -d "$repo_dir" || {
+      unzip -qo "$temp_file" -d "$repo_dir" || {
         print_error "Failed to extract $file_name"
         return 1
       }
