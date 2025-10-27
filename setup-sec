@@ -21,7 +21,6 @@ source "./setup-helper"
 # ******************************************************************************
 
 : "${VM_SEC_OPT:="${HOME}/opt"}"
-: "${VM_SEC_TMP:="${HOME}/.tmp"}" # /tmp
 
 # CONFS :: variables -----------------------------------------------------------
 VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
