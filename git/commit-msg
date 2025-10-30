@@ -52,6 +52,8 @@ SCOPES = [
     "api",  # API code (REST, GraphQL, endpoints)
     "auth",  # Authentication/authorization modules
     "release",  # Release process / version bumps
+    "lint",  # Linting and static analysis (e.g., shellcheck, ESLint)
+    "scripts",  # Utility or maintenance scripts
 ]
 
 # -------------------------------

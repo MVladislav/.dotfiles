@@ -16,6 +16,7 @@ cat <<'EOF'
 EOF
 
 [[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+# shellcheck disable=SC1091
 source "./setup-helper"
 
 # ******************************************************************************
@@ -76,7 +77,7 @@ install_rocm() {
   $RUN_WITH_SUDO apt install -y "$DEPS_INSTALL_PATH/amdgpu-install.deb"
   $RUN_WITH_SUDO apt update
   $RUN_WITH_SUDO apt install -y python3-setuptools python3-wheel
-  $RUN_WITH_SUDO usermod -a -G render,video $LOGNAME
+  $RUN_WITH_SUDO usermod -a -G render,video "$LOGNAME"
   $RUN_WITH_SUDO apt install -y rocm
   # $RUN_WITH_SUDO amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
 
@@ -127,7 +128,7 @@ install_john() {
   local s_name_u="JTR"
   print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
-  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
 
   # Define packages needed for build and install
   local packages_tools=()
@@ -166,7 +167,7 @@ install_john() {
 
   popd 1>/dev/null
   popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
 
   # Remove build dependencies if any
@@ -183,7 +184,7 @@ install_hashcat() {
   local s_name_u="HASHCAT"
   print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
-  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
 
   # Define packages needed for build and install
   local packages_tools=(clinfo pocl-opencl-icd ocl-icd-libopencl1)
@@ -200,7 +201,7 @@ install_hashcat() {
   make -sj"$(nproc)" SHARED=1 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
   popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/$s_name_l" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
 
   # Remove build dependencies if any
@@ -220,7 +221,9 @@ install_tio() {
   rm -rf "$DEPS_INSTALL_PATH/tio" 1>/dev/null
 
   # Define packages needed for build and install
+  # shellcheck disable=SC2034
   local packages_tools=()
+  # shellcheck disable=SC2034
   local packages_build=(git meson cmake ninja-build pkg-config libglib2.0-dev liblua5.2-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
 

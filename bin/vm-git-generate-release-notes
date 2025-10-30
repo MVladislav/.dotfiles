@@ -153,7 +153,7 @@ for entry in "${RAW_LOG[@]}"; do
     commit_link=" (\`${short_hash}\`)"
   fi
 
-  author_display="by @${author_name}" # <${author_email}>
+  author_display="by @${author_name} <${author_email}>"
   line="- ${msg}${commit_link}${pr_part} - ${author_display}"
 
   # Handle PR #0 as default scope
@@ -191,10 +191,10 @@ for t in "${ORDER[@]}"; do
 
   # Print sub-scopes
   if [[ ${#subkeys[@]} -gt 0 ]]; then
-    IFS=$'\n' sorted=($(printf "%s\n" "${subkeys[@]}" | sort))
+    IFS=$'\n' read -r sorted <<< "$(printf "%s\n" "${subkeys[@]}" | sort)"
     unset IFS
     for sk in "${sorted[@]}"; do
-      scope_name="${sk#${t}:}"
+      scope_name="${sk#"${t}":}"
       out+="#### ${scope_name}"$'\n\n'
       out+="${SUBBUCKETS[$sk]}"$'\n'
     done
@@ -216,12 +216,12 @@ fi
 
 out+=$'\n\n''---'$'\n\n'
 out+='## Notes'$'\n\n'
-out+='- Create release branch: `git checkout -b release/x.x.x`.'$'\n'
-out+='- Update `pyproject.toml` version number.'$'\n'
-out+='- Update **uv.lock** run: `uv sync --all-groups`.'$'\n'
-out+='- Release commit: `chore(release): bump version x.x.x`.'$'\n'
-out+='- Create **pull request** and merge/rebase into main`.'$'\n'
-out+='- Release tag: `git tag -a vx.x.x -m "Release version x.x.x"`.'$'\n'
+out+="- Create release branch: \`git checkout -b release/x.x.x\`."$'\n'
+out+="- Update \`pyproject.toml\` version number."$'\n'
+out+="- Update **uv.lock** run: \`uv sync --all-groups\`."$'\n'
+out+="- Release commit: \`chore(release): bump version x.x.x\`."$'\n'
+out+="- Create **pull request** and merge/rebase into main\`."$'\n'
+out+="- Release tag: \`git tag -a vx.x.x -m 'Release version x.x.x'\`."$'\n'
 
 # Output
 if [[ -n "${OUT_FILE:-}" ]]; then

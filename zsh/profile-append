@@ -115,6 +115,7 @@ vm_xterm_cp_local() {
 ### General ###
 alias rm='rm -i'
 alias cp='cp -i'
+# shellcheck disable=SC2032
 alias mv='mv -i'
 
 ### LS as EZA ###
@@ -457,7 +458,7 @@ vm_test_dns() {
     success_count=0
 
     for ((i=1;i<=TRIES;i++)); do
-      output=$(dig @"$DNS_SERVER" $d +stats +tries=1 +time=3)
+      output=$(dig @"$DNS_SERVER" "$d" +stats +tries=1 +time=3)
       stat=$(echo "$output" | awk '/status:/ {print $6}' | tr -d ',')
       qtime=$(echo "$output" | awk '/Query time:/ {print $4}')
 
@@ -659,8 +660,8 @@ vm_ii() {
 ######################################################################
 vm_zsh_history_cleanup() {
     local histfile="${HOME}/.zsh_history"
-    local timestamp="$(date +%Y%m%d-%H%M%S)"
-    local backup="${histfile}.bak-${timestamp}"
+    local backup
+    backup="${histfile}.bak-$(date +%Y%m%d-%H%M%S)"
     local deduped="${HOME}/.zsh_history.deduped"
 
     local opt_multiline=false
@@ -1276,10 +1277,12 @@ vm_shortcut_appimage() {
     echo "Failed to create directory $install_dir"
     return 1
   }
+  # shellcheck disable=SC2033
   sudo mv "$appimage" "$install_dir/${name}.AppImage" || {
     echo "Failed to move AppImage file"
     return 1
   }
+  # shellcheck disable=SC2033
   sudo mv "$image_png" "$install_dir/${name}.png" || {
     echo "Failed to move PNG file"
     return 1

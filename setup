@@ -16,6 +16,7 @@ cat <<'EOF'
 EOF
 
 [[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+# shellcheck disable=SC1091
 source "./setup-helper"
 
 # ******************************************************************************
@@ -367,7 +368,7 @@ install_dependencies_ghostty() {
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
-  print_notes '   💡 For better 'xterm compatibility', use `vm_xterm_cp_local` (for sudo session) or `vm_xterm_cp_ssh` (for SSH sessions).'
+  print_notes "   💡 For better 'xterm compatibility', use \`vm_xterm_cp_local\` (for sudo session) or \`vm_xterm_cp_ssh\` (for SSH sessions)."
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
@@ -675,7 +676,9 @@ install_btop() {
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
 
   # Define packages needed for build and install
+  # shellcheck disable=SC2034
   local packages_tools=()
+  # shellcheck disable=SC2034
   local packages_build=(git build-essential cmake libdrm-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
