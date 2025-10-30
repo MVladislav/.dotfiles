@@ -22,6 +22,7 @@ source "./setup-helper"
 
 # CONFS :: variables -----------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
+RUN_INSTALL_DEPENDENCIES_DEV=0
 RUN_INSTALL_DEPENDENCIES_TMUX=0
 RUN_INSTALL_DEPENDENCIES_NVIM=0
 RUN_INSTALL_DEPENDENCIES_ZSH=0
@@ -96,6 +97,7 @@ main() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   initialize_base
   [[ $RUN_INSTALL_DEPENDENCIES_ADDITIONAL -eq 1 ]] && install_dependencies_additional
+  [[ $RUN_INSTALL_DEPENDENCIES_DEV -eq 1 ]] && install_dependencies_dev
 
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
   [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
@@ -141,22 +143,33 @@ install_dependencies_additional() {
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
   $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
 
-  # print_notes "   📥 install npm..."
-  # $RUN_WITH_SUDO snap install node --classic
-
-  # print_notes "   📥 install rust..."
-  # $RUN_WITH_SUDO snap install rustup --classic
-  # rustup default stable
-
-  # print_notes "   📥 install lazygit with go..."
-  # $RUN_WITH_SUDO snap install go --classic
-  # go install github.com/jesseduffield/lazygit@latest
-
-  # print_notes "   📥 install shellcheck..."
-  # $RUN_WITH_SUDO snap install shellcheck
-
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_info2 "🚀 DEPS :: base services installed!"
+}
+
+# DEPS :: install dev dependencies -------------------------------------------------
+install_dependencies_dev() {
+  print_info2 "\n🚀 DEPS :: installing dev dependencies"
+  print_notes "   📥 install npm..."
+  $RUN_WITH_SUDO snap install node --classic
+
+  print_notes "   📥 install rust..."
+  $RUN_WITH_SUDO snap install rustup --classic
+  rustup default stable
+
+  print_notes "   📥 install lazygit with go..."
+  $RUN_WITH_SUDO snap install go --classic
+  go install github.com/jesseduffield/lazygit@latest
+
+  print_notes "   📥 install shellcheck..."
+  $RUN_WITH_SUDO snap install shellcheck
+
+  print_notes "   📥 install python3+..."
+  $RUN_WITH_SUDO apt install python3-pip python3-venv python3-dev
+  python3 -m pip install --break-system-packages uv prek
+
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_info2 "🚀 DEPS :: dev dependencies installed!"
 }
 
 # SERVICE :: install tmux ------------------------------------------------------
@@ -343,9 +356,6 @@ install_dependencies_ghostty() {
   update-desktop-database ~/.local/share/applications/ -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
 
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
   mkdir -p "${LN_GHOSTTY_FOLDER}"
   ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
@@ -358,6 +368,9 @@ install_dependencies_ghostty() {
   gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
   print_notes '   💡 For better 'xterm compatibility', use `vm_xterm_cp_local` (for sudo session) or `vm_xterm_cp_ssh` (for SSH sessions).'
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
 
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
 }
@@ -563,10 +576,11 @@ install_code_ext() {
     # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
     # "github.copilot" "github.copilot-chat"
     # "ms-python.debugpy" "ms-python.mypy-type-checker" "ms-python.vscode-pylance" "ms-python.vscode-python-envs"
+    # "astral-sh.ty" "donjayamanne.githistory"
     VS_CODE_EXTS=(
       "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf"
-      "astral-sh.ty" "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
-      "donjayamanne.githistory" "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
+      "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
+      "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
       "ms-python.python"  "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
       "redhat.vscode-xml" "redhat.vscode-yaml" "samuelcolvin.jinjahtml" "silofy.hackthebox"
       "streetsidesoftware.code-spell-checker" "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml"
@@ -729,6 +743,7 @@ usage() {
   print_info "     $0 -itools -ifont                              Run config setups without small additional installs"
   print_info "     $0 -ifont                                      Run config setups with fonts install"
   print_info "     $0 -ds -itools                                 Install only additional tools"
+  print_info "     $0 -ds -idev                                   Install only additional dev"
   print_info "     $0 -ds -invim                                  Install only nvim"
   print_info "     $0 -ds -izsh                                   Install only zsh"
   print_info "     $0 -ds -ighost                                 Install only ghostty"
@@ -737,7 +752,8 @@ usage() {
   print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
   print_info "     -h,            --help                          Show this help message and exit"
-  print_info "     -itools,       --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find]"
+  print_info "     -itools,       --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find ...]"
+  print_info "     -idev,         --install-additional-dev        Install additional dev [node rustup go shellcheck ...]"
   print_info "     -itmux,        --install-dependencies-tmux     Install/update service tmux"
   print_info "     -invim,        --install-dependencies-nvim     Install/update service nvim"
   print_info "     -izsh,         --install-dependencies-zsh      Install/update service zsh"
@@ -772,6 +788,9 @@ parse_args() {
       ;;
     -itools | --install-additional-tools)
       RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
+      ;;
+    -idev | --install-additional-dev)
+      RUN_INSTALL_DEPENDENCIES_DEV=1
       ;;
     -itmux | --install-dependencies-tmux)
       RUN_INSTALL_DEPENDENCIES_TMUX=1
