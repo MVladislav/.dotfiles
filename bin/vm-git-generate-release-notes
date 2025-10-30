@@ -172,6 +172,9 @@ done
 today=$(date +"%Y-%m-%d")
 out=""
 out+="# 🚀 Release \`${version_base}..${version_compare}\` - ${today}"$'\n\n'
+# out+="### Highlights:"$'\n\n'
+# out+="  - **Example**"$'\n'
+# out+=$'\n\n''---'$'\n\n'
 out+="## What's Changed"$'\n\n'
 
 for t in "${ORDER[@]}"; do
@@ -213,9 +216,11 @@ fi
 
 out+=$'\n\n''---'$'\n\n'
 out+='## Notes'$'\n\n'
+out+='- Create release branch: `git checkout -b release/x.x.x`.'$'\n'
 out+='- Update `pyproject.toml` version number.'$'\n'
 out+='- Update **uv.lock** run: `uv sync --all-groups`.'$'\n'
 out+='- Release commit: `chore(release): bump version x.x.x`.'$'\n'
+out+='- Create **pull request** and merge/rebase into main`.'$'\n'
 out+='- Release tag: `git tag -a vx.x.x -m "Release version x.x.x"`.'$'\n'
 
 # Output
