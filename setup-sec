@@ -89,11 +89,11 @@ install_rocm() {
 install_tools() {
   print_info2 "\n🚀 TOOLS :: Installing additional tools..."
 
-  print_notes "   ⬇️ Install 'jq'"
-  $RUN_WITH_SUDO apt install jq
+  print_notes "   📥 installing 'jq'"
+  $RUN_WITH_SUDO apt install -y jq 1>/dev/null
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
-  print_notes "   ⬇️ Install 'monolith'"
+  print_notes "   📥 installing 'monolith'"
   cargo install monolith # saving complete web pages as a single HTML file
 
   go_github_commit_date_and_download() {
@@ -101,7 +101,7 @@ install_tools() {
     echo 'LAST COMMIT' "[${repo}] ::" "$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')"
     local package_path="${owner}/${repo}"
     if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
-    print_notes "   ⬇️ Install '${package_path}'"
+    print_notes "   📥 installing '${package_path}'"
     go install "github.com/${package_path}@${2:-latest}"
   }
 
