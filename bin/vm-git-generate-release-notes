@@ -191,8 +191,7 @@ for t in "${ORDER[@]}"; do
 
   # Print sub-scopes
   if [[ ${#subkeys[@]} -gt 0 ]]; then
-    IFS=$'\n' read -r sorted <<< "$(printf "%s\n" "${subkeys[@]}" | sort)"
-    unset IFS
+    mapfile -t sorted < <(printf "%s\n" "${subkeys[@]}" | sort)
     for sk in "${sorted[@]}"; do
       scope_name="${sk#"${t}":}"
       out+="#### ${scope_name}"$'\n\n'
