@@ -6,6 +6,7 @@
   "window.title": "${activeEditorLong}",
   "window.customTitleBarVisibility": "auto",
   "window.commandCenter": true,
+  "keyboard.layout": "de",
   "workbench.activityBar.location": "top",
   "workbench.colorTheme": "Hack The Box",
   "workbench.startupEditor": "none",
@@ -441,7 +442,8 @@
     "editor.codeActionsOnSave": {
       "source.organizeImports": "explicit"
     },
-    "editor.formatOnType": true
+    "editor.formatOnType": true,
+    "diffEditor.ignoreTrimWhitespace": true
   },
   // "python.languageServer": "None",
   "python.analysis.ignore": ["*"],
@@ -469,11 +471,11 @@
   "rust-analyzer.check.features": "all",
   "rust-analyzer.check.extraArgs": ["--target-dir", ".rust-analyzer/target"],
   "[shellscript]": {
-    "editor.defaultFormatter": "foxundermoon.shell-format",
+    "editor.defaultFormatter": "timonwong.shellcheck",
     "files.eol": "\n"
   },
   "shellcheck.run": "onSave",
-  // "shellcheck.executablePath": ".../shellcheck.sh",
+  // "shellcheck.executablePath": "/snap/bin/shellcheck",
   // "shellcheck.useWorkspaceRootAsCwd": true,
   "[c]": {
     // "editor.defaultFormatter": "ms-vscode.cpptools"
@@ -677,5 +679,8 @@
   "chat.promptFilesLocations": {
     "**": false,
     ".github/prompts": true
+  },
+  "[github-actions-workflow]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
   }
 }
