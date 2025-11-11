@@ -216,6 +216,9 @@ vm_sec_ip_country() {
   local ip="$1"
   local ua="${VM_SEC_USER_AGENT:-vmsec/1.0}"
 
+  reverse_check=$(dig +short -x "$ip")
+  echo "Reverse Check: $reverse_check"
+
   local service1="http://ip-api.com/json/$ip?fields=5254673"
   local query1='[
     (.query // "N/A"),
