@@ -297,7 +297,7 @@ alias vm_reverse='python3 -c "import sys; print(sys.argv[1][::-1])"'
 
 alias vm_hun_to_min='python3 -c '\''import sys;x = sys.argv[1].split(":");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(f"{x3}m :: {divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m")'\'''
 
-# $sudo apt install xclip
+# $sudo apt install wl-clipboard
 # $pip3 install pyperclip
 alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
 

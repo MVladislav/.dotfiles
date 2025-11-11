@@ -135,8 +135,8 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n🚀 DEPS :: installing additional base services"
-  print_notes "   📥 installing [curl git jq rsync fzf xclip]..."
-  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf xclip 1>/dev/null
+  print_notes "   📥 installing [curl git jq rsync fzf wl-clipboard]..."
+  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf wl-clipboard 1>/dev/null
   print_notes "   📥 installing [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
