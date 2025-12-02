@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+
+### updater ###
+alias vm_up_apt='sudo /usr/bin/apt update && sudo /usr/bin/apt upgrade'
+alias vm_up_snap='sudo /usr/bin/snap refresh'
+alias vm_up_flatpak='/usr/bin/flatpak update && /usr/bin/flatpak uninstall --unused'
+alias vm_up_py_pip='python3 -m pip list --user -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --user --no-cache-dir -U --break-system-packages'
+alias vm_up_py_pip_root='sudo /usr/bin/python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo /usr/bin/xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
+vm_update_clean_all() {
+  print_separator() {
+    echo -e '\n#########################################################################\n'
+  }
+
+  # Consolidated repetitive update and cleanup logic into a single function.
+  update_and_clean() {
+    local tool="$1"
+    local update_cmd="$2"
+    local clean_cmd="$3"
+
+    echo -e "${BPURPLE}Updating $tool...${NC}"
+    if eval "$update_cmd"; then
+      echo -e "${BPURPLE}$tool update completed.${NC}"
+    else
+      echo -e "${BRED}$tool update failed.${NC}" >&2
+    fi
+
+    echo -e "${BPURPLE}Cleaning $tool...${NC}"
+    if eval "$clean_cmd"; then
+      echo -e "${BPURPLE}$tool cleanup completed.${NC}"
+    else
+      echo -e "${BRED}$tool cleanup failed.${NC}" >&2
+    fi
+  }
+
+  update_and_clean "apt" "sudo apt update && sudo apt full-upgrade -y" "sudo apt autoclean -y && sudo apt autoremove -y && sudo apt clean"
+  print_separator
+  update_and_clean "snap" "sudo snap refresh" "LANG=en_US.UTF-8 sudo snap list --all | awk '/disabled/ {print \$1, \$3}' | while read -r SNAPNAME REVISION; do sudo snap remove \"\$SNAPNAME\" --revision=\"\$REVISION\"; done"
+  print_separator
+  update_and_clean "flatpak" "sudo flatpak update" "sudo flatpak uninstall --unused && sudo rm -rfv /var/tmp/flatpak-cache-*"
+  print_separator
+  update_and_clean "flatpak [user]" "flatpak --user update" "flatpak --user uninstall --unused"
+  print_separator
+
+  echo -e "You could also run additional updates:"
+  echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
+  echo -e "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
+
+  [ -f /var/run/reboot-required ] && echo && cat /var/run/reboot-required
+}
+
+### OTHER ###
+alias vm_mem_free='free -h && sudo /usr/bin/sysctl -w vm.drop_caches=3 && sudo /usr/bin/sync && echo 3 | sudo /usr/bin/tee /proc/sys/vm/drop_caches && free -h'
+alias chmod_ux='chmod u+x'
+alias vm_ux_term='tr -d '\''\r'\'' <'
+alias vm_find_command='apropos'
+alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
+
+alias vm_random='openssl rand -base64'
+vm_random2() {
+  tr -dc A-Za-z0-9 </dev/urandom | head -c "$1"
+  echo ''
+}
+
+### TESTS ###
+vm_test_curl() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: $0 <URL>"
+    return 1
+  fi
+  curl -s -o /dev/null -w \
+  "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
+  "$1"
+}
+vm_test_dns() {
+  local DNS_SERVER="${1:-192.168.1.1}"
+  local DOMAINS=(
+    "example.com" "ubuntu.com" "google.com" "google.de" "youtube.com"
+    "facebook.com" "instagram.com" "chatgpt.com" "x.com" "whatsapp.com"
+    "reddit.com" "wikipedia.org" "amazon.com" "tiktok.com" "pinterest.com"
+  )
+  local TRIES=5
+  local d i total min max success_count output stat qtime avg
+
+  for d in "${DOMAINS[@]}"; do
+    total=0
+    min=100000
+    max=0
+    success_count=0
+
+    for ((i=1;i<=TRIES;i++)); do
+      output=$(dig @"$DNS_SERVER" "$d" +stats +tries=1 +time=3)
+      stat=$(echo "$output" | awk '/status:/ {print $6}' | tr -d ',')
+      qtime=$(echo "$output" | awk '/Query time:/ {print $4}')
+
+      if [[ "$stat" == "NOERROR" ]]; then
+        success_count=$((success_count + 1))
+        total=$((total + qtime))
+        (( qtime < min )) && min=$qtime
+        (( qtime > max )) && max=$qtime
+      fi
+    done
+
+    if (( success_count > 0 )); then
+      avg=$((total / success_count))
+      echo "$d -> avg=${avg}ms min=${min}ms max=${max}ms"
+    fi
+  done
+}
+alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
+alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
+# https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
+vm_speed_pub() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]"
+    return 1
+  fi
+
+  local servers=(
+    'a209.speedtest.wobcom.de:5201' # 1
+    'a205.speedtest.wobcom.de:5201' # 2
+    'speedtest.wobcom.de:5201'      # 3
+    'speedtest.myloc.de:5201'       # 4
+    'speedtest.lu.buyvm.net:5201'   # 5
+    'iperf3.moji.fr:5201'           # 6
+    'speedtest.shinternet.ch:5200'  # 7
+    'speedtest.init7.net:5201'      # 8
+  )
+
+  local num="$1"
+  shift
+  if ! [[ "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt "${#servers[@]}" ]; then
+    num=1
+  fi
+
+  local entry="${servers[$((num))]}"
+  local server="${entry%%:*}" # Extract server name (before :)
+  local port="${entry##*:}"   # Extract port number (after :)
+
+  clear
+
+  local use_docker=0
+  if [[ $use_docker -eq 1 ]]; then
+    docker run -it --rm networkstatic/iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+  else
+    iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
+  fi
+}
+
+### PYTHON TOOLS ###
+alias vm_url_decode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
+alias vm_url_encode='python3 -c "import sys, urllib.parse as ul; print(ul.quote_plus(sys.argv[1]))"'
+alias vm_reverse='python3 -c "import sys; print(sys.argv[1][::-1])"'
+
+alias vm_hun_to_min='python3 -c '\''import sys;x = sys.argv[1].split(":");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(f"{x3}m :: {divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m")'\'''
+
+# $sudo apt install wl-clipboard
+# $pip3 install pyperclip
+alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
+
+### EMULATOR ###
+vm_quick_android_emulator() {
+  local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
+  selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
+  if [[ -z "$selected_emulator" ]]; then
+    echo "No emulator selected."
+    return 1
+  fi
+  # avdmanager create avd -n <new_avd_name> -k "system-images;android-<version>;google_apis;x86"
+
+  QT_QPA_PLATFORM=xcb "${android_path}/Sdk/emulator/emulator" \
+    -cores 4 -memory 4096 \
+    -netdelay none -netspeed full -accel on \
+    -no-snapshot-load -no-snapshot -no-snapshot-save -no-snapstorage \
+    -no-boot-anim -no-audio \
+    -writable-system -gpu host \
+    -avd "$selected_emulator" "$@" 1>/dev/null
+}
+
+######################################################################
+##
+## ii: display useful host related information
+##
+######################################################################
+alias vm_my_ip_4='curl -4 -s https://ipinfo.io/ip' # 'curl -4 -s ifconfig.io/ip'
+alias vm_my_ip_6='curl -6 -s https://v6.ipinfo.io/ip' # 'curl -6 -s ifconfig.io/ip'
+alias vm_my_country='curl -s https://ipinfo.io/country' #'curl -s ifconfig.io/country_code'
+alias vm_my_org='curl -s https://ipinfo.io/org'
+alias vm_my_all='curl -s https://ipinfo.io/json | jq' # 'curl -s ifconfig.io/all.json | jq'
+vm_my_bios() {
+  for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family system-serial-number baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
+    printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
+  done
+}
+vm_my_memory() {
+  echo -e "\\n${BRED}RAM Info:$NC"
+  echo -e "  - Total RAM              : $(free -h | awk '/^Mem:/ {print $2}')"
+
+  # Use dmidecode to get detailed memory device info
+  sudo dmidecode --type 17 | awk '
+    BEGIN { dev_num = 0 }
+    /^Memory Device$/ { dev_num++; in_device=1; next }
+    /^$/ { in_device=0 }
+    in_device {
+      if ($0 ~ /Size:/ && $2 != "No")         size = substr($0, index($0,$2))
+      if ($0 ~ /Type:/ && $2 != "Unknown")    type = substr($0, index($0,$2))
+      if ($0 ~ /Speed:/ && $2 != "Unknown")   speed = substr($0, index($0,$2))
+      if ($0 ~ /Locator:/)                    locator = substr($0, index($0,$2))
+      if ($0 ~ /Manufacturer:/)               mfg = substr($0, index($0,$2))
+      if ($0 ~ /Part Number:/)                part = substr($0, index($0,$3))
+      if ($0 ~ /Data Width:/)                 width = substr($0, index($0,$3))
+    }
+    in_device && /Configured Memory Speed:/ { conf_speed = substr($0, index($0,$4)) }
+    in_device && /Form Factor:/ { form = substr($0, index($0,$3)) }
+    !in_device && size {
+      print "  - Device #" dev_num ":"
+      print "      Size         : " size
+      print "      Type         : " type
+      print "      Speed        : " speed
+      if (conf_speed) print "      Config Speed : " conf_speed
+      print "      Locator      : " locator
+      print "      Manufacturer : " mfg
+      print "      Part Number  : " part
+      if (form) print "      Form Factor  : " form
+      if (width) print "      Data Width   : " width
+      print ""
+      size = type = speed = locator = mfg = part = conf_speed = form = width = ""
+    }
+  '
+}
+
+vm_ii() {
+  local run_bios=false
+
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      -b|--bios) run_bios=true; shift ;;
+      -h|--help) echo "Usage: $0 [--bios|-b]"; return 0 ;;
+      *) echo "Unknown option: $1" >&2; return 2 ;;
+    esac
+  done
+
+  echo -e "\\n${BRED}You are logged on:$NC $(hostname -f 2>/dev/null || hostname)"
+  echo -e "\\n${BRED}Additional information:$NC"
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    echo -e "  - description           : ${PRETTY_NAME:-$NAME}"
+  else
+    echo -e "  - description           : $(lsb_release -d 2>/dev/null | cut -d: -f2- | xargs || echo 'Unknown')"
+  fi
+  echo -e "  - kernel name           : $(uname -s)"
+  echo -e "  - network node hostname : $(uname -n)"
+  echo -e "  - kernel release        : $(uname -r)"
+  echo -e "  - kernel version        : $(uname -v)"
+  echo -e "  - machine hardware name : $(uname -m)"
+  echo -e "  - processor type        : $(uname -p 2>/dev/null || echo 'Unknown')"
+  echo -e "  - hardware platform     : $(uname -i 2>/dev/null || echo 'Unknown')"
+  echo -e "  - operating system      : $(uname -o 2>/dev/null || echo 'Unknown')"
+
+  if command -v mokutil >/dev/null 2>&1; then
+    echo -e "  - secure boot status    : $(mokutil --sb-state 2>/dev/null || echo 'Not available')"
+  else
+    echo -e "  - secure boot status    : mokutil missing"
+  fi
+
+
+  echo -e "\\n${BRED}GPU information:$NC"
+  if command -v vulkaninfo >/dev/null 2>&1; then
+    echo -e "  - Vulkan instance       : $(vulkaninfo 2>/dev/null | awk -F': ' '/Vulkan Instance Version/ {print $2; exit}')"
+  fi
+  if command -v glxinfo >/dev/null 2>&1; then
+    echo -e "  - Mesa version          : $(glxinfo -B 2>/dev/null | awk -F'Mesa ' '/OpenGL version string/ {print $2; exit}')"
+    echo -e "  - OpenGL renderer       : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/ {print $2; exit}')"
+    echo -e "  - OpenGL version        : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL version string/ {print $2; exit}')"
+  fi
+
+  echo -e "\\n${BRED}Users logged on:$NC"
+  if command -v w >/dev/null 2>&1; then
+    echo -e "  $(w -h)"
+  else
+    echo -e "  w: command not found"
+  fi
+
+  echo -e "\\n${BRED}Current date:$NC"
+  echo -e "  $(date)"
+
+  echo -e "\\n${BRED}Machine stats:$NC"
+  echo -e "  $(uptime | xargs)"
+
+  if [[ "$run_bios" == true ]]; then
+    echo -e "\\n${BRED}Machine BIOS:$NC"
+    vm_my_bios
+  fi
+
+  echo -e "\\n${BRED}CPU:$NC"
+  echo -e "  - CPU cores (online)    : $(nproc --all 2>/dev/null || echo 'Unknown')"
+  if command -v lscpu >/dev/null 2>&1; then
+    echo -e "  - CPU model             : $(lscpu | awk -F: '/Model name/ {print $2; exit}' | xargs)"
+  fi
+  echo -e "  - microcode             : $(awk -F: '/microcode/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - family                : $(awk -F: '/cpu family/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - model                 : $(awk -F: '/model name|model/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+  echo -e "  - stepping              : $(awk -F: '/stepping/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
+
+  echo -e "\\n${BRED}Public facing IP Address:$NC"
+  echo -e "  - $(vm_my_ip_4 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_ip_6 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_country 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_org 2>/dev/null || echo 'Unavailable')"
+  echo
+}

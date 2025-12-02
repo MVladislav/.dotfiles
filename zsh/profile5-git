@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+######################################################################
+##
+## git:
+## - some aliases :: pretty logs, pre-commit, diff, re-init for changed .gitignore
+## - search in git commits
+## - check outdated git repos
+##
+######################################################################
+alias git_log1='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold green)(%ar)%C(reset) %C(white)%s%C(reset) %C(dim white)- %an%C(reset)%C(bold yellow)%d%C(reset)'\'' --all'
+alias git_log2='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n'\'''\''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'\'' --all'
+alias git_log3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
+git_pre() {
+  if command -v prek >/dev/null 2>&1; then
+    prek run --hook-stage manual --files "$(git ls-files | tr "\n" " ")"
+  elif command -v pre-commit >/dev/null 2>&1; then
+    pre-commit run --hook-stage manual --files "$(git ls-files | tr "\n" " ")"
+  else
+    echo "[ERROR] Neither pre-commit nor prek found. Did you forget to install one?"
+    return 1
+  fi
+}
+alias git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
+
+alias git_ss='git status --short'
+alias git_diff='git diff --output-indicator-new=" " --output-indicator-old=" "'
+
+vm_git_diff() {
+  if command -v delta >/dev/null 2>&1; then
+    git diff --color=always "$@" | delta --dark --line-numbers
+  else
+    git difftool --tool=nvimdiff "$@"
+  fi
+}
+
+vm_git_commit_search2() {
+  # shellcheck disable=SC2016
+  git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
+    fzf --ansi --no-sort --reverse --tiebreak=index \
+      --bind=ctrl-s:toggle-sort \
+      --preview 'git show --color=always $(echo {} | grep -o "[a-f0-9]\{7\}" | head -1)' \
+      --header "enter to view, ctrl-o to checkout" \
+      --bind "q:abort,ctrl-f:preview-page-down,ctrl-b:preview-page-up" \
+      --bind "ctrl-o:become:(echo {} | grep -o '[a-f0-9]\{7\}' | head -1 | xargs git checkout)" \
+      --bind "ctrl-m:execute:(
+          echo {} | grep -o '[a-f0-9]\{7\}' | head -1 |
+          xargs -I % sh -c 'git show --color=always % | less -R'
+      )" \
+      --preview-window=right:60%
+}
+
+vm_git_check_updates() {
+  # Counter for outdated repositories
+  local outdated_found=0
+  local only_relevant=1
+
+  # Use process substitution to avoid subshell issues with while-read loops
+  while IFS= read -r git_dir; do
+    # Get the repository root directory (parent directory of .git)
+    local repo_dir=""
+    repo_dir=$(dirname "$git_dir")
+    [ "$only_relevant" == 0 ] && echo ""
+    [ "$only_relevant" == 0 ] && echo "🔍 Checking repository: $repo_dir"
+
+    # Change into the repository directory safely.
+    pushd "$repo_dir" >/dev/null || {
+      echo "  🔴 Failed to enter directory: $repo_dir"
+      continue
+    }
+
+    # Check if the current branch has an upstream configured.
+    if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+      # Update remote tracking information quietly.
+      git fetch --quiet
+
+      # Count commits that the local branch is behind its upstream.
+      local behind=0
+      behind=$(git rev-list --count HEAD.."@{u}" 2>/dev/null)
+      if [ "$behind" -gt 0 ]; then
+        local remote_commit_info=""
+        local repo_part=""
+        local remote_url=""
+        local commit_link=""
+
+        # Get a one-line summary (hash and message) from the upstream tip commit.
+        remote_commit_info=$(git log -1 --pretty=format:"%h %s" "@{u}")
+
+        # Determine a link to the latest commit if the remote is on GitHub.
+        remote_url=$(git remote get-url origin 2>/dev/null)
+
+        if [[ $remote_url == *"github.com"* ]]; then
+          # Extract the "user/repo" part using parameter expansion.
+          if [[ $remote_url == git@github.com:* ]]; then
+            repo_part=${remote_url#git@github.com:}
+          elif [[ $remote_url == https://github.com/* ]]; then
+            repo_part=${remote_url#https://github.com/}
+          else
+            repo_part=""
+          fi
+
+          # Remove a trailing ".git" or slash if present.
+          repo_part=${repo_part%.git}
+          repo_part=${repo_part%/}
+
+          if [[ -n "$repo_part" ]]; then
+            commit_link="https://github.com/${repo_part}/commit/$(git log -1 --pretty=format:"%H" "@{u}")"
+          else
+            commit_link="N/A"
+          fi
+        else
+          commit_link="N/A"
+        fi
+
+        echo "  🔺 $repo_dir: $remote_commit_info (behind by $behind commit(s))"
+        echo "    🔗 Latest commit link: $commit_link"
+        outdated_found=$((outdated_found + 1))
+      fi
+    else
+      echo "  ⛔ No upstream branch configured for $repo_dir"
+    fi
+
+    # Return to the previous directory; exit/return if popd fails.
+    popd >/dev/null || {
+      echo "  🔴 popd failed for $repo_dir, exiting." >&2
+      return 1
+    }
+  done < <(find . -type d -name ".git" -prune)
+
+  echo ""
+  if [ "$outdated_found" -eq 0 ]; then
+    echo "✅ No outdated projects found."
+  else
+    echo "🛠️ Total outdated projects: $outdated_found"
+  fi
+}

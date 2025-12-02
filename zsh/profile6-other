@@ -1,0 +1,428 @@
+#!/usr/bin/env bash
+
+######################################################################
+##
+## history: cleanup history file
+##
+######################################################################
+vm_zsh_history_cleanup() {
+    local histfile="${HOME}/.zsh_history"
+    local backup
+    backup="${histfile}.bak-$(date +%Y%m%d-%H%M%S)"
+    local deduped="${HOME}/.zsh_history.deduped"
+
+    local opt_multiline=false
+    local opt_apply=false
+    local opt_help=false
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -m|--multiline) opt_multiline=true ;;
+            -a|--apply)     opt_apply=true ;;
+            -h|--help)      opt_help=true ;;
+            *) echo "Unknown option: $1"; return 1 ;;
+        esac
+        shift
+    done
+
+    if $opt_help; then
+        echo "Usage: $0 [options]"
+        echo
+        echo "Options:"
+        echo "  -m,--multiline    Remove multi-line commands"
+        echo "  -a,--apply        Replace original history with deduped version"
+        echo "  -h, --help        Show this help message"
+        echo
+        echo "By default:"
+        echo "  - Creates a backup at ${backup}"
+        echo "  - Removes duplicates and writes cleaned file to ${deduped}"
+        return 0
+    fi
+
+    # always backup first
+    cp -a "${histfile}" "${backup}" || {
+        echo "Error: Could not backup history file."
+        return 1
+    }
+    echo "Backup created at: ${backup}"
+
+    # remove duplicates
+    sed ':start; /\\$/ { N; s/\\\n/\\\x00/; b start }' "${histfile}" \
+      | nl -nrz \
+      | tac \
+      | sort -t';' -u -k2 \
+      | sort \
+      | cut -d$'\t' -f2- \
+      | tr '\000' '\n' \
+      > "${deduped}"
+
+    echo "Deduplicated history written to: ${deduped}"
+
+    # optionally strip multiline entries
+    if $opt_multiline; then
+        sed -n '/^: /{N;/\n: /p;}' "${histfile}" > "${deduped}"
+        echo "History without multiline commands written to: ${deduped}"
+    fi
+
+    # apply deduped history in-place
+    if $opt_apply; then
+        mv "${deduped}" "${histfile}"
+        echo "Replaced original history with deduped version."
+        echo "Reload into current shell with: fc -R ${histfile}"
+    fi
+}
+
+######################################################################
+##
+## markdown to csv or pdf converts
+##
+######################################################################
+vm_convert_md_to_csv() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    return 1
+  fi
+
+  sed '2d' "$1" | sed '2d' | sed -e 's/^| //' -e 's/ |$//' -e 's/ | /,/g' |
+    awk -F, '{
+      for (i=1; i<=NF; i++) {
+        gsub(/^ *| *$/, "", $i);  # Remove leading and trailing spaces
+        if (i > 1) printf ",";
+          #$i = "\"" $i "\"";     # Sourund with double quote
+          printf "%s", $i;
+        }
+        printf "\n";
+      }' >"$(basename "$1" | cut -d. -f1).csv"
+}
+
+vm_convert_md_to_pdf() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    # sudo apt install fontconfig xz-utils pandoc texlive-xetex
+    return 1
+  fi
+
+  local input_file="$1"
+  local cur_date
+  local filename
+  local template_path="${2:-$HOME/.config/templates/eisvogel.latex}"
+  # local template_url="https://raw.githubusercontent.com/Wandmalfarbe/pandoc-latex-template/refs/heads/master/template-multi-file/eisvogel.latex"
+  local template_url="https://github.com/Wandmalfarbe/pandoc-latex-template/releases/download/v3.1.0/Eisvogel.tar.gz"
+
+  # Check if the input file exists
+  if [ ! -f "$input_file" ]; then
+    echo "Error: '$input_file' does not exist."
+    return 1
+  fi
+
+  # Check if pandoc is installed
+  if ! command -v pandoc &>/dev/null; then
+    echo "Error: pandoc is not installed."
+    return 1
+  fi
+
+  # Check if fc-list command is available
+  if ! command -v fc-list &>/dev/null; then
+    echo "Error: fc-list is not installed."
+    return 1
+  fi
+
+  # Check if the template file exists, if not, download it
+  if [ ! -f "$template_path" ]; then
+    mkdir -p "$(dirname "$template_path")"
+    echo "Template not found locally. Downloading from URL..."
+    if ! curl -sf -o "${template_path}.tar.gz" "$template_url"; then
+      echo "Error: Failed to download the template from '$template_url'."
+      return 1
+    fi
+    tar xf "${template_path}.tar.gz" --strip-components=1 Eisvogel-3.1.0/eisvogel.latex
+    rm -f "${template_path}.tar.gz"
+    echo "Template downloaded successfully."
+  fi
+
+  cur_date=$(date +"%Y-%m-%d")
+  filename=$(basename "$input_file" | cut -f 1 -d ".")
+
+  # Font list and checking for available fonts
+  local main_font="DejaVu Sans Mono"
+  local font_list=("FiraMono Nerd Font Mono" "Hack Nerd Font Mono" "ProggyCleanTTSZ Nerd Font Mono" "TerminessTTF Nerd Font Mono" "JetBrains Mono" "Fira Code" "Consolas" "Courier New")
+
+  for font_check in "${font_list[@]}"; do
+    if fc-list | grep -iq "$font_check"; then
+      main_font=$font_check
+      break
+    fi
+  done
+  echo "Using font: $main_font"
+
+  # Run pandoc to convert markdown to PDF
+  pandoc "$input_file" \
+    -o "${filename}.pdf" \
+    --from markdown \
+    --template "$template_path" \
+    --pdf-engine=xelatex \
+    --listings \
+    -V lang=en-GB \
+    -V classoption=onside \
+    -V book \
+    -V date="$cur_date" \
+    -V "mainfont:$main_font" \
+    -V 'sansfont:DejaVuSans' \
+    -V 'monofont:DejaVuSansMono' \
+    -V 'mathfont:TeXGyreDejaVuMath-Regular'
+}
+
+vm_convert_docs_to_md() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <DOC_FILE | DOC_URL>"
+    echo "  - Supported formats: https://docling-project.github.io/docling/usage/supported_formats/"
+    return 1
+  fi
+
+  python3 -m venv .venv
+  # shellcheck disable=SC1091
+  source .venv/bin/activate
+  python3 -m pip install docling
+
+  docling --image-export-mode referenced "$1"
+}
+
+######################################################################
+##
+##
+##
+######################################################################
+vm_reduce_img_size() {
+  local input="$1"
+  local ext="${input##*.}"
+  ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')
+  local output="${input%.*}-small.${ext}"
+
+  case "$ext" in
+    jpg|jpeg)
+      convert "$input" -resize 1024x \
+        -strip \
+        -interlace Plane \
+        -sampling-factor 4:2:0 \
+        -quality 75 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    png)
+      convert "$input" -resize 1024x \
+        -strip \
+        -define png:compression-level=9 \
+        -define png:compression-strategy=1 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    webp)
+      convert "$input" -resize 1024x \
+        -strip \
+        -quality 75 \
+        +profile '!icc,*' \
+        "$output"
+      ;;
+    *)
+      echo "Unsupported format: $ext"
+      return 1
+      ;;
+  esac
+}
+
+vm_convert_video() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <VIDEO>"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${input%.*}.mp4"
+
+  local codec="libx265" # libx264 | libx265
+  local quality=23      # Lower quality for better file size
+  local fps=60
+
+  # -vaapi_device /dev/dri/renderD128 \
+  ffmpeg -y -v error -hide_banner -i "$input" \
+    -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
+    -map 0:0 -c:v "$codec" \
+    -map 0:a? -c:a copy \
+    -crf "$quality" \
+    -pix_fmt yuv420p \
+    -preset fast \
+    -r "$fps" \
+    "$output"
+}
+
+vm_convert_gif() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <VIDEO>"
+    return 1
+  fi
+
+  local input="$1"
+  local output="${input%.*}.gif"
+  local temp_video="${input%.*}.mp4"
+  local palette="/tmp/palette.png"
+
+  local codec="libx264" # libx264 | libx265
+  local quality=23      # Lower quality for better file size
+  local fps=10          # Reduce fps to optimize GIF size
+  local scale=512       # Lower resolution for smaller GIF size
+
+  # -vaapi_device /dev/dri/renderD128 \
+  ffmpeg -y -v error -hide_banner -i "$input" \
+    -vf "scale=ceil(iw/2)*2:ceil(ih/2)*2" \
+    -map 0:0 -c:v "$codec" \
+    -map 0:a? -c:a copy \
+    -crf "$quality" \
+    -pix_fmt yuv420p \
+    -preset fast \
+    -r 60 \
+    "$temp_video" > /dev/null 2>&1 \
+    || { echo "Failed to convert video!"; return 1; }
+
+  ffmpeg -y -v error -hide_banner -i "$temp_video" -vf "fps=$fps,scale=$scale:-1:flags=lanczos,palettegen=stats_mode=diff" "$palette" > /dev/null 2>&1 \
+  || { echo "Failed to convert palette!"; return 1; }
+  ffmpeg -y -v error -hide_banner -i "$temp_video" -i "$palette" -filter_complex "fps=$fps,scale=$scale:-1:flags=lanczos[x];[x][1:v]paletteuse" > /dev/null 2>&1 "$output" \
+  || { echo "Failed to convert gif!"; rm "$palette"; return 1; }
+}
+
+######################################################################
+##
+## Create a shortcut for an AppImage with a PNG icon.
+##
+######################################################################
+vm_shortcut_appimage() {
+  if [[ "$#" -ne 3 ]]; then
+    echo "Usage: $0 <NAME> <APPIMAGE> <PNG>" >&2
+    return 1
+  fi
+
+  # Parameters
+  local name="$1"
+  local appimage="$2"
+  local image_png="$3"
+  local install_dir="/opt/${name}"
+  local desktop_entry="/usr/share/applications/${name}.desktop"
+
+  # Create necessary directories and move files
+  sudo mkdir -p "$install_dir" || {
+    echo "Failed to create directory $install_dir"
+    return 1
+  }
+  # shellcheck disable=SC2033
+  sudo mv "$appimage" "$install_dir/${name}.AppImage" || {
+    echo "Failed to move AppImage file"
+    return 1
+  }
+  # shellcheck disable=SC2033
+  sudo mv "$image_png" "$install_dir/${name}.png" || {
+    echo "Failed to move PNG file"
+    return 1
+  }
+
+  # Set the correct owner and permissions
+  sudo chown -R root:root "$install_dir"
+  sudo chmod -R 755 "$install_dir"
+  sudo chmod 644 "$install_dir/${name}.png"
+
+  # Create Desktop Entry with indentation using printf and tee
+  printf "[Desktop Entry]\n\
+    Name=%s\n\
+    Exec=%s/%s.AppImage\n\
+    Icon=%s/%s.png\n\
+    Comment=%s\n\
+    Type=Application\n\
+    Terminal=false\n\
+    Encoding=UTF-8\n\
+    Categories=Utility;\n" \
+    "$name" "$install_dir" "$name" "$install_dir" "$name" "$name" |
+    sudo tee "$desktop_entry" >/dev/null
+
+  # Update the desktop database
+  sudo update-desktop-database || {
+    echo "Failed to update desktop database"
+    return 1
+  }
+
+  echo "Shortcut for '${name}' created successfully."
+}
+
+######################################################################
+##
+## ionos: ...
+##
+######################################################################
+vm_ionos_api() {
+  if [ $# -lt 0 ]; then
+    echo "Usage: $0"
+    return 1
+  fi
+
+  local prefix
+  local secret
+  echo -n "Prefix: "
+  read -rs prefix
+  if [ -z "$prefix" ]; then
+    echo "No prefix entered"
+    return 1
+  fi
+  echo -n "Secret: "
+  read -rs secret
+  if [ -z "$secret" ]; then
+    echo "No secret entered"
+    return 1
+  fi
+
+  local response
+  # local response_choose
+  # response=$(curl -f -s -S -k -X GET https://api.hosting.ionos.com/dns/v1/zones -H "X-API-Key: $prefix.$secret" || {
+  #   echo "ERROR: API request failed for URL: https://api.hosting.ionos.com/dns/v1/zones"
+  #   return 1
+  # })
+  # response_choose=$(echo "$response" | jq -r '.[] | "\(.name) :: \(.id)"' | fzf)
+
+  # local name
+  # local id
+  # if [ -z "$response_choose" ]; then
+  #   echo "No selection made"
+  #   return 0
+  # fi
+
+  # name=$(echo "$response_choose" | cut -d' ' -f1)
+  # id=$(echo "$response_choose" | cut -d' ' -f3)
+  # echo "You selected: name=$name, id=$id"
+
+  # response=$(curl -f -s -S -k -X GET "https://api.hosting.ionos.com/dns/v1/zones/$id" -H "X-API-Key: $prefix.$secret")
+  # echo "$response" | jq
+
+  local domains
+  echo "Please enter domain names separated by comma:"
+  read -r domains
+
+  domains=$(echo "$domains" | tr -s ' ' ',')
+  domains="${domains//,/\",\"}"
+  domains="\"$domains\""
+
+  response=$(curl -f -s -S -k -X DELETE "https://api.hosting.ionos.com/dns/v1/dyndns" \
+    -H "X-API-Key: $prefix.$secret" || {
+    echo "ERROR: API request failed for URL: DELETE https://api.hosting.ionos.com/dns/v1/dyndns"
+    return 1
+  })
+  echo "$response" | jq
+
+  response=$(curl -f -s -S -k -X POST "https://api.hosting.ionos.com/dns/v1/dyndns" \
+    -H "X-API-Key: $prefix.$secret" \
+    -H "accept: application/json" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"domains\":[$domains],
+      \"description\": \"My DynamicDns\"
+    }" || {
+    echo "ERROR: API request failed for URL: POST https://api.hosting.ionos.com/dns/v1/dyndns"
+    return 1
+  })
+  echo "$response" | jq
+}

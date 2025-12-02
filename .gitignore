@@ -24,8 +24,14 @@ git/**
 !zsh/
 zsh/**
 !zsh/zshrc
-!zsh/profile-append
 !zsh/profile-sec
+!zsh/profile-append
+!zsh/profile1-base
+!zsh/profile2-defaults
+!zsh/profile3-containers
+!zsh/profile4-helper
+!zsh/profile5-git
+!zsh/profile6-other
 
 !zsh/themes/
 zsh/themes/**

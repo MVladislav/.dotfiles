@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+### SSH ###
+vm_xterm_cp_ssh() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <SSH_HOST>"
+    return 1
+  fi
+  infocmp -x | ssh "$1" -- tic -x -
+}
+vm_xterm_cp_local() {
+  term_dir=$(echo "$TERM" | cut -c1)
+  term_path="${TERMINFO:-$HOME/.terminfo}/$term_dir/$TERM"
+
+  if [ ! -f "$term_path" ]; then
+    echo "Terminfo for $TERM not found at $term_path"
+    return 1
+  fi
+  sudo install -D "$term_path" "/etc/terminfo/$term_dir/$TERM"
+}
+
+### General ###
+alias rm='rm -i'
+alias cp='cp -i'
+# shellcheck disable=SC2032
+alias mv='mv -i'
+
+### LS as EZA ###
+if command -v eza &>/dev/null; then
+  alias ls='eza --color=always --git'
+fi
+alias l='ls -a1'
+alias ll='ls -aalhg'
+alias lg='ll --grid'
+alias llm='ll -t modified -s modified'
+alias lla='ll -t accessed -s accessed'
+alias llc='ll -t created -s created'
+alias ld='ls -ld .*'
+alias tree='ls -TlL 4'
+
+### CAT as BAT ###
+alias catt='batcat -p -P --color always'
+alias catt-b='batcat -P --color always'
+
+### CP as RSYNC ###
+alias rsync-d='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
+alias cp-r='rsync-d -u'
+alias cp-ra='rsync-d'
+scp-r() {
+  rsync-d -u -e "ssh -T -o Compression=no -x" "$@"
+}
+scp-ra() {
+  rsync-d -e "ssh -T -o Compression=no -x" "$@"
+}
+
+### GREP ###
+alias grep='grep --color'
+alias grep-q='grep -rwih'
+alias grep-r='grep -rwi'
+alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
+if command -v rg &>/dev/null; then
+  # https://github.com/BurntSushi/ripgrep
+  alias rg-q='rg -wiIN'
+  alias rg-r='rg -wi'
+  alias rg-d='rg -n -H -C 5 --glob "!.git/*" --glob "!.svn/*" --glob "!CVS/*"'
+  alias rg-github='rg -ioPIN "https://github\.com/[^/\s]+/[^/\s]+"'
+fi
+
+### FIND ###
+if command -v fdfind &>/dev/null; then
+  # https://github.com/sharkdp/fd
+  alias fd='fdfind --hidden --no-ignore'
+fi
+alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
+find-g() {
+  sudo /usr/bin/find / \
+    -not -regex '/home/.*' \
+    -not -regex '/mnt/.*' \
+    -not -regex '/media/.*' \
+    -not -regex '.*/\.cache/.*' \
+    -not -regex '/proc/.*' \
+    -not -regex '/sys/.*' \
+    -not -regex '/var/log/.*' \
+    -newermt "-${1:-5} minute" -ls 2>/dev/null
+}
+find-l() {
+  /usr/bin/find "${2:-.}" \
+    -not -regex "${3:-x}" \
+    -newermt "-${1:-5} minute" -ls 2>/dev/null
+}
+
+### OTHER ###
+alias t='tail -f'
+alias du-l='du -hs * .* 2>/dev/null | sort -h'
+alias du-g='du -hs /boot /dev /etc /home /opt /root /snap /srv /sys /tmp /usr /var 2>/dev/null | sort -h'
+alias ip='ip -c'
+
+### VIM ###
+if command -v nvim &>/dev/null; then
+  alias vim=nvim
+fi
+
+### TMUX ###
+alias vm_tl='tmux ls'
+alias vm_ta='tmux attach -t'
+alias vm_tk='tmux kill-session -t'
+
+### ZED ###
+if command -v flatpak &>/dev/null; then
+  alias zed-editor='flatpak run dev.zed.Zed'
+fi
+
+### COMPRESS ###
+alias pigz='pigz -k -p$(nproc)'
+tar-p() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <directory> [<password | 'pw'>]"
+    return 1
+  fi
+
+  PATH_TO_ENC="$1"
+  if [ $# -eq 1 ]; then
+    echo "disabled"
+    tar --use-compress-program="pigz " -cpf "$(basename "$PATH_TO_ENC").tar.gz" -C "$PATH_TO_ENC" .
+  elif [ $# -eq 2 ]; then
+    PASSWORD_FOR_ENC="$2"
+    [[ "$PASSWORD_FOR_ENC" == "pw" ]] && { # pragma: allowlist secret
+      echo "Password: "
+      read -rs PASSWORD_FOR_ENC
+    }
+    tar --use-compress-program="pigz " -cpf - -C "$PATH_TO_ENC" . | gpg -c --cipher-algo AES256 --batch --passphrase "$PASSWORD_FOR_ENC" -o "$(basename "$PATH_TO_ENC").tar.gz.gpg.enc"
+  fi
+}
+untar-p() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <encrypted_file> <password | 'pw'>"
+    return 1
+  fi
+
+  PATH_TO_DEC="$1"
+  PASSWORD_FOR_DEC="$2"
+  [[ "$PASSWORD_FOR_DEC" == "pw" ]] && { # pragma: allowlist secret
+    echo "Password: "
+    read -rs PASSWORD_FOR_DEC
+  }
+
+  mkdir -p "$(dirname "$PATH_TO_DEC")/${PATH_TO_DEC%%.*}"
+  gpg -d --batch --passphrase "$PASSWORD_FOR_DEC" "$PATH_TO_DEC" | tar --use-compress-program="pigz " -xpf - -C "$(dirname "$PATH_TO_DEC")/${PATH_TO_DEC%%.*}"
+}
+
+######################################################################
+##
+## extract: Extract most known archives with one command
+##
+######################################################################
+vm_extract() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|exe|tar.bz2|tar.gz|tar.xz>"
+    return 1
+  fi
+
+  local file="$1"
+
+  # Check if the file exists
+  if [ ! -f "$file" ]; then
+    echo "Error: '$file' does not exist."
+    return 1
+  fi
+
+  # Extract based on file extension
+  case "$file" in
+  *.tar.bz2 | *.tbz2) tar xjf "$file" ;;
+  *.tar.gz | *.tgz) tar xzf "$file" ;;
+  *.tar.xz) tar xJf "$file" ;;
+  *.lzma) unlzma "$file" ;;
+  *.bz2) bunzip2 "$file" ;;
+  *.rar) unrar x -ad "$file" ;;
+  *.gz) gunzip "$file" ;;
+  *.tar) tar xf "$file" ;;
+  *.zip) unzip "$file" ;;
+  *.Z) uncompress "$file" ;;
+  *.7z) 7z x "$file" ;;
+  *.xz) unxz "$file" ;;
+  *.exe) cabextract "$file" ;;
+  *) echo "Error: Unknown archive method for '$file'" ;;
+  esac
+}
+
+######################################################################
+##
+## encrypt: Encrypt files using known archives with a single command
+##
+######################################################################
+vm_encrypt() {
+  if [ $# -lt 2 ]; then
+    echo "Usage: $0 <rar|7z> <file_or_path> [keyword 'sec'|password]"
+    return 1
+  fi
+
+  local type="$1"
+  local file_or_path="$2"
+  local password_option=""
+
+  # Validate type and set password_option
+  case "$type" in
+  rar)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for RAR
+      password_option="$([[ "$3" == "sec" ]] && echo "-hp")${3#sec}"
+    fi
+    ;;
+  7z)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for 7z
+      password_option="$([[ "$3" == "sec" ]] && echo "-p")${3#sec}"
+    fi
+    ;;
+  *)
+    echo "Error: Unsupported compression type '$type'. Supported types are 'rar' and '7z'."
+    return 1
+    ;;
+  esac
+
+  # Check if the file or path exists
+  if [ ! -e "$file_or_path" ]; then
+    echo "Error: '$file_or_path' is not a valid file or path."
+    return 1
+  fi
+
+  # Perform the compression and encryption
+  case "$type" in
+  rar)
+    if [ -n "$password_option" ]; then
+      rar a "$password_option" "${file_or_path}.rar" "$file_or_path"
+    else
+      rar a "${file_or_path}.rar" "$file_or_path"
+    fi
+    ;;
+  7z)
+    if [ -n "$password_option" ]; then
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password_option" "${file_or_path}.7z" "$file_or_path"
+    else
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "${file_or_path}.7z" "$file_or_path"
+    fi
+    ;;
+  esac
+}

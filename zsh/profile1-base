@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+### COLOR ### (https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux)
+# shellcheck disable=SC2034
+NC='\033[0m'         # No Color
+BRED='\033[1;31m'    # Red
+BPURPLE='\033[1;35m' # Purple
+
+### PY & ANSIBLE ###
+export PY_COLOR=1
+export ANSIBLE_FORCE_COLOR=1
+
+### ZSH ###
+if command -v zsh &>/dev/null && [ -n "$ZSH_NAME" ]; then
+  setopt NO_NOMATCH
+fi
+
+### BASH ###
+export HISTTIMEFORMAT="%F %T "
+alias sudo-env='sudo -E env "PATH=$PATH"'
+
+### EDITOR ###
+if command -v nvim &>/dev/null; then
+  export EDITOR='nvim'
+  export SUDO_EDITOR="nvim"
+else
+  export EDITOR='vim'
+  export SUDO_EDITOR="vim"
+fi
+
+######################################################################
+##
+## HELPER
+##
+######################################################################
+addToPath() {
+  if [[ ":$PATH:" != *":$1:"* ]]; then
+    export PATH="$PATH:$1"
+  fi
+}
+addToPathFront() {
+  if [[ ":$PATH:" != *":$1:"* ]]; then
+    export PATH="$1:$PATH"
+  fi
+}
+
+######################################################################
+##
+## set PATH so it includes user's private bin if it exists
+##
+######################################################################
+addToPathFront "$HOME/.local/bin"
+if [ -d "$HOME/.local/bin/vm" ]; then
+  addToPathFront "$HOME/.local/bin/vm"
+fi
+if [ -d /etc/zsh/profile.d ]; then
+  if ls /etc/zsh/profile.d/*.sh 1>/dev/null 2>&1; then
+    for i in /etc/zsh/profile.d/*.sh; do
+      if [ -r "$i" ]; then
+        # shellcheck disable=SC1090
+        . "$i"
+      fi
+    done
+    unset i
+  fi
+fi
+
+######################################################################
+##
+## set PATH for dev env
+##
+######################################################################
+export GOPATH="$HOME/.go"
+addToPath '/usr/local/go/bin'
+addToPath "$GOPATH/bin"
+
+NPM_PACKAGES="${HOME}/.npm-packages"
+if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
+  export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
+fi
+addToPathFront '/snap/node/current/bin'
+addToPath "$NPM_PACKAGES/bin"
+
+export GEM_HOME="$HOME/.gems"
+addToPath "$GEM_HOME/bin"
+
+export RUSTUP_HOME="$HOME/.rustup"
+# addToPath "$RUSTUP_HOME/bin"
