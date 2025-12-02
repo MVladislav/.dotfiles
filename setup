@@ -47,7 +47,7 @@ RUN_INSTALL_BTOP_INTEL=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
-VERSION_NVIM=v0.11.4
+VERSION_NVIM=v0.11.5
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9
 VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
@@ -163,6 +163,9 @@ install_dependencies_dev() {
   print_notes "   📥 installing shellcheck..."
   $RUN_WITH_SUDO snap install shellcheck 1>/dev/null
 
+  print_notes "   📥 installing httpie..."
+  $RUN_WITH_SUDO snap install httpie 1>/dev/null
+
   print_notes "   📥 installing python3 pip, venv and dev..."
   $RUN_WITH_SUDO apt install -y python3-pip python3-venv python3-dev 1>/dev/null
 
@@ -175,7 +178,10 @@ install_dependencies_dev() {
   go install github.com/jesseduffield/lazygit@latest 1>/dev/null
 
   print_notes "   📥 installing uv and prek..."
-  python3 -m pip install --break-system-packages uv prek 1>/dev/null
+  python3 -m venv "$HOME/.venv"
+  # shellcheck disable=SC1091
+  source "$HOME/.venv/bin/activate"
+  python3 -m pip install uv prek 1>/dev/null
 
   print_info2 "🚀 DEPS :: dev dependencies installed!"
 }
@@ -358,6 +364,8 @@ install_dependencies_ghostty() {
   fi
 
   print_notes "   💡 Build and install ghostty..."
+  sed -i 's|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz|g' ./build.zig.zon
+  sed -i 's|N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y|N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN|g' ./build.zig.zon
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
