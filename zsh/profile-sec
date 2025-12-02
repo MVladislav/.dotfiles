@@ -13,8 +13,11 @@ VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; 
 ##
 ######################################################################
 
+# shellcheck disable=SC2139
 alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
+# shellcheck disable=SC2139
 alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
+# shellcheck disable=SC2139
 alias sj="sj -a '${VM_SEC_USER_AGENT}'"
 alias sqlmap="sqlmap --random-agent"
 
@@ -59,6 +62,7 @@ nmap-report() {
 ##
 ######################################################################
 
+# shellcheck disable=SC2139
 alias vm_sec_massdns="massdns -r '${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt' -t A -o S targets.txt -w hosts.txt -s 4000"
 alias vm_sec_what="whatweb -v"
 
@@ -94,8 +98,10 @@ vm_sec_xssall() {
 # echo https://192.168.111.41 | katana -jc -d 5 -c 50 -ef css,woff,woff2,eot,ttf,tiff,tif -kf robotstxt,sitemapxml | grep -v -e "="
 # subfinder -d https://192.168.111.41 -silent -all | httpx -silent | katana -d 5 silent -em js,jsp,json | grep -P "(?i).+\.js(?:on|p)?$"
 
+# shellcheck disable=SC2139
 alias vm_sec_gobuster="gobuster dir --wordlist '${VM_SEC_LISTS_SECLISTS}/diccnoext.txt' --wildcard --url"
 
+# shellcheck disable=SC2139
 alias vm_sec_fuzz="ffuf -w '${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt' -mc all -u"
 vm_sec_fuzz_path() {
   if [ "$#" -lt 1 ]; then
