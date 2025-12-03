@@ -30,6 +30,7 @@ zsh/**
 !zsh/profile2-defaults
 !zsh/profile3-containers
 !zsh/profile4-helper
+!zsh/profile4-tests
 !zsh/profile5-git
 !zsh/profile6-other
 

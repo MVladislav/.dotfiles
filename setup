@@ -472,6 +472,7 @@ setup_profiles() {
   ln -sf "${PWD}/zsh/profile2-defaults" "${HOME}/.profile2-defaults"
   ln -sf "${PWD}/zsh/profile3-containers" "${HOME}/.profile3-containers"
   ln -sf "${PWD}/zsh/profile4-helper" "${HOME}/.profile4-helper"
+  ln -sf "${PWD}/zsh/profile4-tests" "${HOME}/.profile4-tests"
   ln -sf "${PWD}/zsh/profile5-git" "${HOME}/.profile5-git"
   ln -sf "${PWD}/zsh/profile6-other" "${HOME}/.profile6-other"
   print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-sec' as '$LN_PROFILES_02'"
