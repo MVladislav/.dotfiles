@@ -222,7 +222,7 @@ install_tio() {
 
   # Define packages needed for build and install
   # shellcheck disable=SC2034
-  local packages_tools=()
+  local packages_tools=(liblua5.2-0)
   # shellcheck disable=SC2034
   local packages_build=(git meson cmake ninja-build pkg-config libglib2.0-dev liblua5.2-dev)
   install_dependencies_needs packages_tools[@] packages_build[@]

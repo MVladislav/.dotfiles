@@ -60,7 +60,7 @@ VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
 VERSION_BTOP=v1.4.5
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-7.1.0 # develop # rocm-7.0.1
+VERSION_RSMI=rocm-7.1.1 # develop # rocm-7.0.1
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
 : "${LN_TMUX_ORIG_BASE:="${HOME}/.tmux"}"
@@ -701,7 +701,7 @@ install_btop() {
   # shellcheck disable=SC2034
   local packages_tools=()
   # shellcheck disable=SC2034
-  local packages_build=(git build-essential cmake libdrm-dev)
+  local packages_build=(git build-essential cmake libdrm-dev pkg-config)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   print_notes "   💡 Cloning btop..."
