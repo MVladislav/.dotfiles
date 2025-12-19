@@ -102,6 +102,10 @@ logseq/**
 !logseq/*.json
 !logseq/*.css
 
+!btop/
+btop/**
+!btop/*.conf
+
 !os/
 os/**
 

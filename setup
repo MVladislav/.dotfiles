@@ -714,26 +714,20 @@ install_btop() {
     git checkout -q "${VERSION_BTOP}"
   fi
 
-  # export ROCM_DIR='lib/rocm_smi_lib'
-  # git clone https://github.com/ROCm/amdsmi.git lib/rocm_smi_lib
-  # mkdir -p "${ROCM_DIR}/build"
-  # cmake .. -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
-  # make -j $(nproc) VERBOSE=1
-  # make amd_smi
-
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
   local ROCM_DIR='lib/rocm_smi_lib'
+  local ROCM_PROJECT='rocm-smi-lib' # amdsmi
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
     print_notes "   💡 Cloning & building rocm..."
     rm -rf $ROCM_DIR /tmp/rocm-systems 1>/dev/null
     mkdir -p lib 1>/dev/null
     git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" /tmp/rocm-systems
-    mv /tmp/rocm-systems/projects/rocm-smi-lib lib/rocm_smi_lib
+    mv "/tmp/rocm-systems/projects/$ROCM_PROJECT" "$ROCM_DIR"
     mkdir -p "${ROCM_DIR}/build" 1>/dev/null
     pushd "${ROCM_DIR}/build" 1>/dev/null
-    cmake .. 1>/dev/null
-    make -j "$(nproc)" 1>/dev/null
+    cmake .. 1>/dev/null # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
+    make -j "$(nproc)" 1>/dev/null # amd_smi
     popd 1>/dev/null
     RSMI_STATIC='true'
   fi
@@ -747,8 +741,12 @@ install_btop() {
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
 
   if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
-    print_notes "   💡 configure btop with 'setcap' for 'GPU' access without 'sudo'"
-    $RUN_WITH_SUDO setcap cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
+    print_notes "   💡 configure btop with 'setcap' for 'GPU' and 'CPU watts' access without 'sudo'"
+    $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
+    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  else
+    print_notes "   💡 configure btop with 'setcap' for 'CPU watts' access without 'sudo'"
+    $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   fi
 
