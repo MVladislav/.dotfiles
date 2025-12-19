@@ -13,9 +13,11 @@ alias git_log2='git log --graph --abbrev-commit --decorate --format=format:'\''%
 alias git_log3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
 git_pre() {
   if command -v prek >/dev/null 2>&1; then
-    prek run --hook-stage manual --files "$(git ls-files | tr "\n" " ")"
+    # shellcheck disable=SC2046
+    prek run --hook-stage manual --files $(git ls-files | tr "\n" " ")
   elif command -v pre-commit >/dev/null 2>&1; then
-    pre-commit run --hook-stage manual --files "$(git ls-files | tr "\n" " ")"
+    # shellcheck disable=SC2046
+    pre-commit run --hook-stage manual --files $(git ls-files | tr "\n" " ")
   else
     echo "[ERROR] Neither pre-commit nor prek found. Did you forget to install one?"
     return 1
