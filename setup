@@ -43,6 +43,7 @@ RUN_INSTALL_FONTS=0
 RUN_INSTALL_BTOP=0
 RUN_INSTALL_BTOP_AMD=0
 RUN_INSTALL_BTOP_INTEL=0
+RUN_INSTALL_ANDROID=0
 
 RUN_INSTALL_GH=0
 
@@ -117,6 +118,7 @@ main() {
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
   [[ $RUN_INSTALL_BTOP -eq 1 ]] && install_btop
+  [[ $RUN_INSTALL_ANDROID -eq 1 ]] && install_setup_android_emulator
 
   [[ $RUN_INSTALL_GH -eq 1 ]] && download_github_binary 'https://github.com/cli/cli' 'gh_.*_linux_amd64\.tar\.gz'
 
@@ -756,6 +758,72 @@ install_btop() {
   print_info2 "🚀 BTOP :: btop installed!"
 }
 
+# ANDROID :: setup emulator
+install_setup_android_emulator() {
+  # sudo apt install openjdk-26-jre-headless
+  # --- Paths ----------------------------------------------------------
+  export VM_ANDROID_PATH="$HOME/Downloads/android"
+  export ANDROID_HOME="$VM_ANDROID_PATH/Sdk"
+  export ANDROID_SDK_ROOT="$ANDROID_HOME"
+  mkdir -p "$ANDROID_HOME"
+
+  command -v fzf || { echo "fzf not installed"; exit 1; }
+
+  # --- Download & unpack cmdline-tools if missing ---------------------
+  if [[ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]]; then
+    echo "📦 Downloading Android command-line tools..."
+    # https://developer.android.com/studio#command-line-tools-only
+    # - https://dl.google.com/android/repository/commandlinetools-<os>-<version>_latest.zip
+    curl -sLo "$ANDROID_HOME/cmdline-tools.zip" \
+      https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+
+    unzip -q "$ANDROID_HOME/cmdline-tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+    rm "$ANDROID_HOME/cmdline-tools.zip"
+  fi
+
+  SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+  AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+  EMULATOR="$ANDROID_HOME/emulator/emulator"
+
+  # --- Accept licenses automatically ---------------------------------
+  yes | "$SDKMANAGER" --licenses > /dev/null || true
+
+  # --- Update SDK tools ----------------------------------------------
+  "$SDKMANAGER" --update
+
+  # --- Install build tools ----------------------
+  echo "📋 Available build-tools:"
+  BUILD_TOOLS=$("$SDKMANAGER" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort)
+  SELECTED_BUILD_TOOL=$(echo "$BUILD_TOOLS" | fzf --prompt="Select build-tools version: ")
+  "$SDKMANAGER" "$SELECTED_BUILD_TOOL"
+
+  # --- Show available system images and devices ----------------------
+  echo "📋 Available system images:"
+  IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -u)
+
+  # Use fzf if installed, otherwise prompt
+  SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
+
+
+  echo "📦 Installing: $SELECTED_IMAGE ..."
+  "$SDKMANAGER" "platform-tools" "emulator" "$SELECTED_IMAGE"
+
+  # --- Choose device profile -----------------------------------------
+  DEVICES=$("$AVDMANAGER" list devices | grep 'id:' | awk -F'"' '{print $2}' | grep 'pixel_')
+  SELECTED_DEVICE=$(echo "$DEVICES" | fzf --prompt="Select device profile: " --query="pro")
+
+  # --- Create AVD ----------------------------------------------------
+  SELECTED_IMAGE_NAME=$(basename "$SELECTED_IMAGE" | tr ';:' '_' | tr -d '[:punct:]')
+  AVD_NAME=${SELECTED_IMAGE_NAME}_$(basename "$SELECTED_DEVICE")_"$(date +%s)"
+  echo "🧩 Creating AVD: $AVD_NAME ..."
+  "$AVDMANAGER" create avd -n "$AVD_NAME" -k "$SELECTED_IMAGE" -d "$SELECTED_DEVICE" --force
+
+  # --- Verify --------------------------------------------------------
+  echo "✅ Available AVDs:"
+  "$EMULATOR" -list-avds
+}
+
 # ******************************************************************************
 
 # Function to show usage information
@@ -795,6 +863,7 @@ usage() {
   print_info "     -ibtop,        --install-btop                  Run install install_btop"
   print_info "     -ibtop-amd,    --install-btop-amd              Run install install_btop with AMD GPU support"
   print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
+  print_info "     -iemu,         --install-android-emulator      Run install install_setup_android_emulator"
   print_info "     -igh,          --install-github-cli            Run install gh-cli-binary from github releases"
   print_info "     -upc,          --update-check                  Check if new version for builds exists"
   print_info "     -s                                             Use 'source' instead 'release' used for install services"
@@ -889,6 +958,9 @@ parse_args() {
     -ibtop-intel | --install-btop-intel)
       RUN_INSTALL_BTOP=1
       RUN_INSTALL_BTOP_INTEL=1
+      ;;
+    -iemu | --install-android-emulator)
+      RUN_INSTALL_ANDROID=1
       ;;
     -igh | --install-github-cli)
       RUN_INSTALL_GH=1

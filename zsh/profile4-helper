@@ -90,7 +90,16 @@ vm_quick_android_emulator() {
     -writable-system -gpu host \
     -avd "$selected_emulator" "$@" 1>/dev/null
 }
+vm_quick_android_emulator_rm() {
+  local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
+  selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
+  if [[ -z "$selected_emulator" ]]; then
+    echo "No emulator selected."
+    return 1
+  fi
 
+  "${android_path}/Sdk/cmdline-tools/latest/bin/avdmanager" delete avd -n "$selected_emulator"
+}
 ######################################################################
 ##
 ## ii: display useful host related information
