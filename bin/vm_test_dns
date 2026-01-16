@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$' '
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
+
+command -v dig >/dev/null || { echo "dig not found"; exit 1; }
+
+# -----------------------------
+# DNS providers
+# -----------------------------
+PROVIDERSV4_HOME="${PROVIDERSV4_HOME:-"192.168.1.1"}#home"
+PROVIDERSV6_HOME="${PROVIDERSV6_HOME:-"fd00:affe:affe:1::1"}#home-v6"
+PROVIDERSV4=(
+  "$PROVIDERSV4_HOME"
+  "9.9.9.9#quad9-9-sec"
+  "149.112.112.112#quad9-112-sec"
+  "149.112.112.10#quad9-112-10-unsec"
+  "9.9.9.10#quad9-9-10-unsec"
+  "1.1.1.1#cloudflare-1"
+  "1.0.0.1#cloudflare-0"
+  # "4.2.2.1#level3"
+  # "8.8.8.8#google"
+  # "80.80.80.80#freenom"
+  # "208.67.222.123#opendns"
+  # "199.85.126.20#norton"
+  # "185.228.168.168#cleanbrowsing"
+  # "77.88.8.7#yandex"
+  # "176.103.130.132#adguard"
+  # "156.154.70.3#neustar"
+  # "8.26.56.26#comodo"
+  # "45.90.28.202#nextdns"
+  # "194.242.2.2#mullvad"
+)
+# shellcheck disable=SC2034
+PROVIDERSV6=(
+  "$PROVIDERSV6_HOME"
+  "2620:fe::9#quad9-9-sec-v6"
+  "2620:fe::fe#quad9-fe-sec-v6"
+  "2620:fe::10#quad9-fe-10-unsec"
+  "2620:fe::fe:10#quad9-fe-10-10-unsec"
+  "2606:4700:4700::1111#cloudflare-1-v6"
+  "2606:4700:4700::1001#cloudflare-0-v6"
+  # "2001:4860:4860::8888#google-v6"
+  # "2620:119:35::35#opendns-v6"
+  # "2a0d:2a00:1::1#cleanbrowsing-v6"
+  # "2a02:6b8::feed:0ff#yandex-v6"
+  # "2a00:5a60::ad1:0ff#adguard-v6"
+  # "2610:a1:1018::3#neustar-v6"
+  # "2a07:e340::2#mullvad"
+)
+
+# -----------------------------
+# Domains to test
+# -----------------------------
+DOMAINS=(
+  ubuntu.com github.com reddit.com
+  wikipedia.org youtube.com amazon.com
+  # example.com google.com google.de
+  # chatgpt.com pinterest.com x.com
+  # whatsapp.com facebook.com instagram.com
+)
+
+TRIES=5
+COL_W=42
+NAME_W=20
+WARN_LATENCY=50   # highlight if warm avg > X ms
+WARN_SUCCESS=95   # highlight if success < X %
+
+rand_name() { printf "%s.%s" "$(date +%s%N)" "$1"; }
+
+# -----------------------------
+# Initialize summary arrays
+# -----------------------------
+declare -A PROVIDER_TOTAL_MS PROVIDER_TOTAL_OK PROVIDER_TOTAL_Q
+declare -A PROVIDER_COLD_MS PROVIDER_COLD_OK
+declare -A PROVIDER_TOTAL_SERVFAIL PROVIDER_TOTAL_NX PROVIDER_TOTAL_TIMEOUT
+
+echo "# DNS Test"
+
+# -----------------------------
+# Detect IPv6 availability
+# -----------------------------
+echo
+echo "## Infos"
+echo
+echo "- Checking for IPv6 interfaces..."
+if ip a | grep -q 'inet6'; then
+    if dig -6 @2620:fe::9 example.com +time=2 +tries=1 >/dev/null 2>&1; then
+        echo "  - IPv6 interface and connectivity detected, adding IPv6 DNS providers..."
+        PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}" "${PROVIDERSV6[@]}")
+    else
+        echo "  - IPv6 interface detected, but no connectivity. Using IPv4 only."
+        PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}")
+    fi
+else
+    echo "  - No IPv6 interface detected. Using IPv4 only."
+    PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}")
+fi
+
+echo "- Used Home DNS Resolver(s):"
+echo "  - IPv4(${PROVIDERSV4_HOME##*#}): ${PROVIDERSV4_HOME%%#*}"
+if [[ " ${PROVIDERS_TO_TEST[*]} " == *"${PROVIDERSV6_HOME}"* ]]; then
+    echo "  - IPv6(${PROVIDERSV6_HOME##*#}): ${PROVIDERSV6_HOME%%#*}"
+fi
+
+# -----------------------------
+# Header
+# -----------------------------
+echo
+echo "## Measured Latency"
+echo
+printf "| %-${NAME_W}s |" ""
+for d in "${DOMAINS[@]}"; do
+  printf " %-${COL_W}s |" "${d%%.*}"
+done
+echo
+printf "|%*s|" $((NAME_W+2)) "" | tr ' ' '-'
+for _ in "${DOMAINS[@]}"; do
+  printf "%*s|" $((COL_W+2)) "" | tr ' ' '-'
+done
+echo
+
+# -----------------------------
+# Main loop: measure latency
+# -----------------------------
+for p in "${PROVIDERS_TO_TEST[@]}"; do
+  p_ip=${p%%#*}
+  p_name=${p##*#}
+
+  PROVIDER_TOTAL_MS[$p_name]=0
+  PROVIDER_TOTAL_OK[$p_name]=0
+  PROVIDER_TOTAL_Q[$p_name]=$((TRIES * ${#DOMAINS[@]}))
+  PROVIDER_COLD_MS[$p_name]=0
+  PROVIDER_COLD_OK[$p_name]=0
+  PROVIDER_TOTAL_SERVFAIL[$p_name]=0
+  PROVIDER_TOTAL_NX[$p_name]=0
+  PROVIDER_TOTAL_TIMEOUT[$p_name]=0
+
+  printf "| %-${NAME_W}s |" "$p_name"
+  for d in "${DOMAINS[@]}"; do
+    total=0 min=999999 max=0
+    ok=0 servfail=0 nxdomain=0 timeout=0
+
+    # ---- cold query (cache miss)
+    cold=$(rand_name "$d")
+    cold_out=$(dig @"$p_ip" "$cold" +stats +tries=1 +time=3 2>/dev/null || true)
+    cold_ms=$(awk '/Query time:/ {print $4}' <<<"$cold_out")
+    cold_ms=${cold_ms:-X}
+    if [ "$cold_ms" != "X" ]; then
+      PROVIDER_COLD_MS[$p_name]=$((PROVIDER_COLD_MS[$p_name] + cold_ms))
+      PROVIDER_COLD_OK[$p_name]=$((PROVIDER_COLD_OK[$p_name] + 1))
+    fi
+
+    # ---- warm queries
+    for ((i=1;i<=TRIES;i++)); do
+      out=$(dig @"$p_ip" "$d" +stats +tries=1 +time=3 2>/dev/null || true)
+      stat=$(awk '/status:/ {gsub(/,/, "", $6); print $6}' <<<"$out")
+      qtime=$(awk '/Query time:/ {print $4}' <<<"$out")
+
+      case "$stat" in
+        NOERROR)
+          ok=$((ok + 1))
+          total=$((total + qtime))
+          [ "$qtime" -lt "$min" ] && min=$qtime
+          [ "$qtime" -gt "$max" ] && max=$qtime
+          ;;
+        SERVFAIL) servfail=$((servfail + 1)) ;;
+        NXDOMAIN) nxdomain=$((nxdomain + 1)) ;;
+        *) timeout=$((timeout + 1)) ;;
+      esac
+    done
+
+    # accumulate totals
+    PROVIDER_TOTAL_MS[$p_name]=$((PROVIDER_TOTAL_MS[$p_name] + total))
+    PROVIDER_TOTAL_OK[$p_name]=$((PROVIDER_TOTAL_OK[$p_name] + ok))
+    PROVIDER_TOTAL_SERVFAIL[$p_name]=$((PROVIDER_TOTAL_SERVFAIL[$p_name] + servfail))
+    PROVIDER_TOTAL_NX[$p_name]=$((PROVIDER_TOTAL_NX[$p_name] + nxdomain))
+    PROVIDER_TOTAL_TIMEOUT[$p_name]=$((PROVIDER_TOTAL_TIMEOUT[$p_name] + timeout))
+
+    if [ "$ok" -gt 0 ]; then
+      avg=$((total / ok))
+      jitter=$((max - min))
+      cell=$(printf \
+        "cold=%3sms avg=%2dms min=%2dms max=%2dms j=%2d" \
+        "$cold_ms" "$avg" "$min" "$max" "$jitter"
+      )
+      printf " %-${COL_W}s |" "$cell"
+      # printf " %-${COL_W}s |" "ok=${ok} sf=${servfail} nx=${nxdomain} to=${timeout}"
+    else
+      printf " %-${COL_W}s |" "timeout"
+    fi
+  done
+  echo
+done
+
+# -----------------------------
+# Ranking: average latency & success rate
+# -----------------------------
+echo
+echo "## DNS Provider Ranking (sorted by warm avg, then cold avg)"
+echo
+
+# Column widths
+W_WARM=6
+W_COLD=6
+W_SUCC=7
+W_SF=4
+W_NX=4
+W_TO=4
+
+# Header
+printf "| %-*s | %*s | %*s | %*s | %*s | %*s | %*s |\n" \
+  "$NAME_W" "Provider" \
+  "$W_WARM" "Warm" \
+  "$W_COLD" "Cold" \
+  "$W_SUCC" "Success" \
+  "$W_SF" "SF" \
+  "$W_NX" "NX" \
+  "$W_TO" "TO"
+
+# Separator
+printf "|%*s|" $((NAME_W+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_WARM+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_COLD+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_SUCC+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_SF+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_NX+2)) "" | tr ' ' '-'
+printf "%*s|" $((W_TO+2)) "" | tr ' ' '-'
+echo
+
+{
+  for p in "${!PROVIDER_TOTAL_OK[@]}"; do
+    [ "${PROVIDER_TOTAL_OK[$p]}" -gt 0 ] || continue
+    avg_w=$((PROVIDER_TOTAL_MS[$p] / PROVIDER_TOTAL_OK[$p]))
+    avg_c=$(( PROVIDER_COLD_OK[$p] ))
+    [ "$avg_c" -gt 0 ] && avg_c=$((PROVIDER_COLD_MS[$p] / PROVIDER_COLD_OK[$p]))
+    success=$((100 * PROVIDER_TOTAL_OK[$p] / PROVIDER_TOTAL_Q[$p]))
+    sf=${PROVIDER_TOTAL_SERVFAIL[$p]}
+    nx=${PROVIDER_TOTAL_NX[$p]}
+    to=${PROVIDER_TOTAL_TIMEOUT[$p]}
+    echo "$avg_w $avg_c $p $success $sf $nx $to"
+  done
+} | sort -n -k1,1 -k2,2 | while read -r avg_w avg_c name success sf nx to; do
+    color_start="" color_end=""
+    ((avg_w > WARN_LATENCY || success < WARN_SUCCESS)) && color_start="$(tput setaf 1)" && color_end="$(tput sgr0)"
+    printf "| %s%-*s%s | %*dms | %*dms | %*d%% | %*d | %*d | %*d |\n" \
+      "$color_start" "$NAME_W" "$name" "$color_end" \
+      "$((W_WARM-2))" "$avg_w" \
+      "$((W_COLD-2))" "$avg_c" \
+      "$((W_SUCC-1))" "$success" \
+      "$W_SF" "$sf" \
+      "$W_NX" "$nx" \
+      "$W_TO" "$to"
+done
