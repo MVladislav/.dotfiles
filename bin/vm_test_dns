@@ -1,52 +1,90 @@
 #!/usr/bin/env bash
 set -euo pipefail
-IFS=$' '
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
 command -v dig >/dev/null || { echo "dig not found"; exit 1; }
 
 # -----------------------------
 # DNS providers
+# - home → local resolver
+# - std → default when no special behavior
+# - alt → secondary / alternative endpoint
+# - sec → filtered / secure
+# - unf → unfiltered
 # -----------------------------
 PROVIDERSV4_HOME="${PROVIDERSV4_HOME:-"192.168.1.1"}#home"
 PROVIDERSV6_HOME="${PROVIDERSV6_HOME:-"fd00:affe:affe:1::1"}#home-v6"
 PROVIDERSV4=(
   "$PROVIDERSV4_HOME"
-  "9.9.9.9#quad9-9-sec"
-  "149.112.112.112#quad9-112-sec"
-  "149.112.112.10#quad9-112-10-unsec"
-  "9.9.9.10#quad9-9-10-unsec"
-  "1.1.1.1#cloudflare-1"
-  "1.0.0.1#cloudflare-0"
-  # "4.2.2.1#level3"
-  # "8.8.8.8#google"
-  # "80.80.80.80#freenom"
-  # "208.67.222.123#opendns"
-  # "199.85.126.20#norton"
-  # "185.228.168.168#cleanbrowsing"
-  # "77.88.8.7#yandex"
-  # "176.103.130.132#adguard"
-  # "156.154.70.3#neustar"
-  # "8.26.56.26#comodo"
+
+  # https://quad9.net/service/service-addresses-and-features
+  "9.9.9.9#quad9-sec-std"
+  "149.112.112.112#quad9-sec-alt"
+  "9.9.9.10#quad9-unf-std"
+  "149.112.112.10#quad9-unf-alt"
+
+  # https://developers.cloudflare.com/1.1.1.1/ip-addresses
+  "1.1.1.2#cloudflare-sec-std"
+  "1.0.0.2#cloudflare-sec-alt"
+  "1.1.1.1#cloudflare-unf-std"
+  "1.0.0.1#cloudflare-unf-alt"
+
+  # https://developers.google.com/speed/public-dns/docs/using
+  "8.8.8.8#google-std"
+  "8.8.4.4#google-alt"
+
+  # https://vercara.digicert.com/ultra-dns-public
+  "156.154.70.2#vercara-sec-std"
+  "156.154.70.3#vercara-sec-alt"
+  "64.6.64.6#vercara-unf-std"
+  "64.6.65.6#vercara-unf-alt"
+
+  # https://adguard-dns.io/kb/general/dns-providers
+  "94.140.14.14#adguard-sec-std"
+  "176.103.15.15#adguard-sec-alt"
+  "94.140.14.140#adguard-unf-std"
+  "94.140.14.141#adguard-unf-alt"
+
+  # "208.67.222.222#opendns-std"
+  # "208.67.220.220#opendns-alt"
+  # "4.2.2.1#level3-std"
+  # "4.2.2.5#level3-alt"
   # "45.90.28.202#nextdns"
-  # "194.242.2.2#mullvad"
+  # "8.26.56.26#comodo"
+  # "199.85.126.20#norton"
+  # "77.88.8.7#yandex"
+  # "80.80.80.80#freenom"
+  # "185.228.168.168#cleanbrowsing"
 )
-# shellcheck disable=SC2034
 PROVIDERSV6=(
   "$PROVIDERSV6_HOME"
-  "2620:fe::9#quad9-9-sec-v6"
-  "2620:fe::fe#quad9-fe-sec-v6"
-  "2620:fe::10#quad9-fe-10-unsec"
-  "2620:fe::fe:10#quad9-fe-10-10-unsec"
-  "2606:4700:4700::1111#cloudflare-1-v6"
-  "2606:4700:4700::1001#cloudflare-0-v6"
-  # "2001:4860:4860::8888#google-v6"
+
+  "2620:fe::9#quad9-sec-std-v6"
+  "2620:fe::fe#quad9-sec-alt-v6"
+  "2620:fe::10#quad9-unf-std-v6"
+  "2620:fe::fe:10#quad9-unf-alt-v6"
+
+  "2606:4700:4700::1112#cloudflare-sec-std-v6"
+  "2606:4700:4700::1002#cloudflare-sec-alt-v6"
+  "2606:4700:4700::1111#cloudflare-unf-std-v6"
+  "2606:4700:4700::1001#cloudflare-unf-alt-v6"
+
+  "2001:4860:4860::8888#google-std-v6"
+  "2001:4860:4860::8844#google-alt-v6"
+
+  "2610:a1:1018::2#vercara-sec-std-v6"
+  "2610:a1:1018::3#vercara-sec-alt-v6"
+  "2620:74:1b::1:1#vercara-unf-std-v6"
+  "2620:74:1c::2:2#vercara-unf-alt-v6"
+
+  "2a10:50c0::ad1:ff#adguard-sec-std-v6"
+  "2a10:50c0::ad2:ff#adguard-sec-alt-v6"
+  "92a10:50c0::1:ff#adguard-unf-std-v6"
+  "2a10:50c0::2:ff#adguard-unf-alt-v6"
+
   # "2620:119:35::35#opendns-v6"
-  # "2a0d:2a00:1::1#cleanbrowsing-v6"
   # "2a02:6b8::feed:0ff#yandex-v6"
-  # "2a00:5a60::ad1:0ff#adguard-v6"
-  # "2610:a1:1018::3#neustar-v6"
-  # "2a07:e340::2#mullvad"
+  # "2a0d:2a00:1::1#cleanbrowsing-v6"
 )
 
 # -----------------------------
@@ -83,9 +121,15 @@ echo "# DNS Test"
 echo
 echo "## Infos"
 echo
+echo "- Naming scheme Variants:"
+echo "  - home → local resolver"
+echo "  - std → default when no special behavior"
+echo "  - alt → secondary / alternative endpoint"
+echo "  - sec → filtered / secure"
+echo "  - unf → unfiltered"
 echo "- Checking for IPv6 interfaces..."
 if ip a | grep -q 'inet6'; then
-    if dig -6 @2620:fe::9 example.com +time=2 +tries=1 >/dev/null 2>&1; then
+    if dig -6 @2620:fe::9 example.com +tries=1 +retry=0 +timeout=3 >/dev/null 2>&1; then
         echo "  - IPv6 interface and connectivity detected, adding IPv6 DNS providers..."
         PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}" "${PROVIDERSV6[@]}")
     else
@@ -101,6 +145,28 @@ echo "- Used Home DNS Resolver(s):"
 echo "  - IPv4(${PROVIDERSV4_HOME##*#}): ${PROVIDERSV4_HOME%%#*}"
 if [[ " ${PROVIDERS_TO_TEST[*]} " == *"${PROVIDERSV6_HOME}"* ]]; then
     echo "  - IPv6(${PROVIDERSV6_HOME##*#}): ${PROVIDERSV6_HOME%%#*}"
+fi
+
+# -----------------------------
+# Check reachability before main loop
+# -----------------------------
+echo "- Checking for providers not reachable (will be skipped)..."
+SKIPPED_PROVIDERS=()
+REACHABLE_PROVIDERS=()
+for p in "${PROVIDERS_TO_TEST[@]}"; do
+    p_ip=${p%%#*}
+    p_name=${p##*#}
+    if dig @"$p_ip" example.com +time=1 +tries=1 >/dev/null 2>&1; then
+        REACHABLE_PROVIDERS+=("$p")
+    else
+        SKIPPED_PROVIDERS+=("$p_name ($p_ip)")
+    fi
+done
+PROVIDERS_TO_TEST=("${REACHABLE_PROVIDERS[@]}")
+if [ "${#SKIPPED_PROVIDERS[@]}" -gt 0 ]; then
+    for p in "${SKIPPED_PROVIDERS[@]}"; do
+        echo "  - $p"
+    done
 fi
 
 # -----------------------------
@@ -143,7 +209,7 @@ for p in "${PROVIDERS_TO_TEST[@]}"; do
 
     # ---- cold query (cache miss)
     cold=$(rand_name "$d")
-    cold_out=$(dig @"$p_ip" "$cold" +stats +tries=1 +time=3 2>/dev/null || true)
+    cold_out=$(dig @"$p_ip" "$cold" +stats +tries=1 +retry=0 +timeout=3 2>/dev/null || true)
     cold_ms=$(awk '/Query time:/ {print $4}' <<<"$cold_out")
     cold_ms=${cold_ms:-X}
     if [ "$cold_ms" != "X" ]; then
@@ -153,9 +219,10 @@ for p in "${PROVIDERS_TO_TEST[@]}"; do
 
     # ---- warm queries
     for ((i=1;i<=TRIES;i++)); do
-      out=$(dig @"$p_ip" "$d" +stats +tries=1 +time=3 2>/dev/null || true)
+      out=$(dig @"$p_ip" "$d" +stats +tries=1 +retry=0 +timeout=3 2>/dev/null || true)
       stat=$(awk '/status:/ {gsub(/,/, "", $6); print $6}' <<<"$out")
       qtime=$(awk '/Query time:/ {print $4}' <<<"$out")
+      qtime=${qtime:-0}
 
       case "$stat" in
         NOERROR)
@@ -232,15 +299,16 @@ echo
   for p in "${!PROVIDER_TOTAL_OK[@]}"; do
     [ "${PROVIDER_TOTAL_OK[$p]}" -gt 0 ] || continue
     avg_w=$((PROVIDER_TOTAL_MS[$p] / PROVIDER_TOTAL_OK[$p]))
-    avg_c=$(( PROVIDER_COLD_OK[$p] ))
-    [ "$avg_c" -gt 0 ] && avg_c=$((PROVIDER_COLD_MS[$p] / PROVIDER_COLD_OK[$p]))
+    cold_ok=${PROVIDER_COLD_OK[$p]}
+    avg_c=0
+    (( cold_ok > 0 )) && avg_c=$(( PROVIDER_COLD_MS[$p] / cold_ok ))
     success=$((100 * PROVIDER_TOTAL_OK[$p] / PROVIDER_TOTAL_Q[$p]))
     sf=${PROVIDER_TOTAL_SERVFAIL[$p]}
     nx=${PROVIDER_TOTAL_NX[$p]}
     to=${PROVIDER_TOTAL_TIMEOUT[$p]}
     echo "$avg_w $avg_c $p $success $sf $nx $to"
   done
-} | sort -n -k1,1 -k2,2 | while read -r avg_w avg_c name success sf nx to; do
+} | sort -k4,4nr -k1,1n -k2,2n | while read -r avg_w avg_c name success sf nx to; do
     color_start="" color_end=""
     ((avg_w > WARN_LATENCY || success < WARN_SUCCESS)) && color_start="$(tput setaf 1)" && color_end="$(tput sgr0)"
     printf "| %s%-*s%s | %*dms | %*dms | %*d%% | %*d | %*d | %*d |\n" \
