@@ -7,29 +7,32 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
-  // "assistant": {
-  //   "default_model": {
-  //     "provider": "openai",
-  //     "model": "gpt-4o"
-  //   },
-  //   "version": "2"
-  // },
-  // "language_models": {
-  //   "openai": {
-  //     "version": "1",
-  //     "api_url": "http://ollama.home.local:11434/v1",
-  //     "available_models": [
-  //       {
-  //         "name": "gpt-4o",
-  //         "display_name": "deepseek-r1:14b",
-  //         "max_tokens": 32768
-  //       }
-  //     ]
-  //   },
-  //   "ollama": {
-  //     "api_url": "http://ollama.home.local:11434"
-  //   }
-  // },
+  "agent": {
+    "default_profile": "write",
+    "always_allow_tool_actions": false,
+    "single_file_review": true,
+    "default_model": {
+      "provider": "ollama",
+      "model": "ministral-3:14b"
+    },
+    "model_parameters": []
+  },
+  "language_models": {
+    "ollama": {
+      "api_url": "http://127.0.0.1:11434",
+      "available_models": [
+        {
+          "name": "ministral-3:14b",
+          "display_name": "ministral3",
+          "max_tokens": 32768,
+          "keep_alive": "5m",
+          "supports_tools": true,
+          "supports_thinking": false,
+          "supports_images": true
+        }
+      ]
+    }
+  },
   "features": {
     "edit_prediction_provider": "none"
   },
@@ -83,7 +86,6 @@
   "scrollbar": {
     "show": "auto"
   },
-  "hour_format": "hour24",
   "git": {
     "git_gutter": "tracked_files",
     "inline_blame": {

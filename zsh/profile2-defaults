@@ -36,7 +36,7 @@ alias llm='ll -t modified -s modified'
 alias lla='ll -t accessed -s accessed'
 alias llc='ll -t created -s created'
 alias ld='ls -ld .*'
-alias tree='ls -TlL 4'
+alias tree='ls -TlgL 4'
 
 ### CAT as BAT ###
 alias catt='batcat -p -P --color always'
