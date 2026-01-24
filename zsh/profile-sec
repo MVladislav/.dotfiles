@@ -5,7 +5,7 @@ VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
 VM_SEC_LISTS_SECFILES=~'/opt/sec/SecFiles'
 # VM_SEC_NUCLEI_TEMPLATES=~'/.dotfiles/sec/nuclei'
 
-VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:129.0) Gecko/20100101 Firefox/129.0'}
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
 
 ######################################################################
 ##
@@ -20,6 +20,8 @@ alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
 # shellcheck disable=SC2139
 alias sj="sj -a '${VM_SEC_USER_AGENT}'"
 alias sqlmap="sqlmap --random-agent"
+# shellcheck disable=SC2139
+alias rustscan="rustscan -u '${VM_SEC_USER_AGENT}'"
 
 ######################################################################
 ##

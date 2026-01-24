@@ -26,6 +26,7 @@ source "./setup-helper"
 # CONFS :: variables -----------------------------------------------------------
 VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
 VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
+VM_SEC_LISTS_NUCLEI="${VM_SEC_OPT}/sec/NucleiTmp"
 VM_SEC_NMAP_SCRIPTS='/usr/share/nmap/scripts'
 VM_SEC_EXT_BROWSER="${VM_SEC_OPT}/sec/BrowserExt"
 
@@ -89,12 +90,14 @@ install_rocm() {
 install_tools() {
   print_info2 "\n🚀 TOOLS :: Installing additional tools..."
 
-  print_notes "   📥 installing 'jq'"
-  $RUN_WITH_SUDO apt install -y jq 1>/dev/null
+  print_notes "   📥 installing 'jq' + 'nmap'"
+  $RUN_WITH_SUDO apt install -y jq nmap 1>/dev/null
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   print_notes "   📥 installing 'monolith'"
-  cargo install monolith # saving complete web pages as a single HTML file
+  cargo install monolith  1>/dev/null # save web page as a single HTML file :: https://github.com/Y2Z/monolith
+  print_notes "   📥 installing 'rustscan'"
+  cargo install rustscan  1>/dev/null # modern port scanner :: https://github.com/bee-san/RustScan
 
   go_github_commit_date_and_download() {
     IFS='/' read -r owner repo addition <<<"$1"
@@ -102,7 +105,7 @@ install_tools() {
     local package_path="${owner}/${repo}"
     if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
     print_notes "   📥 installing '${package_path}'"
-    go install "github.com/${package_path}@${2:-latest}"
+    go install "github.com/${package_path}@${2:-latest}" 1>/dev/null
   }
 
   go_github_commit_date_and_download 'charmbracelet/gum'
@@ -256,6 +259,9 @@ load_lists() {
   git clone -q https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
   print_notes "   ⬇️ Cloning 'PayloadsAllTheThings'..."
   git clone -q https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
+
+  print_notes "   ⬇️ Cloning 'Nuclei Templates 1'..."
+  git clone -q https://github.com/coffinxp/nuclei-templates.git "$VM_SEC_LISTS_NUCLEI/tmp1"
 
   print_info2 "🚀 TOOLS :: Lists cloning done!"
 }
