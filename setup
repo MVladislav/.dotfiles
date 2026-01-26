@@ -371,7 +371,7 @@ install_dependencies_ghostty() {
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   cd - 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
-  update-desktop-database ~/.local/share/applications/ -q
+  update-desktop-database "$HOME/.local/share/applications/" -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
 
   print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
@@ -550,13 +550,13 @@ setup_gitconfig() {
     return 1
   fi
 
-  print_info2 "  🔍 Scanning '~/.ssh' for available public keys"
+  print_info2 "  🔍 Scanning '$HOME/.ssh' for available public keys"
   mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub")
 
   if [ ${#ssh_keys[@]} -gt 0 ]; then
     git_signing_key="$(printf '%s\n' "${ssh_keys[@]}" | fzf --prompt='Select signing key: ')"
   else
-    print_info2 "  ⚠️ No SSH public keys found in '~/.ssh'."
+    print_info2 "  ⚠️ No SSH public keys found in '$HOME/.ssh'."
     print_read "  ✏️ Enter path to your Git signing key manually (or leave empty to skip): "
     read -e -r git_signing_key
   fi

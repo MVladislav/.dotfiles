@@ -27,12 +27,14 @@ BCYAN='\033[1;36m'   # Cyan
 
 : "${VM_SEC_TMP:="${HOME}/.tmp"}" # /tmp
 
+# shellcheck disable=SC2034
 DEPS_INSTALL_PATH="${VM_SEC_TMP}"
 USER_LOCAL_PREFIX="${HOME}/.local"
 USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 DEPS_PACKAGES_TO_REMOVE=()
 
+# shellcheck disable=SC2034
 INSTALL_SOURCE_FROM=release # source | release
 
 # ******************************************************************************

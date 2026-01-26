@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-VM_SEC_LISTS_SECLISTS=~'/opt/sec/SecLists'
-# VM_SEC_LISTS_PAYLOADS=~'/opt/sec/PayloadsAllTheThings'
-VM_SEC_LISTS_SECFILES=~'/opt/sec/SecFiles'
-# VM_SEC_NUCLEI_TEMPLATES=~'/.dotfiles/sec/nuclei'
+VM_SEC_LISTS_SECLISTS="$HOME/opt/sec/SecLists"
+# VM_SEC_LISTS_PAYLOADS="$HOME/opt/sec/PayloadsAllTheThings"
+VM_SEC_LISTS_SECFILES="$HOME/opt/sec/SecFiles"
+# VM_SEC_NUCLEI_TEMPLATES="$HOME/.dotfiles/sec/nuclei"
 
 VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
 
