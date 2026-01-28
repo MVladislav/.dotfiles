@@ -86,3 +86,4 @@ addToPath "$GEM_HOME/bin"
 
 export RUSTUP_HOME="$HOME/.rustup"
 # addToPath "$RUSTUP_HOME/bin"
+addToPath "$HOME/.cargo/bin"
