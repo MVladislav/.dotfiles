@@ -1,0 +1,361 @@
+#!/usr/bin/env bash
+
+VM_SEC_LISTS_SECLISTS="$HOME/opt/sec/SecLists"
+# VM_SEC_LISTS_PAYLOADS="$HOME/opt/sec/PayloadsAllTheThings"
+# VM_SEC_LISTS_SECFILES="$HOME/opt/sec/SecFiles"
+VM_SEC_LISTS_TEMPLATES="$HOME/opt/sec/Templates"
+# VM_SEC_NUCLEI_TEMPLATES="$HOME/.dotfiles/sec/nuclei"
+
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
+
+######################################################################
+##
+## DEFAULTS:: extender
+##
+######################################################################
+
+# shellcheck disable=SC2139
+alias nuclei="nuclei -header 'User-Agent: ${VM_SEC_USER_AGENT}'"
+# shellcheck disable=SC2139
+alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
+# shellcheck disable=SC2139
+alias sj="sj -a '${VM_SEC_USER_AGENT}'"
+alias sqlmap="sqlmap --random-agent"
+# shellcheck disable=SC2139
+alias rustscan="rustscan -u '${VM_SEC_USER_AGENT}'"
+
+alias trivy-img='trivy image --disable-telemetry --severity "CRITICAL,HIGH"'
+alias trivy-img-sarif='trivy-img -f sarif -o trivy-results.sarif'
+alias trivy-img-html='trivy-img --format template --template "@$VM_SEC_LISTS_TEMPLATES/trivy-html.tpl" -o trivy-results.html'
+alias grype='grype --scope all-layers --only-fixed'
+alias grype-sarif='grype -o sarif --file grype-results.sarif'
+alias grype-html='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-html.tmpl" --file grype-results.html'
+alias grype-md='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-markdown.tmpl" --file grype-results.md'
+
+######################################################################
+##
+## FUNCTIONS:: tools
+##
+######################################################################
+
+alias vm_sec_server='python3 -m http.server 4445'
+alias vm_sec_tunnel='ngrok http 4445'
+
+######################################################################
+##
+## FUNCTIONS:: tools :: NMAP
+##
+######################################################################
+# -Pn -sS -T4
+alias vm_sec_nmap_ssl='mkdir -p nmap && sudo nmap -vv -p 443 --script "ssl-enum-ciphers"'
+alias vm_sec_nmap_quick='mkdir -p nmap && sudo nmap -vv -sC -oA nmap/scan1'
+alias vm_sec_nmap_deep='mkdir -p nmap && sudo nmap -vv -sC -sV -O -oA nmap/scan2 --script "nmap-vulners/,vulscan/"'
+
+xsltproc() {
+  local NMAP_REPORT_ID="${1:-1}"
+  mkdir -p /var/log/nmap
+  xsltproc \
+    -o "/var/log/nmap/report-$(date +%Y-%m-%d)-${NMAP_REPORT_ID}.html" \
+    /opt/nmap/nmap-bootstrap.xsl \
+    "/var/log/nmap/report-$(date +%Y-%m-%d)-${NMAP_REPORT_ID}.xml" \
+    "$@"
+}
+nmap-report() {
+  local NMAP_REPORT_ID="${1:-1}"
+  mkdir -p /var/log/nmap
+  nmap -oA /var/log/nmap/report-"$(date +%Y-%m-%d)"-"${NMAP_REPORT_ID}" "$@"
+  xsltproc
+}
+
+######################################################################
+##
+## FUNCTIONS:: tools
+##
+######################################################################
+
+# shellcheck disable=SC2139
+alias vm_sec_massdns="massdns -r '${VM_SEC_LISTS_SECLISTS}/massdns/lists/resolvers.txt' -t A -o S targets.txt -w hosts.txt -s 4000"
+alias vm_sec_what="whatweb -v"
+
+vm_sec_crt() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s "https://crt.sh/?output=json&q=$1" | jq -r '.[].name_value' | sed 's/\*\.//g' | sort -u
+}
+
+vm_sec_wayback() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <FILE> :: FILE: contains Domains per line"
+    return 1
+  fi
+
+  # curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -sG "https://web.archive.org/cdx/search/cdx" --data-urlencode "url=*.${domain}*" --data-urlencode "collapse=urlkey" --data-urlencode "output=text" --data-urlencode "fl=original"
+
+  awk -F/ '{print $3 == "" ? $1 : $3}' <"$1" | sort -u | waybackurls | tee waybacks.txt
+  # TODO: extend with url cleanup
+  # TODO: nuclei -c 32 -t "${VM_SEC_NUCLEI_TEMPLATES}/openRedirect.yaml" :: sql injection probs
+}
+
+vm_sec_xssall() {
+  gum input --placeholder='Input Target IP/DOMAIN' |
+    httpx -silent |
+    katana -silent |
+    dalfox pipe --silence
+}
+
+# echo https://192.168.111.41 | katana -jc -f qurl -d 5 -c 50 -kf robotstxt,sitemapxml -silent | dalfox pipe --skip-bav | grep "=" | egrep -iv ".(jpg|jpeg|gif|css|tif|tiff|png|ttf|woff|woff2|ico|pdf|svg|txt|js)" | unew
+# echo https://192.168.111.41 | katana -jc -d 5 -c 50 -ef css,woff,woff2,eot,ttf,tiff,tif -kf robotstxt,sitemapxml | grep -v -e "="
+# subfinder -d https://192.168.111.41 -silent -all | httpx -silent | katana -d 5 silent -em js,jsp,json | grep -P "(?i).+\.js(?:on|p)?$"
+
+# shellcheck disable=SC2139
+alias vm_sec_gobuster="gobuster dir --wordlist '${VM_SEC_LISTS_SECLISTS}/diccnoext.txt' --wildcard --url"
+
+# shellcheck disable=SC2139
+alias vm_sec_fuzz="ffuf -w '${VM_SEC_LISTS_SECLISTS}/content_discovery_all.txt' -mc all -u"
+vm_sec_fuzz_path() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <[http(s)://]HOST>"
+    return 1
+  fi
+
+  # Check if the URL contains http or https
+  if [[ "$1" =~ ^https?:// ]]; then
+    # Extract protocol and domain
+    protocol=$(echo "$1" | awk -F'://' '{print $1}')
+    domain=$(echo "$1" | awk -F'://' '{print $2}')
+  else
+    # Default to https if no protocol is found
+    protocol="https"
+    domain="$1"
+  fi
+
+  ffuf -u "${protocol}://${domain}/FUZZ" \
+    -w "${VM_SEC_LISTS_SECLISTS}/Discovery/Web-Content/common.txt" \
+    -c -ac -recursion
+}
+vm_sec_fuzz_dns() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <[http(s)://]HOST>"
+    return 1
+  fi
+
+  # Check if the URL contains http or https
+  if [[ "$1" =~ ^https?:// ]]; then
+    # Extract protocol and domain
+    protocol=$(echo "$1" | awk -F'://' '{print $1}')
+    domain=$(echo "$1" | awk -F'://' '{print $2}')
+  else
+    # Default to https if no protocol is found
+    protocol="https"
+    domain="$1"
+  fi
+
+  ffuf -u "${protocol}://${domain}" \
+    -w "${VM_SEC_LISTS_SECLISTS}/Discovery/DNS/namelist.txt" \
+    -H "Host: ${protocol}://FUZZ.${domain}"
+}
+
+vm_sec_katana() {
+  echo "$1" | katana -headless -fs rdn -d 1 -ct 1 -rl 10 -o result.txt -jsonl
+}
+
+alias vm_sec_sj="sj -i"
+
+# https://pentest-tools.com/website-vulnerability-scanning/website-scanner
+alias vm_sec_scan_ptt='docker run --rm -it pentesttoolscom/ptt-scan:latest run website_scanner'
+# https://github.com/wpscanteam/wpscan
+# --plugins-detection aggressive
+alias vm_sec_scan_wpscan='docker run --rm -it wpscanteam/wpscan:latest --rua -e ap,at,tt,cb,dbe,u,m --url'
+
+######################################################################
+##
+## FUNCTIONS:: tools
+##
+######################################################################
+vm_sec_attack_sql() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <HOST_PATH>"
+    return 1
+  fi
+
+  local HOST_PATH="$1"
+  local TODO_1="${2:id}"
+  local TODO_2="${3:mysql}"
+  local TODO_3="${4:10}"
+
+  # TODO: extend with 'proxychains'
+  sqlmap -u "$HOST_PATH" --dbs --batch -p "$TODO_1" --random-agent --tamper=between,space2comment --dbms="$TODO_2" --tech=B --no-cast --flush-session --threads "$TODO_3"
+  # --level 5 --risk 3
+}
+
+######################################################################
+##
+## HELPER:: converter
+##
+######################################################################
+vm_sec_encode_utf8() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  printf '%s' "$1" | xxd -p -u | sed 's/\(..\)/\\x\1/g'
+}
+
+vm_sec_encode_utf16() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  printf '%s' "$1" | iconv -f UTF-8 -t UTF-16LE | xxd -p | sed 's/\(..\)\(..\)/\\u{\2\1}/g' | sed 's/\\u{00\([0-9a-fA-F]\{2\}\)}/\\u{\1}/g'
+}
+
+vm_sec_encode_base64() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <STRING>"
+    return 1
+  fi
+  echo -n "$1" | base64
+}
+
+######################################################################
+##
+## FUNCTIONS:: base
+##
+######################################################################
+vm_sec_ip_country() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <IP>"
+    return 1
+  fi
+  local ip="$1"
+  local ua="${VM_SEC_USER_AGENT:-vmsec/1.0}"
+
+  reverse_check=$(dig +short -x "$ip")
+  echo "Reverse Check: $reverse_check"
+
+  local service1="http://ip-api.com/json/$ip?fields=5254673"
+  local query1='[
+    (.query // "N/A"),
+    (.continent // "N/A"),
+    (.country // "N/A"),
+    (.city // "N/A"),
+    (.isp // "N/A"),
+    (.org // "N/A"),
+    (.as // "N/A"),
+    (.asname // "N/A")
+  ] | join(" :: ")'
+  #local service="https://ipapi.co/$ip/json"
+  #local query='[.country, .city, .asn, .org] | join(" :: ")'
+  local service2="https://ipinfo.io/$ip/json"
+  local query2='[
+    (.hostname // "N/A"),
+    (.country // "N/A"),
+    (.region // "N/A"),
+    (.city // "N/A"),
+    (.asn // "N/A"),
+    (.org // "N/A"),
+    (.postal // "N/A")
+  ] | join(" :: ")'
+
+  curl -H "User-Agent: $ua" -s "$service1" | jq "$query1"
+  curl -H "User-Agent: $ua" -s "$service2" | jq "$query2"
+
+  if [[ -n $ABUSE_IP_DB_API_TOKEN ]]; then
+    local query3='.data | [
+      (.isWhitelisted),
+      (.isTor),
+      (.abuseConfidenceScore // "N/A"),
+      (.usageType // "N/A"),
+      (.countryCode // "N/A"),
+      (.countryName // "N/A"),
+      (.isp // "N/A"),
+      (.domain // "N/A")
+    ] | join(" :: ")'
+    local query4='.data.reports[:10][] | "  - " + (.comment | split("\n") | join("\n     "))'
+    local abused_json
+    abused_json=$(curl -G https://api.abuseipdb.com/api/v2/check -s \
+      -H "User-Agent: $ua" \
+      -H "Accept: application/json" \
+      -H "Key: $ABUSE_IP_DB_API_TOKEN" \
+      -d verbose \
+      -d maxAgeInDays=90 \
+      --data-urlencode "ipAddress=$ip")
+    printf '%s' "$abused_json" | jq "$query3"
+    printf '%s' "$abused_json" | jq -r "$query4"
+  fi
+}
+
+vm_sec_ip_country_batch() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <FILE> :: FILE: contains IP per line"
+    return 1
+  fi
+
+  local ips
+  ips=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$1")
+
+  curl http://ip-api.com/batch \
+    -H "User-Agent: ${VM_SEC_USER_AGENT}" \
+    --data "$ips" |
+    jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
+    sort -h
+}
+
+vm_sec_dig_multi() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+
+  local domain=$1
+  local result=""
+
+  echo "=== MX Records for $domain ==="
+  result=$(dig "$domain" MX +short)
+  [ -z "$result" ] && echo "No MX records found" || echo "$result"
+
+  echo -e "=== TXT (SPF) Records for $domain ==="
+  result=$(dig "$domain" TXT +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No TXT records found" || echo "$result"
+  echo -e "=== SPF Records for $domain ==="
+  result=$(dig "$domain" SPF +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No SPF records found" || echo "$result"
+
+  echo -e "=== DMARC Records for $domain ==="
+  result=$(dig "_dmarc.$domain" TXT +short)
+  [ -z "$result" ] && echo "No DMARC records found" || echo "$result"
+
+  # echo -e "=== DKIM Records for $domain ==="
+  # dkim_selector="default." # Change this to your DKIM selector if needed
+  # result=$(dig "${dkim_selector}_domainkey.$domain" TXT +short)
+  # [ -z "$result" ] && echo "No DKIM records found" || echo "$result"
+
+  echo -e "\n=== NS Records for $domain ==="
+  result=$(dig "$domain" NS +short)
+  [ -z "$result" ] && echo "No NS records found" || echo "$result"
+  echo -e "=== A Records for $domain ==="
+  result=$(dig "$domain" A +short)
+  [ -z "$result" ] && echo "No A records found" || echo "$result"
+  echo -e "=== AAAA Records for $domain ==="
+  result=$(dig "$domain" AAAA +short)
+  [ -z "$result" ] && echo "No AAAA records found" || echo "$result"
+  echo -e "=== CNAME Records for $domain ==="
+  result=$(dig "$domain" CNAME +short)
+  [ -z "$result" ] && echo "No CNAME records found" || echo "$result"
+
+  echo -e "\n=== SOA Records for $domain ==="
+  result=$(dig "$domain" SOA +short)
+  [ -z "$result" ] && echo "No SOA records found" || echo "$result"
+  echo -e "=== CAA Records for $domain ==="
+  result=$(dig "$domain" CAA +short)
+  [ -z "$result" ] && echo "No CAA records found" || echo "$result"
+  echo -e "=== SRV Records for $domain ==="
+  result=$(
+    dig "$domain" SRV +short
+    dig "_imaps._tcp.@$domain" SRV +short
+    dig "_smtps._tcp.@$domain" SRV +short
+  )
+  [ -z "$result" ] && echo "No SRV records found" || echo "$result"
+}

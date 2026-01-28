@@ -29,6 +29,7 @@ VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
 VM_SEC_LISTS_NUCLEI="${VM_SEC_OPT}/sec/NucleiTmp"
 VM_SEC_NMAP_SCRIPTS='/usr/share/nmap/scripts'
 VM_SEC_EXT_BROWSER="${VM_SEC_OPT}/sec/BrowserExt"
+VM_SEC_TEMPLATES="${VM_SEC_OPT}/sec/Templates"
 
 RUN_INSTALL_ROCM=0
 RUN_INSTALL_TOOLS=0
@@ -37,6 +38,7 @@ RUN_INSTALL_HASHCAT=0
 RUN_INSTALL_TIO=0
 
 RUN_LOAD_LISTS=0
+RUN_LOAD_TEMPLATES=0
 RUN_LOAD_NMAP_SCRIPTS=0
 RUN_LOAD_EXT_BROWSER=0
 
@@ -61,6 +63,7 @@ main() {
   [[ $RUN_INSTALL_TIO -eq 1 ]] && install_tio
 
   [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
+  [[ $RUN_LOAD_TEMPLATES -eq 1 ]] && load_templates
   [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
   [[ $RUN_LOAD_EXT_BROWSER -eq 1 ]] && load_ext_browser
 
@@ -90,10 +93,12 @@ install_rocm() {
 install_tools() {
   print_info2 "\n🚀 TOOLS :: Installing additional tools..."
 
+  ### APT Tools ###
   print_notes "   📥 installing 'jq' + 'nmap'"
   $RUN_WITH_SUDO apt install -y jq nmap 1>/dev/null
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
+  ### RUST Tools ###
   print_notes "   📥 installing 'monolith'"
   cargo install monolith  1>/dev/null # save web page as a single HTML file :: https://github.com/Y2Z/monolith
   print_notes "   📥 installing 'rustscan'"
@@ -108,6 +113,7 @@ install_tools() {
     go install "github.com/${package_path}@${2:-latest}" 1>/dev/null
   }
 
+  ### GO Tools ###
   go_github_commit_date_and_download 'charmbracelet/gum'
   go_github_commit_date_and_download 'projectdiscovery/httpx/cmd/httpx'
   go_github_commit_date_and_download 'projectdiscovery/katana/cmd/katana'
@@ -118,6 +124,44 @@ install_tools() {
   go_github_commit_date_and_download 'BishopFox/sj'
   go_github_commit_date_and_download 'tomnomnom/waybackurls'
   go_github_commit_date_and_download 'tomnomnom/gf'
+
+  ### TOOLS ###
+  curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
+  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
+
+  ### MicroShit ###
+  # sudo snap install dotnet --classic
+  # sudo snap install powershell --classic
+
+  ### REVERSE ###
+  # print_notes "   📥 installing 'exiftool'"
+  # sudo apt install exiftool
+  # print_notes "   📥 installing 'binwalk'"
+  # sudo apt install build-essential libfontconfig1-dev liblzma-dev
+  # cargo install binwalk
+  # print_notes "   📥 installing 'hexwalk'"
+  # sudo apt install hexwalk
+  # print_notes "   📥 installing 'volatility3'"
+  # python3 -m venv "$HOME/.venv" && source "$HOME/.venv/bin/activate"
+  # python3 -m pip install volatility3
+
+  ### OTHER ###
+  # git clone https://github.com/icsharpcode/ILSpy "$VM_SEC_OPT/ILSpy" && cd "$VM_SEC_OPT/ILSpy" && git submodule update --init --recursive
+
+  # print_notes "   📥 installing 'radare2'"
+  # sudo snap install radare2 --classic
+  # sudo snap install iaito --classic
+  # print_notes "   📥 installing 'ghidra'"
+  # sudo snap install ghidra
+  # print_notes "   📥 installing 'dotnet'"
+  # # sudo snap install dotnet --classic
+  # sudo apt install dotnet-sdk-8.0
+  # print_notes "   📥 installing 'ilspycmd'"
+  # dotnet tool install --global ilspycmd
+  # print_notes "   📥 installing 'wine'"
+  # sudo dpkg --add-architecture i386 && apt-get update
+  # sudo apt install wine32 wine64 winetricks
+  # winetricks dotnet48
 
   print_info2 "🚀 TOOLS :: Additional tools installed!"
 
@@ -265,6 +309,17 @@ load_lists() {
 
   print_info2 "🚀 TOOLS :: Lists cloning done!"
 }
+load_templates() {
+  print_info2 "\n🚀 TOOLS :: Clone lists..."
+
+  print_notes "   ⬇️ Download 'trivy html template'..."
+  curl -Lo "$VM_SEC_TEMPLATES/trivy-html.tpl" https://github.com/aquasecurity/trivy/blob/main/contrib/html.tpl
+  print_notes "   ⬇️ Download 'grype html template'..."
+  curl -Lo "$VM_SEC_TEMPLATES/grype-html.tmpl" https://github.com/anchore/grype/raw/refs/heads/main/templates/html.tmpl
+  curl -Lo "$VM_SEC_TEMPLATES/grype-markdown.tmpl" https://github.com/anchore/grype/raw/refs/heads/main/templates/markdown.tmpl
+
+  print_info2 "🚀 TOOLS :: Lists cloning done!"
+}
 
 # SOURCE :: load nmap scripts --------------------------------------------------
 load_nmap_scripts() {
@@ -306,6 +361,7 @@ usage() {
   print_info "     -itio,      --install-tio               Install tio"
   print_info "     -itools,    --install-additional-tools  Install additional tools"
   print_info "     -llists,    --load-lists                Load/Clone lists"
+  print_info "     -ltemps,    --load-templates            Download Templates"
   print_info "     -lnmap,     --load-nmap-scripts         Load/Clone more NMAP scripts"
 }
 
@@ -336,6 +392,9 @@ parse_args() {
       ;;
     -llists | --load-lists)
       RUN_LOAD_LISTS=1
+      ;;
+    -ltemps | --load-templates)
+      RUN_LOAD_TEMPLATES=1
       ;;
     -lnmap | --load-nmap-scripts)
       RUN_LOAD_NMAP_SCRIPTS=1

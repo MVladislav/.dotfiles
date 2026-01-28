@@ -470,13 +470,6 @@ setup_profiles() {
   print_info2 "\n🚀 PROFILES :: Create symlink for './zsh/profile-append' as '$LN_PROFILES_01'"
   rm -f "${LN_PROFILES_01}"
   ln -sf "${PWD}/zsh/profile-append" "${LN_PROFILES_01}"
-  ln -sf "${PWD}/zsh/profile1-base" "${HOME}/.profile1-base"
-  ln -sf "${PWD}/zsh/profile2-defaults" "${HOME}/.profile2-defaults"
-  ln -sf "${PWD}/zsh/profile3-containers" "${HOME}/.profile3-containers"
-  ln -sf "${PWD}/zsh/profile4-helper" "${HOME}/.profile4-helper"
-  ln -sf "${PWD}/zsh/profile4-tests" "${HOME}/.profile4-tests"
-  ln -sf "${PWD}/zsh/profile5-git" "${HOME}/.profile5-git"
-  ln -sf "${PWD}/zsh/profile6-other" "${HOME}/.profile6-other"
   print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-sec' as '$LN_PROFILES_02'"
   rm -f "${LN_PROFILES_02}"
   ln -sf "${PWD}/zsh/profile-sec" "${LN_PROFILES_02}"
@@ -547,9 +540,13 @@ setup_gitconfig() {
   read -r git_user_email
   if [[ ! $git_user_email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
     print_error "  ❌ That doesn't look like a valid email. Please try again."
-    return 1
+    git_user_email=
   fi
 
+  if [ -z "$git_user_name" ] || [ -z "$git_user_email" ]; then
+    print_info2 "🚀 GIT :: You not provide a git user or email, setup will be skipped"
+    return 0
+  fi
   print_info2 "  🔍 Scanning '$HOME/.ssh' for available public keys"
   mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub")
 

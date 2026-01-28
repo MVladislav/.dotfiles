@@ -178,7 +178,7 @@ download_github_binary() {
   mkdir -p "$out_dir"
 
   # Handle archive or direct binary
-  local bin_path=""
+  local bin_path=
   if [[ "$file_name" == *.tar.gz || "$file_name" == *.tgz ]]; then
     print_info2 "   ⚙️ Extracting 'tar.gz'..."
     tar -xzf "$tmp_dir/$file_name" -C "$tmp_dir"

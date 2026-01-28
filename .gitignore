@@ -25,6 +25,9 @@ git/**
 zsh/**
 !zsh/zshrc
 !zsh/profile-sec
+!zsh/profile-sec-base
+!zsh/profile-sec-api
+!zsh/profile-sec-tools
 !zsh/profile-append
 !zsh/profile1-base
 !zsh/profile2-defaults

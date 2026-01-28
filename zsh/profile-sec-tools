@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+# VM_SEC_LISTS_SECLISTS="$HOME/opt/sec/SecLists"
+# VM_SEC_LISTS_PAYLOADS="$HOME/opt/sec/PayloadsAllTheThings"
+# VM_SEC_LISTS_SECFILES="$HOME/opt/sec/SecFiles"
+# VM_SEC_LISTS_TEMPLATES="$HOME/opt/sec/Templates"
+# VM_SEC_NUCLEI_TEMPLATES="$HOME/.dotfiles/sec/nuclei"
+
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
+
+######################################################################
+##
+## DEFAULTS:: Snippets
+##
+######################################################################
+alias vm_sec_csv_telnet='USER="-f root" telnet -a' # GNU InetUtils 1.9.3

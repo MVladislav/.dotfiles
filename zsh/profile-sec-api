@@ -1,0 +1,487 @@
+#!/usr/bin/env bash
+
+# VM_SEC_LISTS_SECLISTS="$HOME/opt/sec/SecLists"
+# VM_SEC_LISTS_PAYLOADS="$HOME/opt/sec/PayloadsAllTheThings"
+VM_SEC_LISTS_SECFILES="$HOME/opt/sec/SecFiles"
+# VM_SEC_LISTS_TEMPLATES="$HOME/opt/sec/Templates"
+# VM_SEC_NUCLEI_TEMPLATES="$HOME/.dotfiles/sec/nuclei"
+
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
+
+######################################################################
+##
+## FUNCTIONS:: ...
+##
+######################################################################
+vm_sec_shodan() {
+  if [[ -z "${SHODAN_API_KEY}" ]]; then
+    echo "Error: 'SHODAN_API_KEY' environment variable must be set" >&2
+    return 1
+  fi
+  # if [ "$#" -lt 1 ]; then
+  #   echo "Usage: $0 <QUERY>" >&2
+  #   return 1
+  # fi
+  local query=${1:-'http.title:"Clawdbot Control" http.favicon.hash:-805544463'}
+  query="${query// /%20}"
+  query="${query//\"/\\\"}"
+  query="${query//:/%3A}"
+  query="${query//-/%2D}"
+
+  query="query=${query}&facets=country:2,org:2,port:2"
+  curl -s "https://api.shodan.io/shodan/host/search?key=${SHODAN_API_KEY}&$query" | jq
+}
+
+######################################################################
+##
+## FUNCTIONS:: ...
+##
+######################################################################
+vm_sec_api_doc_search() {
+  # Function to check for active API documentation endpoints on a domain
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <domain>"
+    return 1
+  fi
+
+  # Ensure the domain starts with http:// or https://
+  local domain="$1"
+  if [[ ! "$domain" =~ ^https?:// ]]; then
+    domain="http://$domain"
+  fi
+
+  # List of common API documentation paths (can be extended)
+  local endpoint_docs=(
+    '/swagger-ui.html'
+    '/swagger-ui/'
+    '/swagger-ui/index.html'
+    '/api-docs'
+    '/v2/api-docs'
+    '/v3/api-docs'
+    '/swagger.json'
+    '/openapi.json'
+    '/api/swagger.json'
+    '/docs'
+    '/api-docs/'
+    '/swagger/'
+    '/swagger/index.html'
+    '/swagger/v1/swagger.json'
+    '/swagger/v2/swagger.json'
+    '/swagger/v3/swagger.json'
+    '/openapi/'
+    '/openapi/v1/'
+    '/openapi/v2/'
+    '/openapi/v3/'
+    '/api/v1/swagger.json'
+    '/api/v2/swagger.json'
+    '/api/v3/swagger.json'
+    '/documentation'
+    '/documentation/swagger'
+    '/documentation/openapi'
+    '/swagger/docs/v1'
+    '/swagger/docs/v2'
+    '/swagger/docs/v3'
+    '/swagger-ui.html#/'
+    '/swagger-ui/index.html#/'
+    '/openapi/ui'
+    '/swagger-ui/v1/'
+    '/swagger-ui/v2/'
+    '/swagger-ui/v3/'
+    '/api/swagger-ui.html'
+    '/api/swagger-ui/'
+    '/api/documentation'
+    '/v1/documentation'
+    '/v2/documentation'
+    '/v3/documentation'
+    '/swagger-resources'
+    '/swagger-resources/configuration/ui'
+    '/swagger-resources/configuration/security'
+    '/swagger-resources/swagger.json'
+    '/swagger-resources/openapi.json'
+    '/swagger-ui/swagger-ui.html'
+    '/swagger-ui/swagger-ui/'
+    '/swagger-ui.html/swagger-resources'
+    '/swagger-ui.html/swagger-resources/configuration/ui'
+    '/swagger-ui.html/swagger-resources/configuration/security'
+    '/api/swagger-resources'
+    '/api/swagger-resources/configuration/ui'
+    '/api/swagger-resources/configuration/security'
+    '/api/swagger-resources/swagger.json'
+    '/api/swagger-resources/openapi.json'
+    '/swagger/v1/'
+    '/swagger/v2/'
+    '/swagger/v3/'
+    '/swagger-ui/v1/swagger.json'
+    '/swagger-ui/v2/swagger.json'
+    '/swagger-ui/v3/swagger.json'
+    '/api/swagger-ui/v1/'
+    '/api/swagger-ui/v2/'
+    '/api/swagger-ui/v3/'
+    '/openapi/swagger.json'
+    '/openapi/openapi.json'
+    '/api/openapi'
+    '/api/openapi.json'
+    '/api/v1/openapi.json'
+    '/api/v2/openapi.json'
+    '/api/v3/openapi.json'
+    '/swagger.yaml'
+    '/openapi.yaml'
+    '/swagger.yml'
+    '/openapi.yml'
+    '/v1/swagger.json'
+    '/v2/swagger.json'
+    '/v3/swagger.json'
+    '/v1/openapi.json'
+    '/v2/openapi.json'
+    '/v3/openapi.json'
+    '/v1/swagger.yaml'
+    '/v2/swagger.yaml'
+    '/v3/swagger.yaml'
+    '/v1/openapi.yaml'
+    '/v2/openapi.yaml'
+    '/v3/openapi.yaml'
+    '/swagger/api'
+    '/openapi/api'
+    '/swagger/api-docs'
+    '/openapi/api-docs'
+    '/swagger/api/swagger.json'
+    '/openapi/api/openapi.json'
+    '/swagger/api/v1/swagger.json'
+    '/swagger/api/v2/swagger.json'
+    '/swagger/api/v3/swagger.json'
+    '/openapi/api/v1/openapi.json'
+    '/openapi/api/v2/openapi.json'
+    '/openapi/api/v3/openapi.json'
+    '/swagger/api/swagger.yaml'
+    '/swagger/api/swagger.yml'
+    '/openapi/api/openapi.yaml'
+    '/openapi/api/openapi.yml'
+  )
+
+  echo "Checking API documentation endpoints on: $domain"
+
+  local found_docs=0
+  local not_found_docs=0
+  for endpoint in "${endpoint_docs[@]}"; do
+    local url="${domain}${endpoint}"
+    # Get only the HTTP response code (-s silent, -o discard output, -w writes status code)
+    local curl_reps=-1
+    curl_reps=$(curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -ks -o /dev/null -w '%{http_code}' "$url")
+    # Check for success (HTTP 200-299)
+    if [[ "$curl_reps" -ge 200 && "$curl_reps" -lt 300 ]]; then
+      echo "✅ Active API documentation found at: $url (HTTP $curl_reps)"
+      found_docs=1
+      break
+    else
+      if [[ "$curl_reps" -eq 404 ]]; then
+        not_found_docs=$((not_found_docs + 1))
+        # echo "✖ Not found at: $url (HTTP $curl_reps)"
+      else
+        echo "✖ Not found at: $url (HTTP $curl_reps)"
+      fi
+    fi
+  done
+
+  if [ $found_docs -eq 0 ]; then
+    echo "No active API documentation endpoint was found on $domain. (resp 404 :: $not_found_docs counts)"
+    return 1
+  fi
+  return 0
+}
+
+######################################################################
+##
+## FUNCTIONS:: APT search
+##
+######################################################################
+vm_sec_search_apt() {
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
+    return 1
+  fi
+
+  local vm_s_type="$1"
+  local vm_apt_s="$2"
+  local vm_apt_json_list='https://raw.githubusercontent.com/andreacristaldi/APTmap/master/apt.json'
+  local vm_apt_file="$VM_SEC_LISTS_SECFILES/apt.json"
+
+  # Create the directory if it doesn't exist
+  mkdir -p "$VM_SEC_LISTS_SECFILES"
+
+  # Check if the file doesn't exist or is older than 1 day (86400 seconds)
+  if [ ! -f "$vm_apt_file" ] || [ "$(stat -c %Y "$vm_apt_file")" -lt "$(($(date +%s) - 86400))" ]; then
+    echo "Downloading apt.json (file missing or older than one day)..."
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_apt_file" "$vm_apt_json_list"
+  fi
+
+  case $vm_s_type in
+  "name")
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+      | select( \
+      (.name | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase)) \
+      or \
+      (.[\"other-names\"][] | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase)) \
+      )]" "$vm_apt_file"
+    ;;
+  "tool")
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets, \
+      tools: (.tools[] | select(.value | ascii_downcase | contains(\"$vm_apt_s\" | ascii_downcase))) \
+      }]" "$vm_apt_file"
+    ;;
+  "location")
+    jq "[.features[] | .properties | {name, \"other-names\",\"first-seen\",country,location,sponsor,motivations,targets} \
+      | select( \
+      ((.location | ascii_downcase) | contains(\"$vm_apt_s\" | ascii_downcase)) and (.location | length > 0) \
+      )]" "$vm_apt_file"
+    ;;
+  "raw")
+    cat "$vm_apt_file"
+    ;;
+  *)
+    echo "Type to search is not known"
+    echo "Usage: $0 <[name|tool|location|raw]> <NAME>"
+    ;;
+  esac
+}
+
+######################################################################
+##
+## FUNCTIONS:: MITRE technique search
+##
+######################################################################
+vm_sec_search_mitre() {
+  local USAGE="Usage: $0 <[short|detail|tactics|attacks|intrusion|malware]> (<SEARCH>)"
+  local vm_s_type="$1"
+
+  if [[ "$vm_s_type" == "tactics" ]]; then
+    [ "$#" -lt 1 ] && {
+      echo "$USAGE"
+      return 1
+    }
+  else
+    [ "$#" -lt 2 ] && {
+      echo "$USAGE"
+      return 1
+    }
+  fi
+
+  local vm_mitre_s="$2"
+  # local vm_mitre_json_list='https://raw.githubusercontent.com/mitre/cti/refs/heads/master/enterprise-attack/enterprise-attack.json'
+  local vm_mitre_json_list='https://raw.githubusercontent.com/mitre-attack/attack-stix-data/refs/heads/master/enterprise-attack/enterprise-attack.json'
+  local vm_mitre_file="$VM_SEC_LISTS_SECFILES/enterprise-attack.json"
+
+  mkdir -p "$VM_SEC_LISTS_SECFILES"
+  if [ ! -f "$vm_mitre_file" ] || [ "$(stat -c %Y "$vm_mitre_file")" -lt "$(($(date +%s) - 86400))" ]; then
+    echo "Downloading enterprise-attack.json (file missing or older than one day)..."
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_mitre_file" "$vm_mitre_json_list"
+  fi
+
+  local output
+  case "$vm_s_type" in
+  detail | tactics | intrusion | malware)
+    output='{
+        name: .name,
+        type: .type,
+        description: .description,
+        ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+        ref_urls: ([.external_references[]? | select(has("url")) | .url]),
+        ref_names: ([.external_references[]? | select(has("source_name")) | .source_name]),
+        ref_descriptions: ([.external_references[]? | select(has("description")) | .description])
+      }'
+    ;;
+  short | attacks)
+    output='{
+        name: .name,
+        type: .type,
+        ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+        ref_urls: ([.external_references[]? | select(has("url")) | .url] | .[0])
+      }'
+    ;;
+  *)
+    echo "Type to search is not known"
+    echo "$USAGE"
+    return 1
+    ;;
+  esac
+
+  # Additional type filters for some modes.
+  local type_filter=''
+  local type_filter_reverse=''
+  local type_filter_relation1=''
+  local type_filter_relation2=''
+  case "$vm_s_type" in
+  tactics) type_filter=' and (.type | IN("x-mitre-tactic"))' ;;
+  # attacks) type_filter=' and (.type | IN("attack-pattern"))' ;;
+  attacks)
+    type_filter=' and (.type | IN("attack-pattern"))'
+    type_filter_reverse='"malware","tool","intrusion-set","course-of-action"'
+    type_filter_relation1='target_ref'
+    type_filter_relation2='source_ref'
+    ;;
+  intrusion)
+    type_filter=' and (.type | IN("intrusion-set"))'
+    type_filter_reverse='"malware","tool","course-of-action"'
+    type_filter_relation1='source_ref'
+    type_filter_relation2='target_ref'
+    ;;
+  malware)
+    type_filter=' and (.type | IN("malware"))'
+    type_filter_reverse='"intrusion-set","course-of-action"'
+    type_filter_relation1='target_ref'
+    type_filter_relation2='source_ref'
+    ;;
+  esac
+
+  # Build a common search filter (search across name, description, external descriptions, and external IDs).
+  # shellcheck disable=SC2016
+  local common_filter='
+    .objects[]
+    | select(
+        (
+          ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
+          or
+          ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+        )
+        and (.name != null)
+        '$type_filter'
+      )
+  '
+
+  jq --arg s "$vm_mitre_s" "$common_filter | $output" "$vm_mitre_file"
+
+  # ---
+
+  if [ -n "$type_filter_reverse" ]; then
+
+    # shellcheck disable=SC2016
+    # local output_extended='{
+    #       base_ids: $base_ids,
+    #       relation: $relation,
+    #       final: ($final | map({
+    #         name: .name,
+    #         ref_ids: ([.external_references[]? | select(has("external_id")) | .external_id] | join(", ")),
+    #       }))
+    #     }'
+    local output_extended='($final | map('$output'))'
+
+    # shellcheck disable=SC2016
+    local common_filter_extended='
+      . as $root
+      |
+      # Base search: get IDs of objects matching the query.
+      ($root.objects
+        | map(select(
+            (
+              ((.description // "") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ([.external_references[]? | (.description // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ((.name // "") | ascii_downcase | contains($s | ascii_downcase))
+              or
+              ([.external_references[]? | (.external_id // "")] | join(" ") | ascii_downcase | contains($s | ascii_downcase))
+            )
+            and (.name != null)
+            '$type_filter'
+          ))
+        | map(.id)
+        | unique
+      ) as $base_ids
+
+      |
+      # First hop: find relationship objects whose source_ref is in the base IDs.
+      ($root.objects
+        | map(select(
+            .type=="relationship"
+            and has($r1)
+            and (getpath([$r1]) | type=="string")
+            and ( (getpath([$r1])) as $sr | ($base_ids | index($sr)) != null )
+            # and (getpath([$r2]) | startswith($r))
+          ))
+        | map(getpath([$r2]))
+        | unique
+      ) as $relation
+
+      |
+      # Final lookup: get objects whose id is in the final IDs.
+      ($root.objects
+        | map(select(
+            ( (.type) as $tt | ($r | index($tt)) != null )
+            and has("id")
+            and (.id | type=="string")
+            and ( (.id) as $fid | ($relation | index($fid)) != null )
+          ))
+      ) as $final
+    '
+
+    jq \
+      --arg s "$vm_mitre_s" \
+      --arg r "$type_filter_reverse" \
+      --arg r1 "$type_filter_relation1" \
+      --arg r2 "$type_filter_relation2" \
+      "$common_filter_extended | $output_extended" "$vm_mitre_file"
+  fi
+}
+
+######################################################################
+##
+## FUNCTIONS:: EUVD/CVE search
+##
+######################################################################
+vm_sec_search_vulns() {
+  if [ "$#" -gt 0 ] && [ "$#" -lt 2 ]; then
+    echo "Usage: $0 [euvd|cve] <ID>"
+    return 1
+  fi
+
+  local vm_s_type=""
+  local vm_s_id=""
+  local merged_json
+
+  if [ "$#" -eq 2 ]; then
+    vm_s_type="$1"
+    vm_s_id="$2"
+  fi
+
+  # NOTE: https://euvd.enisa.europa.eu/apidoc
+  local vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
+  case $vm_s_type in
+  "euvd")
+    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/enisaid?id=$vm_s_id"
+    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
+    ;;
+  "cve")
+    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/vulnerability?id=$vm_s_id"
+    echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
+    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    ;;
+  *)
+    vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
+    merged_json=$(curl -s "$vm_vuln_api" | jq '.items')
+    ;;
+  esac
+
+  # local vm_vuln_q_list1="https://euvdservices.enisa.europa.eu/api/exploitedvulnerabilities"
+  # local vm_vuln_q_list2="https://euvdservices.enisa.europa.eu/api/criticalvulnerabilities"
+  # local vm_vuln_q_list3="https://euvdservices.enisa.europa.eu/api/lastvulnerabilities"
+  # merged_json=$(jq -s 'add' <(curl -s "$vm_vuln_q_list1") <(curl -s "$vm_vuln_q_list2") <(curl -s "$vm_vuln_q_list3"))
+
+  # Filter the required fields and pretty print
+  jq -r '
+    .[] | {
+      id,
+      enisa_id,
+      status,
+      datePublished,
+      dateUpdated,
+      baseScore,
+      epss,
+      aliases,
+      description
+    }
+  ' <<<"$merged_json"
+}

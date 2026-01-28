@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
 # shellcheck disable=SC1091
-source "$HOME/.profile1-base"
-source "$HOME/.profile2-defaults"
-source "$HOME/.profile3-containers"
-source "$HOME/.profile4-helper"
-source "$HOME/.profile4-tests"
-source "$HOME/.profile5-git"
-source "$HOME/.profile6-other"
+source "$HOME/.dotfiles/zsh/profile1-base"
+source "$HOME/.dotfiles/zsh/profile2-defaults"
+source "$HOME/.dotfiles/zsh/profile3-containers"
+source "$HOME/.dotfiles/zsh/profile4-helper"
+source "$HOME/.dotfiles/zsh/profile4-tests"
+source "$HOME/.dotfiles/zsh/profile5-git"
+source "$HOME/.dotfiles/zsh/profile6-other"
