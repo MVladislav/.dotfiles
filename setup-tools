@@ -1,0 +1,127 @@
+#!/bin/usr/env bash
+# NOTE: inspired by <https://www.youtube.com/@yousuckatprogramming>
+
+NC='\033[0m'         # No Color
+BRED='\033[1;31m'    # Red
+BPURPLE='\033[1;35m' # Purple
+BCyan='\033[1;36m'   # Cyan
+BGreen='\033[1;32m'  # Green
+
+# USAGE: progress
+#  - start_term
+#  - progress_bar "<COUNT>" "<SIZE>"
+#  - progress_bar "<SIZE>" "<SIZE>"
+#
+# USAGE: spinner
+#  - start_term
+#  - spinner
+
+start_term() {
+  trap deinit_term exit
+  trap init_term winch
+  init_term
+}
+init_term() {
+  shopt -s globstar nullglob checkwinsize
+  (:) # ensure checkwinsize is triggred and set
+  printf '\n'
+  printf '\e7' # save cursor position
+  printf '\e[%d;%dr' 0 "$((LINES - 1))" # define scrollable region
+  printf '\e8' # restores the cursor to the last saved position
+  printf '\e[1A' # moves cursor up 1 lines
+}
+deinit_term() {
+  printf '\e7' # save cursor position
+  printf '\e[%d;%dr' 0 "$LINES" # reset scrollable region
+  printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
+  printf '\e[0K' # erase from cursor to end of line
+  printf '\e8' # restores the cursor to the last saved position
+}
+
+progress_bar() {
+  local current=$1
+  local len=$2
+
+  local bar_char='#'
+  local empty_char='.'
+  local start_char='['
+  local end_char=']'
+
+  local perc_done=$((current * 100 / len))
+  local suffix=" $current/$len ($perc_done%)"
+  local length=$((COLUMNS - ${#suffix} - 2))
+  local num_bars=$((perc_done * length / 100))
+
+  local steps=4
+  local colors=("$BRED" "$BPURPLE" "$BCyan" "$BGreen")
+
+  local i pos_step color_idx color
+  local s=$start_char
+  for ((i = 0; i < num_bars; i++)); do
+    pos_step=$(( i * steps / length ))
+    color_idx=$(( pos_step < steps ? pos_step : steps-1 ))
+    color="${colors[color_idx]}"
+    s+="$color$bar_char$NC"
+  done
+  for ((i = num_bars; i < length; i++)); do
+    pos_step=$(( i * steps / length ))
+    color_idx=$(( pos_step < steps ? pos_step : steps-1 ))
+    color="${colors[color_idx]}"
+    s+="$color$empty_char$NC"
+  done
+  s+="$end_char"
+  s+="$suffix"
+  printf '\e7' # save cursor position
+  printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
+  printf '\e[0K' # erase from cursor to end of line
+  printf '%b' "$s"
+  printf '\e8' # restores the cursor to the last saved position
+}
+
+spinner_spin() {
+  # https://github.com/sindresorhus/cli-spinners/blob/main/spinners.json
+  # local chars=(
+  #   "▐⠂       ▌" "▐⠈       ▌" "▐ ⠂      ▌" "▐ ⠠      ▌" "▐  ⡀     ▌" "▐  ⠠     ▌"
+  #   "▐   ⠂    ▌" "▐   ⠈    ▌" "▐    ⠂   ▌" "▐    ⠠   ▌" "▐     ⡀  ▌" "▐     ⠠  ▌"
+  #   "▐      ⠂ ▌" "▐      ⠈ ▌" "▐       ⠂▌" "▐       ⠠▌" "▐       ⡀▌" "▐      ⠠ ▌"
+  #   "▐      ⠂ ▌" "▐     ⠈  ▌" "▐     ⠂  ▌" "▐    ⠠   ▌" "▐    ⡀   ▌" "▐   ⠠    ▌"
+  #   "▐   ⠂    ▌" "▐  ⠈     ▌" "▐  ⠂     ▌" "▐ ⠠      ▌" "▐ ⡀      ▌" "▐⠠       ▌"
+  # )
+  local chars=("🕛" "🕐" "🕑" "🕒" "🕓" "🕔" "🕕" "🕖" "🕗" "🕘" "🕙" "🕚")
+  local i
+  while true; do
+    for i in "${chars[@]}"; do
+      sleep .3
+      printf '\e7' # save cursor position
+      printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
+      printf '\e[0K' # erase from cursor to end of line
+      printf ' %s' "$i"
+      printf '\e8' # restores the cursor to the last saved position
+    done
+  done
+}
+spinner_pid=
+spinner_cleanup() {
+  if [[ -n $spinner_pid ]]; then
+    kill "$spinner_pid"
+  fi
+}
+spinner() {
+  trap spinner_cleanup exit
+  spinner_spin &
+  spinner_pid=$!
+}
+
+# start_term
+# for ((i=0; i < 100;i++)); do
+#   echo "hi $((i+1))"
+#   progress_bar "$((i+1))" "100"
+#   sleep 0.1
+# done
+
+# start_term
+# spinner
+# for ((i=0; i < 100; i++)); do
+#   echo "file $((i+1))"
+#   sleep 0.1
+# done
