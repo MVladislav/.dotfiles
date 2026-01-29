@@ -128,6 +128,9 @@ install_tools() {
   ### TOOLS ###
   curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
   curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
+  DOCKLE_VERSION=0.4.15
+  curl -sSfL "https://github.com/goodwithtech/dockle/releases/download/v${DOCKLE_VERSION}/dockle_${DOCKLE_VERSION}_Linux-64bit.tar.gz" | tar -xz -C "$USER_LOCAL_PREFIX_BIN" dockle
+
 
   ### MicroShit ###
   # sudo snap install dotnet --classic

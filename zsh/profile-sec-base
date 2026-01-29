@@ -31,6 +31,7 @@ alias grype='grype --scope all-layers --only-fixed'
 alias grype-sarif='grype -o sarif --file grype-results.sarif'
 alias grype-html='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-html.tmpl" --file grype-results.html'
 alias grype-md='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-markdown.tmpl" --file grype-results.md'
+alias dockle-sarif='dockle --exit-code 1 --format sarif --output dockle-results.sarif'
 
 ######################################################################
 ##
