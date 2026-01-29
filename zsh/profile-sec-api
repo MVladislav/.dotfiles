@@ -29,7 +29,7 @@ vm_sec_shodan() {
   query="${query//-/%2D}"
 
   query="query=${query}&facets=country:2,org:2,port:2"
-  curl -s "https://api.shodan.io/shodan/host/search?key=${SHODAN_API_KEY}&$query" | jq
+  curl -sSfL "https://api.shodan.io/shodan/host/search?key=${SHODAN_API_KEY}&$query" | jq
 }
 
 ######################################################################
@@ -166,7 +166,7 @@ vm_sec_api_doc_search() {
     local url="${domain}${endpoint}"
     # Get only the HTTP response code (-s silent, -o discard output, -w writes status code)
     local curl_reps=-1
-    curl_reps=$(curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -ks -o /dev/null -w '%{http_code}' "$url")
+    curl_reps=$(curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -k -sSL -o /dev/null -w '%{http_code}' "$url")
     # Check for success (HTTP 200-299)
     if [[ "$curl_reps" -ge 200 && "$curl_reps" -lt 300 ]]; then
       echo "✅ Active API documentation found at: $url (HTTP $curl_reps)"
@@ -211,7 +211,7 @@ vm_sec_search_apt() {
   # Check if the file doesn't exist or is older than 1 day (86400 seconds)
   if [ ! -f "$vm_apt_file" ] || [ "$(stat -c %Y "$vm_apt_file")" -lt "$(($(date +%s) - 86400))" ]; then
     echo "Downloading apt.json (file missing or older than one day)..."
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_apt_file" "$vm_apt_json_list"
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -sSfL -o "$vm_apt_file" "$vm_apt_json_list"
   fi
 
   case $vm_s_type in
@@ -273,7 +273,7 @@ vm_sec_search_mitre() {
   mkdir -p "$VM_SEC_LISTS_SECFILES"
   if [ ! -f "$vm_mitre_file" ] || [ "$(stat -c %Y "$vm_mitre_file")" -lt "$(($(date +%s) - 86400))" ]; then
     echo "Downloading enterprise-attack.json (file missing or older than one day)..."
-    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -s -o "$vm_mitre_file" "$vm_mitre_json_list"
+    curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -sSfL -o "$vm_mitre_file" "$vm_mitre_json_list"
   fi
 
   local output
@@ -447,21 +447,21 @@ vm_sec_search_vulns() {
   fi
 
   # NOTE: https://euvd.enisa.europa.eu/apidoc
-  local vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
+  local vm_vuln_api='https://euvdservices.enisa.europa.eu/api/search?size=100&fromScore=6&toScore=10&exploited=true'
   case $vm_s_type in
   "euvd")
     vm_vuln_api="https://euvdservices.enisa.europa.eu/api/enisaid?id=$vm_s_id"
-    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    merged_json=$(curl -sSfL "$vm_vuln_api" | jq '[.]')
     echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
     ;;
   "cve")
-    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/vulnerability?id=$vm_s_id"
+    vm_vuln_api="https://euvdservices.enisa.europa.eu/api/lastvulnerabilities?id=$vm_s_id"
     echo "Will search '$vm_s_type' as '$vm_s_id' with '$vm_vuln_api'"
-    merged_json=$(curl -s "$vm_vuln_api" | jq '[.]')
+    merged_json=$(curl -sSfL "$vm_vuln_api" | jq '[.]')
     ;;
   *)
-    vm_vuln_api='https://euvdservices.enisa.europa.eu/api/vulnerabilities?size=100&fromScore=6&toScore=10&exploited=true'
-    merged_json=$(curl -s "$vm_vuln_api" | jq '.items')
+    vm_vuln_api='https://euvdservices.enisa.europa.eu/api/search?size=100&fromScore=6&toScore=10&exploited=true'
+    merged_json=$(curl -sSfL "$vm_vuln_api" | jq '.items')
     ;;
   esac
 

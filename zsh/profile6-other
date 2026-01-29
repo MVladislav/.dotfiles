@@ -131,7 +131,7 @@ vm_convert_md_to_pdf() {
   if [ ! -f "$template_path" ]; then
     mkdir -p "$(dirname "$template_path")"
     echo "Template not found locally. Downloading from URL..."
-    if ! curl -sf -o "${template_path}.tar.gz" "$template_url"; then
+    if ! curl -sSfL -o "${template_path}.tar.gz" "$template_url"; then
       echo "Error: Failed to download the template from '$template_url'."
       return 1
     fi
@@ -406,14 +406,14 @@ vm_ionos_api() {
   domains="${domains//,/\",\"}"
   domains="\"$domains\""
 
-  response=$(curl -f -s -S -k -X DELETE "https://api.hosting.ionos.com/dns/v1/dyndns" \
+  response=$(curl -sSfL -k -X DELETE "https://api.hosting.ionos.com/dns/v1/dyndns" \
     -H "X-API-Key: $prefix.$secret" || {
     echo "ERROR: API request failed for URL: DELETE https://api.hosting.ionos.com/dns/v1/dyndns"
     return 1
   })
   echo "$response" | jq
 
-  response=$(curl -f -s -S -k -X POST "https://api.hosting.ionos.com/dns/v1/dyndns" \
+  response=$(curl -sSfL -k -X POST "https://api.hosting.ionos.com/dns/v1/dyndns" \
     -H "X-API-Key: $prefix.$secret" \
     -H "accept: application/json" \
     -H "Content-Type: application/json" \
