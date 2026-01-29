@@ -27,6 +27,7 @@ setopt HIST_FIND_NO_DUPS          # Skip duplicates when searching history
 setopt HIST_IGNORE_SPACE          # Skip commands starting with a space
 setopt HIST_SAVE_NO_DUPS          # Prevent duplicate entries from being written
 setopt HIST_REDUCE_BLANKS         # Strip superfluous whitespace
+setopt HIST_IGNORE_DUPS           # Ignore duplicated commands history list
 
 # ---------------------------------------------------------------------------
 # Directory navigation
