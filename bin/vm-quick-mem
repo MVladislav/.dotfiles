@@ -30,6 +30,7 @@ display_collect() {
   total_file_kb=0
   total_shmem_kb=0
 
+  local pid_path status uid owner anon_kb file_kb shmem_kb total_kb cmd cmd_first cmd_last
   for pid_path in /proc/[0-9]*; do
     pid=${pid_path##*/}
     status="$pid_path/status"
@@ -48,6 +49,7 @@ display_collect() {
     total_kb=$((anon_kb + file_kb + shmem_kb))
     [[ $total_kb -gt 0 ]] || continue
 
+    cmd=
     if [[ -r "/proc/$pid/cmdline" ]]; then
       cmd=$(tr '\0' ' ' <"/proc/$pid/cmdline" | awk '{print $1}')
       if [[ -z $cmd ]]; then
@@ -56,8 +58,8 @@ display_collect() {
     else
       cmd=$(awk '/^Name:/ {print $2; exit}' "$status")
     fi
-    cmd_first=$(basename "$(cut -d'/' -f2 <<<"$cmd")")
-    cmd_last=$(basename "$cmd")
+    cmd_first=$(basename -- "$(cut -d'/' -f2 <<<"$cmd")")
+    cmd_last=$(basename -- "$cmd")
     cmd=$(printf "%-6s :: %s" "$cmd_first" "$cmd_last")
 
     PROC_LIST+=("$total_kb;$pid;$owner;$cmd;$anon_kb;$file_kb;$shmem_kb")
@@ -76,6 +78,7 @@ display_header() {
 
 # Display top processes from collected data
 display_top() {
+  local total_mb anon_mb file_mb shmem_mb color total_kb pid owner cmd anon_kb file_kb shmem_kb
   printf '%s\n' "${PROC_LIST[@]}" |
     sort -t';' -k1,1nr | head -n "$TOP_COUNT" |
     while IFS=';' read -r total_kb pid owner cmd anon_kb file_kb shmem_kb; do
@@ -127,22 +130,22 @@ usage() {
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    -u)
-      USER_FILTER="$2"
-      shift 2
-      ;;
-    -n)
-      TOP_COUNT="$2"
-      shift 2
-      ;;
-    -h)
-      usage
-      exit 0
-      ;;
-    *)
-      usage
-      exit 1
-      ;;
+      -u)
+        USER_FILTER="$2"
+        shift 2
+        ;;
+      -n)
+        TOP_COUNT="$2"
+        shift 2
+        ;;
+      -h)
+        usage
+        exit 0
+        ;;
+      *)
+        usage
+        exit 1
+        ;;
     esac
   done
 }
