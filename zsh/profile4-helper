@@ -105,8 +105,8 @@ vm_quick_android_emulator_rm() {
 ## ii: display useful host related information
 ##
 ######################################################################
-alias vm_my_ip_4='curl -4 -s https://ipinfo.io/ip' # 'curl -4 -s ifconfig.io/ip'
-alias vm_my_ip_6='curl -6 -s https://v6.ipinfo.io/ip' # 'curl -6 -s ifconfig.io/ip'
+alias vm_my_ip_4='curl -4 -s https://ipinfo.io/ip'      # 'curl -4 -s ifconfig.io/ip'
+alias vm_my_ip_6='curl -6 -s https://v6.ipinfo.io/ip'   # 'curl -6 -s ifconfig.io/ip'
 alias vm_my_country='curl -s https://ipinfo.io/country' #'curl -s ifconfig.io/country_code'
 alias vm_my_org='curl -s https://ipinfo.io/org'
 alias vm_my_all='curl -s https://ipinfo.io/json | jq' # 'curl -s ifconfig.io/all.json | jq'
@@ -157,9 +157,18 @@ vm_ii() {
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
-      -b|--bios) run_bios=true; shift ;;
-      -h|--help) echo "Usage: $0 [--bios|-b]"; return 0 ;;
-      *) echo "Unknown option: $1" >&2; return 2 ;;
+    -b | --bios)
+      run_bios=true
+      shift
+      ;;
+    -h | --help)
+      echo "Usage: $0 [--bios|-b]"
+      return 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      return 2
+      ;;
     esac
   done
 
@@ -186,7 +195,6 @@ vm_ii() {
   else
     echo -e "  - secure boot status    : mokutil missing"
   fi
-
 
   echo -e "\\n${BRED}GPU information:$NC"
   if command -v vulkaninfo >/dev/null 2>&1; then

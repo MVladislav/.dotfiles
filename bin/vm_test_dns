@@ -2,7 +2,10 @@
 set -euo pipefail
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
-command -v dig >/dev/null || { echo "dig not found"; exit 1; }
+command -v dig >/dev/null || {
+  echo "dig not found"
+  exit 1
+}
 
 # -----------------------------
 # DNS providers
@@ -101,8 +104,8 @@ DOMAINS=(
 TRIES=5
 COL_W=42
 NAME_W=20
-WARN_LATENCY=50   # highlight if warm avg > X ms
-WARN_SUCCESS=95   # highlight if success < X %
+WARN_LATENCY=50 # highlight if warm avg > X ms
+WARN_SUCCESS=95 # highlight if success < X %
 
 rand_name() { printf "%s.%s" "$(date +%s%N)" "$1"; }
 
@@ -129,22 +132,22 @@ echo "  - sec → filtered / secure"
 echo "  - unf → unfiltered"
 echo "- Checking for IPv6 interfaces..."
 if ip a | grep -q 'inet6'; then
-    if dig -6 @2620:fe::9 example.com +tries=1 +retry=0 +timeout=3 >/dev/null 2>&1; then
-        echo "  - IPv6 interface and connectivity detected, adding IPv6 DNS providers..."
-        PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}" "${PROVIDERSV6[@]}")
-    else
-        echo "  - IPv6 interface detected, but no connectivity. Using IPv4 only."
-        PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}")
-    fi
-else
-    echo "  - No IPv6 interface detected. Using IPv4 only."
+  if dig -6 @2620:fe::9 example.com +tries=1 +retry=0 +timeout=3 >/dev/null 2>&1; then
+    echo "  - IPv6 interface and connectivity detected, adding IPv6 DNS providers..."
+    PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}" "${PROVIDERSV6[@]}")
+  else
+    echo "  - IPv6 interface detected, but no connectivity. Using IPv4 only."
     PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}")
+  fi
+else
+  echo "  - No IPv6 interface detected. Using IPv4 only."
+  PROVIDERS_TO_TEST=("${PROVIDERSV4[@]}")
 fi
 
 echo "- Used Home DNS Resolver(s):"
 echo "  - IPv4(${PROVIDERSV4_HOME##*#}): ${PROVIDERSV4_HOME%%#*}"
 if [[ " ${PROVIDERS_TO_TEST[*]} " == *"${PROVIDERSV6_HOME}"* ]]; then
-    echo "  - IPv6(${PROVIDERSV6_HOME##*#}): ${PROVIDERSV6_HOME%%#*}"
+  echo "  - IPv6(${PROVIDERSV6_HOME##*#}): ${PROVIDERSV6_HOME%%#*}"
 fi
 
 # -----------------------------
@@ -154,19 +157,19 @@ echo "- Checking for providers not reachable (will be skipped)..."
 SKIPPED_PROVIDERS=()
 REACHABLE_PROVIDERS=()
 for p in "${PROVIDERS_TO_TEST[@]}"; do
-    p_ip=${p%%#*}
-    p_name=${p##*#}
-    if dig @"$p_ip" example.com +time=1 +tries=1 >/dev/null 2>&1; then
-        REACHABLE_PROVIDERS+=("$p")
-    else
-        SKIPPED_PROVIDERS+=("$p_name ($p_ip)")
-    fi
+  p_ip=${p%%#*}
+  p_name=${p##*#}
+  if dig @"$p_ip" example.com +time=1 +tries=1 >/dev/null 2>&1; then
+    REACHABLE_PROVIDERS+=("$p")
+  else
+    SKIPPED_PROVIDERS+=("$p_name ($p_ip)")
+  fi
 done
 PROVIDERS_TO_TEST=("${REACHABLE_PROVIDERS[@]}")
 if [ "${#SKIPPED_PROVIDERS[@]}" -gt 0 ]; then
-    for p in "${SKIPPED_PROVIDERS[@]}"; do
-        echo "  - $p"
-    done
+  for p in "${SKIPPED_PROVIDERS[@]}"; do
+    echo "  - $p"
+  done
 fi
 
 # -----------------------------
@@ -180,9 +183,9 @@ for d in "${DOMAINS[@]}"; do
   printf " %-${COL_W}s |" "${d%%.*}"
 done
 echo
-printf "|%*s|" $((NAME_W+2)) "" | tr ' ' '-'
+printf "|%*s|" $((NAME_W + 2)) "" | tr ' ' '-'
 for _ in "${DOMAINS[@]}"; do
-  printf "%*s|" $((COL_W+2)) "" | tr ' ' '-'
+  printf "%*s|" $((COL_W + 2)) "" | tr ' ' '-'
 done
 echo
 
@@ -218,22 +221,22 @@ for p in "${PROVIDERS_TO_TEST[@]}"; do
     fi
 
     # ---- warm queries
-    for ((i=1;i<=TRIES;i++)); do
+    for ((i = 1; i <= TRIES; i++)); do
       out=$(dig @"$p_ip" "$d" +stats +tries=1 +retry=0 +timeout=3 2>/dev/null || true)
       stat=$(awk '/status:/ {gsub(/,/, "", $6); print $6}' <<<"$out")
       qtime=$(awk '/Query time:/ {print $4}' <<<"$out")
       qtime=${qtime:-0}
 
       case "$stat" in
-        NOERROR)
-          ok=$((ok + 1))
-          total=$((total + qtime))
-          [ "$qtime" -lt "$min" ] && min=$qtime
-          [ "$qtime" -gt "$max" ] && max=$qtime
-          ;;
-        SERVFAIL) servfail=$((servfail + 1)) ;;
-        NXDOMAIN) nxdomain=$((nxdomain + 1)) ;;
-        *) timeout=$((timeout + 1)) ;;
+      NOERROR)
+        ok=$((ok + 1))
+        total=$((total + qtime))
+        [ "$qtime" -lt "$min" ] && min=$qtime
+        [ "$qtime" -gt "$max" ] && max=$qtime
+        ;;
+      SERVFAIL) servfail=$((servfail + 1)) ;;
+      NXDOMAIN) nxdomain=$((nxdomain + 1)) ;;
+      *) timeout=$((timeout + 1)) ;;
       esac
     done
 
@@ -247,9 +250,10 @@ for p in "${PROVIDERS_TO_TEST[@]}"; do
     if [ "$ok" -gt 0 ]; then
       avg=$((total / ok))
       jitter=$((max - min))
-      cell=$(printf \
-        "cold=%3sms avg=%2dms min=%2dms max=%2dms j=%2d" \
-        "$cold_ms" "$avg" "$min" "$max" "$jitter"
+      cell=$(
+        printf \
+          "cold=%3sms avg=%2dms min=%2dms max=%2dms j=%2d" \
+          "$cold_ms" "$avg" "$min" "$max" "$jitter"
       )
       printf " %-${COL_W}s |" "$cell"
       # printf " %-${COL_W}s |" "ok=${ok} sf=${servfail} nx=${nxdomain} to=${timeout}"
@@ -286,13 +290,13 @@ printf "| %-*s | %*s | %*s | %*s | %*s | %*s | %*s |\n" \
   "$W_TO" "TO"
 
 # Separator
-printf "|%*s|" $((NAME_W+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_WARM+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_COLD+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_SUCC+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_SF+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_NX+2)) "" | tr ' ' '-'
-printf "%*s|" $((W_TO+2)) "" | tr ' ' '-'
+printf "|%*s|" $((NAME_W + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_WARM + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_COLD + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_SUCC + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_SF + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_NX + 2)) "" | tr ' ' '-'
+printf "%*s|" $((W_TO + 2)) "" | tr ' ' '-'
 echo
 
 {
@@ -301,7 +305,7 @@ echo
     avg_w=$((PROVIDER_TOTAL_MS[$p] / PROVIDER_TOTAL_OK[$p]))
     cold_ok=${PROVIDER_COLD_OK[$p]}
     avg_c=0
-    (( cold_ok > 0 )) && avg_c=$(( PROVIDER_COLD_MS[$p] / cold_ok ))
+    ((cold_ok > 0)) && avg_c=$((PROVIDER_COLD_MS[$p] / cold_ok))
     success=$((100 * PROVIDER_TOTAL_OK[$p] / PROVIDER_TOTAL_Q[$p]))
     sf=${PROVIDER_TOTAL_SERVFAIL[$p]}
     nx=${PROVIDER_TOTAL_NX[$p]}
@@ -309,14 +313,14 @@ echo
     echo "$avg_w $avg_c $p $success $sf $nx $to"
   done
 } | sort -k4,4nr -k1,1n -k2,2n | while read -r avg_w avg_c name success sf nx to; do
-    color_start="" color_end=""
-    ((avg_w > WARN_LATENCY || success < WARN_SUCCESS)) && color_start="$(tput setaf 1)" && color_end="$(tput sgr0)"
-    printf "| %s%-*s%s | %*dms | %*dms | %*d%% | %*d | %*d | %*d |\n" \
-      "$color_start" "$NAME_W" "$name" "$color_end" \
-      "$((W_WARM-2))" "$avg_w" \
-      "$((W_COLD-2))" "$avg_c" \
-      "$((W_SUCC-1))" "$success" \
-      "$W_SF" "$sf" \
-      "$W_NX" "$nx" \
-      "$W_TO" "$to"
+  color_start="" color_end=""
+  ((avg_w > WARN_LATENCY || success < WARN_SUCCESS)) && color_start="$(tput setaf 1)" && color_end="$(tput sgr0)"
+  printf "| %s%-*s%s | %*dms | %*dms | %*d%% | %*d | %*d | %*d |\n" \
+    "$color_start" "$NAME_W" "$name" "$color_end" \
+    "$((W_WARM - 2))" "$avg_w" \
+    "$((W_COLD - 2))" "$avg_c" \
+    "$((W_SUCC - 1))" "$success" \
+    "$W_SF" "$sf" \
+    "$W_NX" "$nx" \
+    "$W_TO" "$to"
 done

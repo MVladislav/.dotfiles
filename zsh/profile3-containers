@@ -10,23 +10,23 @@ docker-swarm-compose() {
   # 1) Parse flags and collect everything else into ARGS
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      -f|--file)
-        if [[ -n "${2:-}" && -f "$2" ]]; then
-          COMPOSE_FILES+=("$2")
-          shift 2
-        else
-          echo "Error: Missing or invalid file after $1" >&2
-          return 1
-        fi
-        ;;
-      never|always)
-        RESOLVE_IMAGE="$1"
-        shift
-        ;;
-      *)
-        ARGS+=("$1")
-        shift
-        ;;
+    -f | --file)
+      if [[ -n "${2:-}" && -f "$2" ]]; then
+        COMPOSE_FILES+=("$2")
+        shift 2
+      else
+        echo "Error: Missing or invalid file after $1" >&2
+        return 1
+      fi
+      ;;
+    never | always)
+      RESOLVE_IMAGE="$1"
+      shift
+      ;;
+    *)
+      ARGS+=("$1")
+      shift
+      ;;
     esac
   done
 
@@ -47,7 +47,7 @@ docker-swarm-compose() {
   # 5) Extract stack name & extra args
   local STACK_NAME="$1"
   shift
-  local EXTRA_ARGS=( "$@" )
+  local EXTRA_ARGS=("$@")
 
   echo "Deploying stack '$STACK_NAME' with files: ${COMPOSE_FILES[*]} :: [resolve=$RESOLVE_IMAGE]"
 
@@ -58,18 +58,18 @@ docker-swarm-compose() {
   done
 
   # 7) Pipe the final config into docker stack deploy
-  docker compose "${FILE_ARGS[@]}" --compatibility config \
-    | sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' \
-    | sed '1{/^name:/d}' \
-    | sed 's/published: "\(.*\)"/published: \1/' \
-    | sed 's|mode: "\([0-9]\+\)"|mode: \1|' \
-    | docker stack deploy \
-        --resolve-image="$RESOLVE_IMAGE" \
-        --with-registry-auth \
-        --detach=false \
-        --compose-file - \
-        "$STACK_NAME" \
-        "${EXTRA_ARGS[@]}"
+  docker compose "${FILE_ARGS[@]}" --compatibility config |
+    sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' |
+    sed '1{/^name:/d}' |
+    sed 's/published: "\(.*\)"/published: \1/' |
+    sed 's|mode: "\([0-9]\+\)"|mode: \1|' |
+    docker stack deploy \
+      --resolve-image="$RESOLVE_IMAGE" \
+      --with-registry-auth \
+      --detach=false \
+      --compose-file - \
+      "$STACK_NAME" \
+      "${EXTRA_ARGS[@]}"
 }
 
 docker-context() {

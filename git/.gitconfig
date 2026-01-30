@@ -7,12 +7,13 @@
 [gpg]
   format = ssh
 [safe]
-	# directory = *
+	directory = ~/*
 [core]
   hooksPath = ~/.git-hooks
   compression = 9
   whitespace = error
   preloadindex = true
+  editor = vim
 [init]
   defaultBranch = main
 [push]

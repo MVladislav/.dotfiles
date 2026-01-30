@@ -15,7 +15,10 @@ cat <<'EOF'
 
 EOF
 
-[[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+[[ -f "./setup-helper" ]] || {
+  echo 'Not found "./setup-helper" script'
+  exit 1
+}
 # shellcheck disable=SC1091
 source "./setup-helper"
 
@@ -100,9 +103,9 @@ install_tools() {
 
   ### RUST Tools ###
   print_notes "   📥 installing 'monolith'"
-  cargo install monolith  1>/dev/null # save web page as a single HTML file :: https://github.com/Y2Z/monolith
+  cargo install monolith 1>/dev/null # save web page as a single HTML file :: https://github.com/Y2Z/monolith
   print_notes "   📥 installing 'rustscan'"
-  cargo install rustscan  1>/dev/null # modern port scanner :: https://github.com/bee-san/RustScan
+  cargo install rustscan 1>/dev/null # modern port scanner :: https://github.com/bee-san/RustScan
 
   go_github_commit_date_and_download() {
     IFS='/' read -r owner repo addition <<<"$1"
@@ -130,7 +133,6 @@ install_tools() {
   curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
   DOCKLE_VERSION=0.4.15
   curl -sSfL "https://github.com/goodwithtech/dockle/releases/download/v${DOCKLE_VERSION}/dockle_${DOCKLE_VERSION}_Linux-64bit.tar.gz" | tar -xz -C "$USER_LOCAL_PREFIX_BIN" dockle
-
 
   ### MicroShit ###
   # sudo snap install dotnet --classic
@@ -178,7 +180,7 @@ install_john() {
   local s_name_u="JTR"
   print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
-  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?/}" 1>/dev/null
 
   # Define packages needed for build and install
   local packages_tools=()
@@ -209,7 +211,7 @@ install_john() {
     rm -rf "$DEPS_INSTALL_PATH/john/run"/*.dSYM >/dev/null || true
     mkdir -p "$USER_LOCAL_PREFIX_BIN"
     mv -f "$DEPS_INSTALL_PATH/john/run"/{john,john-*,*2john,unshadow,unique,undrop,unafs,base64conv,tgtsnarf,mkvcalcproba,genmkvpwd,calc_stat,raw2dyna,cprepair,SIPdump} \
-    "$USER_LOCAL_PREFIX_BIN" >/dev/null || true
+      "$USER_LOCAL_PREFIX_BIN" >/dev/null || true
     mkdir -p "$USER_LOCAL_PREFIX/share/john"
     cp -a "$DEPS_INSTALL_PATH/john/run"/* "$USER_LOCAL_PREFIX/share/john" >/dev/null || true
     mv -f "$USER_LOCAL_PREFIX/share/john"/*.{pl,py,rb} "$USER_LOCAL_PREFIX/share/john"/{relbench,benchmark-unify,mailer,makechr} "$USER_LOCAL_PREFIX_BIN" >/dev/null || true
@@ -217,7 +219,7 @@ install_john() {
 
   popd 1>/dev/null
   popd 1>/dev/null
-  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?/}" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" -h 2>/dev/null | head -n1 | cut -d' ' -f-4)'"
 
   # Remove build dependencies if any
@@ -234,7 +236,7 @@ install_hashcat() {
   local s_name_u="HASHCAT"
   print_info2 "\n🚀 $s_name_u :: install ${s_name_l}..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
-  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?/}" 1>/dev/null
 
   # Define packages needed for build and install
   local packages_tools=(clinfo pocl-opencl-icd ocl-icd-libopencl1)
@@ -251,7 +253,7 @@ install_hashcat() {
   make -sj"$(nproc)" SHARED=1 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
   popd 1>/dev/null
-  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?}" 1>/dev/null
+  rm -rf "${DEPS_INSTALL_PATH/$s_name_l:?/}" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/$s_name_l" --version 2>/dev/null | head -n1)'"
 
   # Remove build dependencies if any

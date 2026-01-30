@@ -7,8 +7,8 @@ vm_test_curl() {
     return 1
   fi
   curl -s -o /dev/null -w \
-  "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
-  "$1"
+    "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
+    "$1"
 }
 alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
 alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
@@ -60,15 +60,21 @@ vm_fio() {
     echo "Example: vm_fio randread | vm_fio randwrite | vm_fio read | vm_fio write"
     return 1
   fi
-  command -v jq >/dev/null || { echo "jq is not installed"; return 1; }
-  command -v fio >/dev/null || { echo "fio is not installed"; return 1; }
+  command -v jq >/dev/null || {
+    echo "jq is not installed"
+    return 1
+  }
+  command -v fio >/dev/null || {
+    echo "fio is not installed"
+    return 1
+  }
 
   local FIO_RW_TYPE="$1"
   local FIO_BS="${FIO_BS:-64k}"
   local FIO_IOENGINE="${FIO_IOENGINE:-libaio}"
   local FIO_IODEPTH="${FIO_IODEPTH:-16}"
   local FIO_DIRECT="${FIO_DIRECT:-1}"
-  local FIO_NUMJOBS="${FIO_NUMJOBS:-$(($(nproc)/2))}"
+  local FIO_NUMJOBS="${FIO_NUMJOBS:-$(($(nproc) / 2))}"
   local FIO_FSYNC="${FIO_FSYNC:-0}"
   local FIO_FILESIZE="${FIO_FILESIZE:-3G}"
 
@@ -90,20 +96,20 @@ vm_fio() {
 
   # Run the FIO benchmark
   OUTPUT=$(fio \
-          --rw="$FIO_RW_TYPE" \
-          --numjobs="$FIO_NUMJOBS" \
-          --time_based \
-          --runtime=30s \
-          --size="$FIO_FILESIZE" \
-          --direct="$FIO_DIRECT" \
-          --iodepth="${FIO_IODEPTH}" \
-          --bs="$FIO_BS" \
-          --group_reporting \
-          --fsync="${FIO_FSYNC}" \
-          --ioengine="$FIO_IOENGINE" \
-          --name="test_$(date +%s%3N)" \
-          --filename="fio_test_$FIO_RW_TYPE" \
-          --output-format=json)
+    --rw="$FIO_RW_TYPE" \
+    --numjobs="$FIO_NUMJOBS" \
+    --time_based \
+    --runtime=30s \
+    --size="$FIO_FILESIZE" \
+    --direct="$FIO_DIRECT" \
+    --iodepth="${FIO_IODEPTH}" \
+    --bs="$FIO_BS" \
+    --group_reporting \
+    --fsync="${FIO_FSYNC}" \
+    --ioengine="$FIO_IOENGINE" \
+    --name="test_$(date +%s%3N)" \
+    --filename="fio_test_$FIO_RW_TYPE" \
+    --output-format=json)
   # Accumulate values
   TOTAL_READ_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].read.iops + '"$TOTAL_READ_IOPS")
   TOTAL_WRITE_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].write.iops + '"$TOTAL_WRITE_IOPS")
@@ -111,8 +117,8 @@ vm_fio() {
   TOTAL_WRITE_BW=$(echo "$OUTPUT" | jq '(.jobs[0].write.bw / 1024) + '"$TOTAL_WRITE_BW")
 
   # Format and print averages, omitting 0 results
-  (( ${TOTAL_READ_IOPS%.*} > 0 )) && echo "Average Read IOPS: $TOTAL_READ_IOPS"
-  (( ${TOTAL_WRITE_IOPS%.*} > 0 )) && echo "Average Write IOPS: $TOTAL_WRITE_IOPS"
-  (( ${TOTAL_READ_BW%.*} > 0 )) && echo "Average Read Bandwidth (MB/s): $TOTAL_READ_BW"
-  (( ${TOTAL_WRITE_BW%.*} > 0 )) && echo "Average Write Bandwidth (MB/s): $TOTAL_WRITE_BW"
+  ((${TOTAL_READ_IOPS%.*} > 0)) && echo "Average Read IOPS: $TOTAL_READ_IOPS"
+  ((${TOTAL_WRITE_IOPS%.*} > 0)) && echo "Average Write IOPS: $TOTAL_WRITE_IOPS"
+  ((${TOTAL_READ_BW%.*} > 0)) && echo "Average Read Bandwidth (MB/s): $TOTAL_READ_BW"
+  ((${TOTAL_WRITE_BW%.*} > 0)) && echo "Average Write Bandwidth (MB/s): $TOTAL_WRITE_BW"
 }

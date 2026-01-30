@@ -75,20 +75,20 @@ return {
     -- =====================
     -- Mason-lspconfig
     -- =====================
-    -- nvim-lint:
-    -- - 'ansible_lint',
-    -- - "mypy",
-    -- - "ruff",
-    -- - "shellcheck"
     require("mason-lspconfig").setup({
       ensure_installed = {
         "ansiblels",
+        -- 'ansible_lint',
         "bashls",
         "biome",
         "docker_compose_language_service",
         "dockerls",
         "lua_ls",
         "ruff",
+        -- "mypy",
+        "rust_analyzer",
+        "shellcheck",
+        "shfmt",
         "yamlls",
       },
       handlers = {

@@ -15,7 +15,10 @@ cat <<'EOF'
 
 EOF
 
-[[ -f "./setup-helper" ]] || { echo 'Not found "./setup-helper" script'; exit 1; }
+[[ -f "./setup-helper" ]] || {
+  echo 'Not found "./setup-helper" script'
+  exit 1
+}
 # shellcheck disable=SC1091
 source "./setup-helper"
 
@@ -603,7 +606,7 @@ install_code_ext() {
       "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf"
       "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
       "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
-      "ms-python.python"  "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
+      "ms-python.python" "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
       "redhat.vscode-xml" "redhat.vscode-yaml" "samuelcolvin.jinjahtml" "silofy.hackthebox"
       "streetsidesoftware.code-spell-checker" "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml"
       "timonwong.shellcheck" "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
@@ -725,7 +728,7 @@ install_btop() {
     mv "/tmp/rocm-systems/projects/$ROCM_PROJECT" "$ROCM_DIR"
     mkdir -p "${ROCM_DIR}/build" 1>/dev/null
     pushd "${ROCM_DIR}/build" 1>/dev/null
-    cmake .. 1>/dev/null # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
+    cmake .. 1>/dev/null           # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
     make -j "$(nproc)" 1>/dev/null # amd_smi
     popd 1>/dev/null
     RSMI_STATIC='true'
@@ -764,7 +767,10 @@ install_setup_android_emulator() {
   export ANDROID_SDK_ROOT="$ANDROID_HOME"
   mkdir -p "$ANDROID_HOME"
 
-  command -v fzf || { echo "fzf not installed"; exit 1; }
+  command -v fzf || {
+    echo "fzf not installed"
+    exit 1
+  }
 
   # --- Download & unpack cmdline-tools if missing ---------------------
   if [[ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]]; then
@@ -784,7 +790,7 @@ install_setup_android_emulator() {
   EMULATOR="$ANDROID_HOME/emulator/emulator"
 
   # --- Accept licenses automatically ---------------------------------
-  yes | "$SDKMANAGER" --licenses > /dev/null || true
+  yes | "$SDKMANAGER" --licenses >/dev/null || true
 
   # --- Update SDK tools ----------------------------------------------
   "$SDKMANAGER" --update
@@ -801,7 +807,6 @@ install_setup_android_emulator() {
 
   # Use fzf if installed, otherwise prompt
   SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
-
 
   echo "📦 Installing: $SELECTED_IMAGE ..."
   "$SDKMANAGER" "platform-tools" "emulator" "$SELECTED_IMAGE"

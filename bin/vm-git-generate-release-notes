@@ -24,7 +24,10 @@ declare -A GROUP_LABEL=(
 ORDER=(feat fix docs refactor perf test chore security release init other)
 
 # -------- Utilities ----------
-err() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+err() {
+  printf 'ERROR: %s\n' "$*" >&2
+  exit 1
+}
 info() { printf '%s\n' "$*"; }
 
 require_git() {
@@ -34,18 +37,18 @@ require_git() {
 get_remote_repo_slug() {
   local remote_url slug
   remote_url=$(git remote get-url origin 2>/dev/null) || return 1
-  remote_url="${remote_url%.git}"  # remove .git
+  remote_url="${remote_url%.git}" # remove .git
   case "$remote_url" in
-    git@*:*/*)
-      slug="${remote_url#*:}"       # strip "git@github.com:"
-      ;;
-    https://*|http://*|ssh://*)
-      slug="${remote_url#*github.com/}"  # strip URL prefix
-      ;;
-    *)
-      echo "unknown/unknown"
-      return 1
-      ;;
+  git@*:*/*)
+    slug="${remote_url#*:}" # strip "git@github.com:"
+    ;;
+  https://* | http://* | ssh://*)
+    slug="${remote_url#*github.com/}" # strip URL prefix
+    ;;
+  *)
+    echo "unknown/unknown"
+    return 1
+    ;;
   esac
   echo "$slug"
 }
@@ -102,20 +105,29 @@ fi
 # Helper: extract PR
 extract_pr() {
   local subj="$1"
-  if [[ "$subj" =~ \(\#([0-9]+)\) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
-  if [[ "$subj" =~ PR[[:space:]]\#([0-9]+) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
-  if [[ "$subj" =~ \#([0-9]+) ]]; then printf "%s" "${BASH_REMATCH[1]}"; return; fi
+  if [[ "$subj" =~ \(\#([0-9]+)\) ]]; then
+    printf "%s" "${BASH_REMATCH[1]}"
+    return
+  fi
+  if [[ "$subj" =~ PR[[:space:]]\#([0-9]+) ]]; then
+    printf "%s" "${BASH_REMATCH[1]}"
+    return
+  fi
+  if [[ "$subj" =~ \#([0-9]+) ]]; then
+    printf "%s" "${BASH_REMATCH[1]}"
+    return
+  fi
   printf ""
 }
 
 # Initialize buckets
 declare -A BUCKETS
-declare -A SUBBUCKETS   # key: type:scope -> multiline string
-for k in "${!GROUP_LABEL[@]}"; do BUCKETS["$k"]="" ; done
+declare -A SUBBUCKETS # key: type:scope -> multiline string
+for k in "${!GROUP_LABEL[@]}"; do BUCKETS["$k"]=""; done
 
 # Parse commits
 for entry in "${RAW_LOG[@]}"; do
-  IFS='|' read -r subject full_hash short_hash author_name author_email <<< "$entry"
+  IFS='|' read -r subject full_hash short_hash author_name author_email <<<"$entry"
   subject="${subject#"${subject%%[![:space:]]*}"}"
   subject="${subject%"${subject##*[![:space:]]}"}"
 
@@ -224,7 +236,7 @@ out+="- Release tag: \`git tag -a vx.x.x -m 'Release version x.x.x'\`."$'\n'
 
 # Output
 if [[ -n "${OUT_FILE:-}" ]]; then
-  printf '%s\n' "$out" > "$OUT_FILE"
+  printf '%s\n' "$out" >"$OUT_FILE"
   info "Wrote release notes to $OUT_FILE"
 else
   printf '%s\n' "$out"

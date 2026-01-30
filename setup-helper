@@ -158,7 +158,10 @@ download_github_binary() {
   local asset_url
   asset_url=$(curl -s "$api_url" | jq -r --arg regex "$binary_regex" '
     .assets[] | select(.name | test($regex)) | .browser_download_url
-  ' 2>/dev/null | head -n 1) || { print_error "   ❌ Failed to jq GitHub-api '$api_url' for asset."; return 1; }
+  ' 2>/dev/null | head -n 1) || {
+    print_error "   ❌ Failed to jq GitHub-api '$api_url' for asset."
+    return 1
+  }
 
   if [[ -z "$asset_url" || "$asset_url" == "null" ]]; then
     print_error "   ❌ No asset matching regex '$binary_regex' found in latest release."

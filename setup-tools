@@ -25,17 +25,17 @@ init_term() {
   shopt -s globstar nullglob checkwinsize
   (:) # ensure checkwinsize is triggred and set
   printf '\n'
-  printf '\e7' # save cursor position
+  printf '\e7'                          # save cursor position
   printf '\e[%d;%dr' 0 "$((LINES - 1))" # define scrollable region
-  printf '\e8' # restores the cursor to the last saved position
-  printf '\e[1A' # moves cursor up 1 lines
+  printf '\e8'                          # restores the cursor to the last saved position
+  printf '\e[1A'                        # moves cursor up 1 lines
 }
 deinit_term() {
-  printf '\e7' # save cursor position
+  printf '\e7'                  # save cursor position
   printf '\e[%d;%dr' 0 "$LINES" # reset scrollable region
   printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
-  printf '\e[0K' # erase from cursor to end of line
-  printf '\e8' # restores the cursor to the last saved position
+  printf '\e[0K'                # erase from cursor to end of line
+  printf '\e8'                  # restores the cursor to the last saved position
 }
 
 progress_bar() {
@@ -58,22 +58,22 @@ progress_bar() {
   local i pos_step color_idx color
   local s=$start_char
   for ((i = 0; i < num_bars; i++)); do
-    pos_step=$(( i * steps / length ))
-    color_idx=$(( pos_step < steps ? pos_step : steps-1 ))
+    pos_step=$((i * steps / length))
+    color_idx=$((pos_step < steps ? pos_step : steps - 1))
     color="${colors[color_idx]}"
     s+="$color$bar_char$NC"
   done
   for ((i = num_bars; i < length; i++)); do
-    pos_step=$(( i * steps / length ))
-    color_idx=$(( pos_step < steps ? pos_step : steps-1 ))
+    pos_step=$((i * steps / length))
+    color_idx=$((pos_step < steps ? pos_step : steps - 1))
     color="${colors[color_idx]}"
     s+="$color$empty_char$NC"
   done
   s+="$end_char"
   s+="$suffix"
-  printf '\e7' # save cursor position
+  printf '\e7'                  # save cursor position
   printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
-  printf '\e[0K' # erase from cursor to end of line
+  printf '\e[0K'                # erase from cursor to end of line
   printf '%b' "$s"
   printf '\e8' # restores the cursor to the last saved position
 }
@@ -92,9 +92,9 @@ spinner_spin() {
   while true; do
     for i in "${chars[@]}"; do
       sleep .3
-      printf '\e7' # save cursor position
+      printf '\e7'                  # save cursor position
       printf '\e[%d;%dH' "$LINES" 0 # move cursor to bottom
-      printf '\e[0K' # erase from cursor to end of line
+      printf '\e[0K'                # erase from cursor to end of line
       printf ' %s' "$i"
       printf '\e8' # restores the cursor to the last saved position
     done

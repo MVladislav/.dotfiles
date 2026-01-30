@@ -49,5 +49,5 @@ if command -v pstree >/dev/null 2>&1; then
   fi
 fi
 
-echo "$selected"
+echo "copied 'cd $selected' into clipboard"
 echo -n "cd '$selected'" | wl-copy
