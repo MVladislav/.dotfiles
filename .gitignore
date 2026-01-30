@@ -73,6 +73,10 @@ nvim/lua/vm/**
 nvim/lua/vm/lazy/**
 !nvim/lua/vm/lazy/*.lua
 
+
+!nvim/snippets/
+!nvim/snippets/*.snippets
+
 !tmux/
 tmux/**
 !tmux/tmux.conf
