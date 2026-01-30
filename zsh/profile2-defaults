@@ -94,6 +94,7 @@ alias t='tail -f'
 alias du-l='du -hs * .* 2>/dev/null | sort -h'
 alias du-g='du -hs /boot /dev /etc /home /opt /root /snap /srv /sys /tmp /usr /var 2>/dev/null | sort -h'
 alias ip='ip -c'
+alias watch-q='watch -n.5 -d'
 
 ### VIM ###
 if command -v nvim &>/dev/null; then

@@ -53,7 +53,9 @@ vm_speed_pub() {
 }
 
 vm_fio() {
-  if [[ -z "$1" ]]; then
+  local valid_types=(randread randwrite read write)
+
+  if [[ -z "$1" ]] || [[ ! " ${valid_types[*]} " =~ $1 ]]; then
     echo "Usage: vm_fio <readwrite_type>"
     echo "Example: vm_fio randread | vm_fio randwrite | vm_fio read | vm_fio write"
     return 1
