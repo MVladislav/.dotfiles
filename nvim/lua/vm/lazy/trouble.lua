@@ -2,18 +2,19 @@ return {
   {
     'folke/trouble.nvim',
     config = function()
-      require("trouble").setup {
-        icon = true
+      local trouble = require("trouble")
+      trouble.setup {
+        icons = true
       }
 
       vim.keymap.set("n", "<leader>tt", function()
-        require("trouble").toggle();
+        trouble.toggle();
       end)
       vim.keymap.set("n", "<leader>tn", function()
-        require("trouble").next({ skip_groups = true, jump = true });
+        trouble.next({ skip_groups = true, jump = true });
       end)
       vim.keymap.set("n", "<leader>tp", function()
-        require("trouble").previous({ skip_groups = true, jump = true });
+        trouble.previous({ skip_groups = true, jump = true });
       end)
     end
   }

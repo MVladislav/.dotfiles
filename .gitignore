@@ -73,6 +73,8 @@ nvim/lua/vm/**
 nvim/lua/vm/lazy/**
 !nvim/lua/vm/lazy/*.lua
 
+!nvim/lua/config/
+!nvim/lua/config/ui.lua
 
 !nvim/snippets/
 !nvim/snippets/*.snippets

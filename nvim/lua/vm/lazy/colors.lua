@@ -1,15 +1,24 @@
-function ColorMyPencils(color)
-  color = color or "catppuccin"
-  vim.cmd.colorscheme(color)
-
-  vim.api.nvim_set_hl(0, "Normal", { bg = "none" })
-  vim.api.nvim_set_hl(0, "NormalFloat", { bg = "none" })
-end
-
 return {
+  {
+    'rose-pine/neovim',
+    name = 'rose-pine',
+    priority = 1000,
+    lazy = false,
+    config = function()
+      require('rose-pine').setup({
+        disable_background = true,
+        styles = {
+          italic = false,
+        },
+      })
+      require("config.ui").ColorMyPencils("rose-pine")
+    end
+  },
   {
     'folke/tokyonight.nvim',
     name = 'tokyonight',
+    priority = 1000,
+    lazy = true,
     config = function()
       require("tokyonight").setup({
         style = "storm",        -- The theme comes in three styles, `storm`, `moon`, a darker variant `night` and `day`
@@ -22,12 +31,14 @@ return {
           floats = "dark",   -- style for floating windows
         }
       })
-      -- ColorMyPencils("tokyonight")
+      -- require("config.ui").ColorMyPencils("tokyonight")
     end
   },
   {
     "catppuccin/nvim",
     name = "catppuccin",
+    priority = 1000,
+    lazy = true,
     config = function()
       require("catppuccin").setup({
         flavour = "mocha", -- latte, frappe, macchiato, mocha
@@ -45,20 +56,7 @@ return {
           fidget = true,
         },
       })
-      -- ColorMyPencils("catppuccin")
+      -- require("config.ui").ColorMyPencils("catppuccin")
     end
   },
-  {
-    'rose-pine/neovim',
-    name = 'rose-pine',
-    config = function()
-      require('rose-pine').setup({
-        disable_background = true,
-        styles = {
-          italic = false,
-        },
-      })
-      ColorMyPencils("rose-pine")
-    end
-  }
 }

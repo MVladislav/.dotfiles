@@ -1,11 +1,11 @@
 return {
   {
     "nvim-treesitter/nvim-treesitter",
-    branch = 'main',
+    branch = "main",
     build = ":TSUpdate",
+    lazy = false,
     config = function()
       local parsers = {
-        "sh",
         "bash",
         "css",
         "dockerfile",
@@ -22,6 +22,7 @@ return {
         "python",
         "query",
         "rust",
+        "templ",
         "toml",
         "typescript",
         "vim",
@@ -29,9 +30,18 @@ return {
         "yaml",
         "zig",
       }
-      require('nvim-treesitter').install(parsers)
+      require("nvim-treesitter.config").setup({
+        ensure_installed = parsers,
+        sync_install = false,
+        auto_install = true,
+        indent = { enable = true },
 
-      require('nvim-treesitter').install({ 'templ' })
+        highlight = {
+          enable = true,
+          additional_vim_regex_highlighting = { "markdown" },
+        },
+      })
+
       vim.api.nvim_create_autocmd('FileType', {
         pattern = 'templ',
         callback = function()

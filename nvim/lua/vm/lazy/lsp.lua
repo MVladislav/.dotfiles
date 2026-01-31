@@ -13,6 +13,7 @@ return {
     "L3MON4D3/LuaSnip",
     "saadparwaiz1/cmp_luasnip",
   },
+  event = { "BufReadPre", "BufNewFile" },
 
   config = function()
     -- =====================
@@ -20,7 +21,12 @@ return {
     -- =====================
     require("conform").setup({
       formatters_by_ft = {
-      }
+        bash = { "shfmt" },
+        lua = { "lua_ls" },
+        python = { "ruff" },
+        rust = { "rust_analyzer" },
+        yaml = { "yamlls" },
+      },
     })
 
     -- =====================

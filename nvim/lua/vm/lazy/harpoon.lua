@@ -3,6 +3,16 @@ return {
     'theprimeagen/harpoon',
     branch = 'harpoon2',
     dependencies = { "nvim-lua/plenary.nvim" },
+    keys = {
+      { "<leader>a", mode = "n" },
+      { "<C-e>",     mode = "n" },
+      { "<C-1>",     mode = "n" },
+      { "<C-2>",     mode = "n" },
+      { "<C-3>",     mode = "n" },
+      { "<C-4>",     mode = "n" },
+      { "<C-8>",     mode = "n" },
+      { "<C-9>",     mode = "n" },
+    },
     config = function()
       local harpoon = require("harpoon")
       harpoon:setup()

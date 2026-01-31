@@ -3,7 +3,8 @@ return {
     "nvim-lualine/lualine.nvim",
     event = "VeryLazy",
     dependencies = {
-      { 'theprimeagen/harpoon', branch = 'harpoon2' }
+      { 'nvim-tree/nvim-web-devicons', lazy = true },
+      { 'theprimeagen/harpoon',        branch = 'harpoon2', lazy = true },
     },
     config = function()
       -- local harpoon = require("harpoon.mark")
