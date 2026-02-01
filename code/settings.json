@@ -522,9 +522,9 @@
   "[html]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "html.format.wrapLineLength": 500,
+  "html.format.wrapLineLength": 130,
   "html.format.enable": true,
-  "html.format.wrapAttributes": "force-expand-multiline",
+  "html.format.wrapAttributes": "preserve-aligned",
   "[css]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
