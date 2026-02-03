@@ -10,12 +10,12 @@ vm_test_curl() {
     "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
     "$1"
 }
-alias vm_speed_server='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
-alias vm_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
-alias vm_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
-alias vm_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
+alias vm_quick_iperf='docker run -d -it --rm --name=iperf3-server -p 5201:5201 networkstatic/iperf3 -s'
+alias vm_test_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_test_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
+alias vm_test_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
 # https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
-vm_speed_pub() {
+vm_test_speed_pub() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]"
     return 1
@@ -52,12 +52,12 @@ vm_speed_pub() {
   fi
 }
 
-vm_fio() {
-  local valid_types=(randread randwrite read write)
+vm_test_fio() {
+  local valid_types=(randread randwrite randrw read write rw)
 
   if [[ -z "$1" ]] || [[ ! " ${valid_types[*]} " =~ $1 ]]; then
-    echo "Usage: vm_fio <readwrite_type>"
-    echo "Example: vm_fio randread | vm_fio randwrite | vm_fio read | vm_fio write"
+    echo "Usage: $0 <readwrite_type>"
+    echo "  <readwrite_type> = ${valid_types[*]}"
     return 1
   fi
   command -v jq >/dev/null || {
@@ -70,7 +70,7 @@ vm_fio() {
   }
 
   local FIO_RW_TYPE="$1"
-  local FIO_BS="${FIO_BS:-64k}"
+  local FIO_BS="${FIO_BS:-128k}"
   local FIO_IOENGINE="${FIO_IOENGINE:-libaio}"
   local FIO_IODEPTH="${FIO_IODEPTH:-16}"
   local FIO_DIRECT="${FIO_DIRECT:-1}"
@@ -79,7 +79,7 @@ vm_fio() {
   local FIO_FILESIZE="${FIO_FILESIZE:-3G}"
 
   # Check if the FIO_RW_TYPE contains "read" or "write" to set the block size accordingly
-  if [[ "$FIO_RW_TYPE" == *"read"* ]]; then
+  if [[ "$FIO_RW_TYPE" == *"read"* || "$FIO_RW_TYPE" == *"rw"* ]]; then
     FIO_BS="256k"
   elif [[ "$FIO_RW_TYPE" == *"write"* ]]; then
     FIO_BS="1M"
