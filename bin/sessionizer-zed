@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
-IFS=$' '
 
 # Ensure required dependencies are available
 command -v fzf >/dev/null 2>&1 || {

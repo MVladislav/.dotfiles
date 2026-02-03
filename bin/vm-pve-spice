@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
-IFS=$' '
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
 # Default values for Proxmox and API credentials
 PVE_NODE="${PVE_NODE:-pve}"

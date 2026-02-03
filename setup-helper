@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-
 PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin"
 set -euo pipefail
-IFS=$'\n\t'
+trap 'echo -e "${BRED}ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND).${NC}" >&2' ERR
 
 # ******************************************************************************
 

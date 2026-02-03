@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 PATH=/usr/bin:/usr/local/bin:~/.local/bin
 set -euo pipefail
-IFS=$'\n\t'
 
 main() {
   selected=$({

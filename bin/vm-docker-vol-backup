@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
-IFS=$'\n\t'
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
 # Error handling: print a message and exit on any error
 trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" ERR

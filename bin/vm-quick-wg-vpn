@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
 set -euo pipefail
-IFS=$'\n\t'
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
 trap 'log "ERROR" "Unexpected error on line $LINENO (command: $BASH_COMMAND). Check WireGuard and UFW status."' ERR
 
