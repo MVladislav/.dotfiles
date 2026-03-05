@@ -8,6 +8,7 @@ vim.opt.number = true
 vim.opt.relativenumber = true
 vim.opt.signcolumn = "yes"
 vim.opt.cursorline = true
+vim.opt.cursorcolumn = true
 vim.opt.colorcolumn = "130"
 vim.opt.termguicolors = true
 vim.opt.mouse = "a"

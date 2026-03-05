@@ -11,5 +11,11 @@ VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; 
 
 # shellcheck disable=SC1091
 source "$HOME/.dotfiles/zsh/profile-sec-base"
+# shellcheck disable=SC1091
+source "$HOME/.dotfiles/zsh/profile-sec-helper"
+# shellcheck disable=SC1091
+source "$HOME/.dotfiles/zsh/profile-sec-check"
+# shellcheck disable=SC1091
 source "$HOME/.dotfiles/zsh/profile-sec-api"
+# shellcheck disable=SC1091
 source "$HOME/.dotfiles/zsh/profile-sec-tools"

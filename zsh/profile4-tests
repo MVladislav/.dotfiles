@@ -6,7 +6,10 @@ vm_test_curl() {
     echo "Usage: $0 <URL>"
     return 1
   fi
-  curl -s -o /dev/null -w \
+  local user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'
+  curl -sSfL -o /dev/null \
+    -H "User-Agent: $user_agent" \
+    -w \
     "dns_lookup: %{time_namelookup}s :: connect: %{time_connect}s :: appconnect: %{time_appconnect}s :: pretransfer: %{time_pretransfer}s :: starttransfer: %{time_starttransfer}s\n-------------------------------\ntotal: %{time_total}s http_code: %{http_code}\n" \
     "$1"
 }

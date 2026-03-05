@@ -11,7 +11,7 @@ export PY_COLOR=1
 export ANSIBLE_FORCE_COLOR=1
 
 ### ZSH ###
-if command -v zsh &>/dev/null && [ -n "$ZSH_NAME" ]; then
+if command -v zsh >/dev/null 2>&1 && [ -n "$ZSH_NAME" ]; then
   setopt NO_NOMATCH
 fi
 
@@ -20,7 +20,7 @@ export HISTTIMEFORMAT="%F %T "
 alias sudo-env='sudo -E env "PATH=$PATH"'
 
 ### EDITOR ###
-if command -v nvim &>/dev/null; then
+if command -v nvim >/dev/null 2>&1; then
   export EDITOR='nvim'
   export SUDO_EDITOR="nvim"
 else

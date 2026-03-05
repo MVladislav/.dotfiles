@@ -83,11 +83,11 @@ vm_quick_android_emulator() {
   # avdmanager create avd -n <new_avd_name> -k "system-images;android-<version>;google_apis;x86"
 
   QT_QPA_PLATFORM=xcb "${android_path}/Sdk/emulator/emulator" \
-    -cores 4 -memory 4096 \
+    -cores 4 -memory 3072 \
     -netdelay none -netspeed full -accel on \
     -no-snapshot-load -no-snapshot -no-snapshot-save -no-snapstorage \
-    -no-boot-anim -no-audio \
-    -writable-system -gpu host \
+    -no-boot-anim -no-audio -gpu host \
+    -writable-system \
     -avd "$selected_emulator" "$@" 1>/dev/null
 }
 vm_quick_android_emulator_rm() {

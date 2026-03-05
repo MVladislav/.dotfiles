@@ -7,9 +7,17 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "session": {
+    "restore_unsaved_buffers": true
+  },
+  "git_panel": {
+    "tree_view": true
+  },
+  "edit_predictions": {
+    "provider": "none"
+  },
   "agent": {
     "default_profile": "write",
-    "always_allow_tool_actions": false,
     "single_file_review": true,
     "default_model": {
       "provider": "ollama",
@@ -32,9 +40,6 @@
         }
       ]
     }
-  },
-  "features": {
-    "edit_prediction_provider": "none"
   },
   "wrap_guides": [80, 130],
   "show_wrap_guides": true,
@@ -87,6 +92,7 @@
     "show": "auto"
   },
   "git": {
+    "disable_git": false,
     "git_gutter": "tracked_files",
     "inline_blame": {
       "enabled": true,

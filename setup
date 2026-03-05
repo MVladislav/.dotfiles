@@ -295,7 +295,7 @@ install_dependencies_zsh() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
   local zsh_install_bin_path
-  zsh_install_bin_path=$(command -v zsh || echo "/usr/bin/zsh")
+  zsh_install_bin_path=$(command -v zsh >/dev/null 2>&1 || echo "/usr/bin/zsh")
   # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
   print_info2 "🚀 ZSH :: Load git submodules"
@@ -348,7 +348,7 @@ install_dependencies_ghostty() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   local ZIG_COMMAND=zig
-  if ! command -v zig &>/dev/null; then
+  if ! command -v zig >/dev/null 2>&1; then
     print_notes "   💡 Download binary zig..."
     curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_U"
     mkdir -p "$DEPS_INSTALL_PATH/zig"
@@ -420,7 +420,7 @@ setup_tmux() {
 
   print_info2 "🚀 TMUX :: Load git submodules"
   git submodule update -q --init --remote tmux/tmux/plugins/tpm
-  if command -v tmux &>/dev/null; then
+  if command -v tmux >/dev/null 2>&1; then
     print_info2 "🚀 TMUX :: Run tpm to install plugins"
     PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
   fi
@@ -593,7 +593,7 @@ setup_gitconfig() {
 
 # CODE :: install ext ----------------------------------------------------------
 install_code_ext() {
-  if command -v code &>/dev/null; then
+  if command -v code >/dev/null 2>&1; then
     print_info2 "\n🚀 CODE :: installing code extensions"
 
     # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
@@ -765,7 +765,7 @@ install_setup_android_emulator() {
   export ANDROID_SDK_ROOT="$ANDROID_HOME"
   mkdir -p "$ANDROID_HOME"
 
-  command -v fzf || {
+  command -v fzf >/dev/null 2>&1 || {
     echo "fzf not installed"
     exit 1
   }
@@ -795,13 +795,13 @@ install_setup_android_emulator() {
 
   # --- Install build tools ----------------------
   echo "📋 Available build-tools:"
-  BUILD_TOOLS=$("$SDKMANAGER" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort)
+  BUILD_TOOLS=$("$SDKMANAGER" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort -ur)
   SELECTED_BUILD_TOOL=$(echo "$BUILD_TOOLS" | fzf --prompt="Select build-tools version: ")
   "$SDKMANAGER" "$SELECTED_BUILD_TOOL"
 
   # --- Show available system images and devices ----------------------
   echo "📋 Available system images:"
-  IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -u)
+  IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -ur)
 
   # Use fzf if installed, otherwise prompt
   SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
@@ -810,7 +810,7 @@ install_setup_android_emulator() {
   "$SDKMANAGER" "platform-tools" "emulator" "$SELECTED_IMAGE"
 
   # --- Choose device profile -----------------------------------------
-  DEVICES=$("$AVDMANAGER" list devices | grep 'id:' | awk -F'"' '{print $2}' | grep 'pixel_')
+  DEVICES=$("$AVDMANAGER" list devices | grep 'id:' | awk -F'"' '{print $2}' | grep 'pixel_' | sort -ur)
   SELECTED_DEVICE=$(echo "$DEVICES" | fzf --prompt="Select device profile: " --query="pro")
 
   # --- Create AVD ----------------------------------------------------

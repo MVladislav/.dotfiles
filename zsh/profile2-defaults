@@ -24,13 +24,17 @@ alias rm='rm -i'
 alias cp='cp -i'
 # shellcheck disable=SC2032
 alias mv='mv -i'
+mann() {
+  man "$@" | batcat -l man --style=-numbers
+}
 
 ### LS as EZA ###
-if command -v eza &>/dev/null; then
+if command -v eza >/dev/null 2>&1; then
   alias ls='eza --color=always --git'
 fi
 alias l='ls -a1'
 alias ll='ls -aalhg'
+alias lll='ll -muU --time-style long-iso'
 alias lg='ll --grid'
 alias llm='ll -t modified -s modified'
 alias lla='ll -t accessed -s accessed'
@@ -58,7 +62,7 @@ alias grep='grep --color'
 alias grep-q='grep -rwih'
 alias grep-r='grep -rwi'
 alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
-if command -v rg &>/dev/null; then
+if command -v rg >/dev/null 2>&1; then
   # https://github.com/BurntSushi/ripgrep
   alias rg-q='rg -wiIN'
   alias rg-r='rg -wi'
@@ -67,7 +71,7 @@ if command -v rg &>/dev/null; then
 fi
 
 ### FIND ###
-if command -v fdfind &>/dev/null; then
+if command -v fdfind >/dev/null 2>&1; then
   # https://github.com/sharkdp/fd
   alias fd='fdfind --hidden --no-ignore'
 fi
@@ -97,7 +101,7 @@ alias ip='ip -c'
 alias watch-q='watch -n.5 -d'
 
 ### VIM ###
-if command -v nvim &>/dev/null; then
+if command -v nvim >/dev/null 2>&1; then
   alias vim=nvim
 fi
 
@@ -107,7 +111,7 @@ alias vm_ta='tmux attach -t'
 alias vm_tk='tmux kill-session -t'
 
 ### ZED ###
-if command -v flatpak &>/dev/null; then
+if command -v flatpak >/dev/null 2>&1; then
   alias zed-editor='flatpak run dev.zed.Zed'
 fi
 

@@ -27,6 +27,8 @@ zsh/**
 !zsh/zshrc
 !zsh/profile-sec
 !zsh/profile-sec-base
+!zsh/profile-sec-helper
+!zsh/profile-sec-check
 !zsh/profile-sec-api
 !zsh/profile-sec-tools
 !zsh/profile-append

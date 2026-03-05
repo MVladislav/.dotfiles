@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+
+VM_SEC_LISTS_TEMPLATES="$HOME/opt/sec/Templates"
+VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
+
+######################################################################
+##
+## DEFAULTS:: extender
+##
+######################################################################
+# shellcheck disable=SC2139
+alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
+
+alias trivy-img='trivy image --disable-telemetry --severity "CRITICAL,HIGH"'
+alias trivy-img-sarif='trivy-img -f sarif -o trivy-results.sarif'
+alias trivy-img-html='trivy-img --format template --template "@$VM_SEC_LISTS_TEMPLATES/trivy-html.tpl" -o trivy-results.html'
+alias grype='grype --scope all-layers --only-fixed'
+alias grype-sarif='grype -o sarif --file grype-results.sarif'
+alias grype-html='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-html.tmpl" --file grype-results.html'
+alias grype-md='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-markdown.tmpl" --file grype-results.md'
+alias dockle-sarif='dockle --exit-code 1 --format sarif --output dockle-results.sarif'
+
+######################################################################
+##
+## FUNCTIONS:: base
+##
+######################################################################
+vm_sec_crt() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+  curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -sSfL "https://crt.sh/?output=json&q=$1" | jq -r '.[].name_value' | sed 's/\*\.//g' | sort -u
+}
+
+vm_sec_wayback() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <FILE> :: FILE: contains Domains per line"
+    return 1
+  fi
+
+  # curl -H "User-Agent: ${VM_SEC_USER_AGENT}" -sSfL -G "https://web.archive.org/cdx/search/cdx" --data-urlencode "url=*.${domain}*" --data-urlencode "collapse=urlkey" --data-urlencode "output=text" --data-urlencode "fl=original"
+
+  awk -F/ '{print $3 == "" ? $1 : $3}' <"$1" | sort -u | waybackurls | tee waybacks.txt
+  # TODO: extend with url cleanup
+  # TODO: nuclei -c 32 -t "${VM_SEC_NUCLEI_TEMPLATES}/openRedirect.yaml" :: sql injection probs
+}
+
+######################################################################
+##
+## FUNCTIONS:: base
+##
+######################################################################
+vm_sec_ip_country() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <IP>"
+    return 1
+  fi
+  local ip="$1"
+  local ua="${VM_SEC_USER_AGENT:-vmsec/1.0}"
+
+  reverse_check=$(dig +short -x "$ip")
+  echo "Reverse Check: $reverse_check"
+
+  local service1="http://ip-api.com/json/$ip?fields=5254673"
+  local query1='[
+    (.query // "N/A"),
+    (.continent // "N/A"),
+    (.country // "N/A"),
+    (.city // "N/A"),
+    (.isp // "N/A"),
+    (.org // "N/A"),
+    (.as // "N/A"),
+    (.asname // "N/A")
+  ] | join(" :: ")'
+  #local service="https://ipapi.co/$ip/json"
+  #local query='[.country, .city, .asn, .org] | join(" :: ")'
+  local service2="https://ipinfo.io/$ip/json"
+  local query2='[
+    (.hostname // "N/A"),
+    (.country // "N/A"),
+    (.region // "N/A"),
+    (.city // "N/A"),
+    (.asn // "N/A"),
+    (.org // "N/A"),
+    (.postal // "N/A")
+  ] | join(" :: ")'
+
+  curl -H "User-Agent: $ua" -sSfL "$service1" | jq "$query1"
+  curl -H "User-Agent: $ua" -sSfL "$service2" | jq "$query2"
+
+  if [[ -n $ABUSE_IP_DB_API_TOKEN ]]; then
+    local query3='.data | [
+      (.isWhitelisted),
+      (.isTor),
+      (.abuseConfidenceScore // "N/A"),
+      (.usageType // "N/A"),
+      (.countryCode // "N/A"),
+      (.countryName // "N/A"),
+      (.isp // "N/A"),
+      (.domain // "N/A")
+    ] | join(" :: ")'
+    local query4='.data.reports[:10][] | "  - " + (.comment | split("\n") | join("\n     "))'
+    local abused_json
+    abused_json=$(curl -G https://api.abuseipdb.com/api/v2/check -sSfL \
+      -H "User-Agent: $ua" \
+      -H "Accept: application/json" \
+      -H "Key: $ABUSE_IP_DB_API_TOKEN" \
+      -d verbose \
+      -d maxAgeInDays=90 \
+      --data-urlencode "ipAddress=$ip")
+    printf '%s' "$abused_json" | jq "$query3"
+    printf '%s' "$abused_json" | jq -r "$query4"
+  fi
+}
+
+vm_sec_ip_country_batch() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <FILE> :: FILE: contains IP per line"
+    return 1
+  fi
+
+  local ips
+  ips=$(jq -R -s -c 'split("\n") | map(select(length > 0))' "$1")
+
+  curl http://ip-api.com/batch -sSfL \
+    -H "User-Agent: ${VM_SEC_USER_AGENT}" \
+    --data "$ips" |
+    jq -r '.[] | "\(.country) :: \(.city) :: \(.isp) :: \(.org) :: \(.query)"' |
+    sort -h
+}
+
+vm_sec_dig_multi() {
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <DOMAIN>"
+    return 1
+  fi
+
+  local domain=$1
+  local result=""
+
+  echo "=== MX Records for $domain ==="
+  result=$(dig "$domain" MX +short)
+  [ -z "$result" ] && echo "No MX records found" || echo "$result"
+
+  echo -e "=== TXT (SPF) Records for $domain ==="
+  result=$(dig "$domain" TXT +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No TXT records found" || echo "$result"
+  echo -e "=== SPF Records for $domain ==="
+  result=$(dig "$domain" SPF +short | grep -i "v=spf" --color=never)
+  [ -z "$result" ] && echo "No SPF records found" || echo "$result"
+
+  echo -e "=== DMARC Records for $domain ==="
+  result=$(dig "_dmarc.$domain" TXT +short)
+  [ -z "$result" ] && echo "No DMARC records found" || echo "$result"
+
+  # echo -e "=== DKIM Records for $domain ==="
+  # dkim_selector="default." # Change this to your DKIM selector if needed
+  # result=$(dig "${dkim_selector}_domainkey.$domain" TXT +short)
+  # [ -z "$result" ] && echo "No DKIM records found" || echo "$result"
+
+  echo -e "\n=== NS Records for $domain ==="
+  result=$(dig "$domain" NS +short)
+  [ -z "$result" ] && echo "No NS records found" || echo "$result"
+  echo -e "=== A Records for $domain ==="
+  result=$(dig "$domain" A +short)
+  [ -z "$result" ] && echo "No A records found" || echo "$result"
+  echo -e "=== AAAA Records for $domain ==="
+  result=$(dig "$domain" AAAA +short)
+  [ -z "$result" ] && echo "No AAAA records found" || echo "$result"
+  echo -e "=== CNAME Records for $domain ==="
+  result=$(dig "$domain" CNAME +short)
+  [ -z "$result" ] && echo "No CNAME records found" || echo "$result"
+
+  echo -e "\n=== SOA Records for $domain ==="
+  result=$(dig "$domain" SOA +short)
+  [ -z "$result" ] && echo "No SOA records found" || echo "$result"
+  echo -e "=== CAA Records for $domain ==="
+  result=$(dig "$domain" CAA +short)
+  [ -z "$result" ] && echo "No CAA records found" || echo "$result"
+  echo -e "=== SRV Records for $domain ==="
+  result=$(
+    dig "$domain" SRV +short
+    dig "_imaps._tcp.@$domain" SRV +short
+    dig "_smtps._tcp.@$domain" SRV +short
+  )
+  [ -z "$result" ] && echo "No SRV records found" || echo "$result"
+}

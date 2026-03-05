@@ -93,8 +93,8 @@ return {
         "ruff",
         -- "mypy",
         "rust_analyzer",
-        "shellcheck",
-        "shfmt",
+        -- "shellcheck",
+        -- "shfmt",
         "yamlls",
       },
       handlers = {
