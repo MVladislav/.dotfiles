@@ -102,19 +102,26 @@ launch_spice() {
   local spice_keys=("secure-attention" "delete-this-file" "proxy" "type" "ca" "toggle-fullscreen" "title" "host" "password" "host-subject" "release-cursor" "tls-port")
 
   response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/spiceproxy" "POST" "proxy=$PVE_PROXY")
-  pve_tmp=$(mktemp)
+  pve_tmp="$(mktemp).vv"
 
   {
     echo "[virt-viewer]"
     for key in "${spice_keys[@]}"; do
       echo "$key=$(echo "$response" | jq -r ".data.\"$key\"" | sed ':a;N;$!ba;s/\n/\\\\n/g')"
     done
+    # echo "resolution=3840x2160"
+    echo "resolution=1920x1080"
+    echo "color-depth=16"      # 16|24
+    echo "disable-effects=all" # wallpaper, font-smooth, animation or all
+    echo "image-compression=off"
+    echo "streaming-video=all"
+    echo "fullscreen=0"
   } >"$pve_tmp"
 
   if false && command -v flatpak &>/dev/null && flatpak list | grep -q 'org.virt_manager.virt-viewer'; then
     nohup flatpak run org.virt_manager.virt-viewer "$pve_tmp" >/dev/null 2>&1 &
   elif command -v virt-viewer &>/dev/null; then
-    nohup remote-viewer "$pve_tmp" >/dev/null 2>&1 &
+    nohup remote-viewer --auto-resize=always "$pve_tmp" >/dev/null 2>&1 &
   else
     print_error1 "virt-viewer is not installed. Please install it via Flatpak or your package manager."
   fi
