@@ -24,7 +24,7 @@ BCYAN='\033[1;36m'   # Cyan
 
 # ******************************************************************************
 
-: "${VM_SEC_TMP:="${HOME}/.tmp"}" # /tmp
+VM_SEC_TMP="${VM_SEC_TMP:-"$HOME/.tmp"}" # /tmp
 
 # shellcheck disable=SC2034
 DEPS_INSTALL_PATH="${VM_SEC_TMP}"

@@ -65,27 +65,27 @@ VERSION_BTOP_G=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-7.2.0 # develop # rocm-7.0.1
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
-: "${LN_TMUX_ORIG_BASE:="${HOME}/.tmux"}"
-: "${LN_TMUX_ORIG_TMUX:="${HOME}/.tmux.conf"}"
+LN_TMUX_ORIG_BASE="${LN_TMUX_ORIG_BASE:-"$HOME/.tmux"}"
+LN_TMUX_ORIG_TMUX="${LN_TMUX_ORIG_TMUX:-"$HOME/.tmux.conf"}"
 
-: "${LN_NVIM_ORIG_BASE:="${HOME}/.config/nvim"}"
+LN_NVIM_ORIG_BASE="${LN_NVIM_ORIG_BASE:-"$HOME/.config/nvim"}"
 
-LN_ZSH="${HOME}/.zsh"
-LN_ZSHRC="${HOME}/.zshrc"
-LN_PROFILES_01="${HOME}/.profile-append"
-LN_PROFILES_02="${HOME}/.profile-sec"
+LN_ZSH="$HOME/.zsh"
+LN_ZSHRC="$HOME/.zshrc"
+LN_PROFILES_01="$HOME/.profile-append"
+LN_PROFILES_02="$HOME/.profile-sec"
 
-: "${LN_GHOSTTY_FOLDER:="${HOME}/.config/ghostty"}"
+LN_GHOSTTY_FOLDER="${LN_GHOSTTY_FOLDER:-"$HOME/.config/ghostty"}"
 
-: "${LN_VS_CODE:="${HOME}/.config/Code/User"}"
+LN_VS_CODE="${LN_VS_CODE:-"$HOME/.config/Code/User"}"
 
-LN_ZED_FLATPAK="${HOME}/.var/app/dev.zed.Zed/config/zed"
-: "${LN_ZED:="$LN_ZED_FLATPAK"}"
-# LN_ZED=${HOME}/.config/zed
+LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
+LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
+# LN_ZED=$HOME/.config/zed
 
-LN_LOGSEQ_PATH="${HOME}/.logseq"
+LN_LOGSEQ_PATH="$HOME/.logseq"
 
-GIT_HOOK_FOLDER="${HOME}/.git-hooks"
+GIT_HOOK_FOLDER="$HOME/.git-hooks"
 LN_GIT_HOOK_COMMIT_MSG="$GIT_HOOK_FOLDER/commit-msg"
 LN_GIT_HOOK_PRE_COMMIT="$GIT_HOOK_FOLDER/pre-commit"
 
@@ -101,6 +101,7 @@ main() {
   initialize_base
   [[ $RUN_INSTALL_DEPENDENCIES_ADDITIONAL -eq 1 ]] && install_dependencies_additional
   [[ $RUN_INSTALL_DEPENDENCIES_DEV -eq 1 ]] && install_dependencies_dev
+  [[ $RUN_INSTALL_EXTENDED_TOOLS -eq 1 ]] && install_extended_tools
 
   [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
   [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
@@ -188,6 +189,17 @@ install_dependencies_dev() {
 
   print_info2 "🚀 DEPS :: dev dependencies installed!"
 }
+
+install_extended_tools(){
+  print_info2 "\n🚀 TOOLS :: installing extended tools"
+
+  # cargo install impala # https://github.com/pythops/impala
+  # cargo install wiremix # https://github.com/tsowell/wiremix
+
+  print_info2 "🚀 TOOLS :: extended tools installed!"
+}
+
+# ******************************************************************************
 
 # SERVICE :: install tmux ------------------------------------------------------
 install_dependencies_tmux() {
