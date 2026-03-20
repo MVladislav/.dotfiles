@@ -59,8 +59,10 @@ scp-ra() {
 
 ### GREP ###
 alias grep='grep --color'
-alias grep-q='grep -rwih'
-alias grep-r='grep -rwi'
+alias grep-r='grep -rawi'
+alias grep-rq='grep -rawih'
+alias grep-rr='grep -Rai'
+alias grep-rrq='grep -Raih'
 alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 if command -v rg >/dev/null 2>&1; then
   # https://github.com/BurntSushi/ripgrep

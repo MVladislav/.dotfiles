@@ -3,6 +3,8 @@
 VM_SEC_LISTS_SECLISTS="$HOME/opt/sec/SecLists"
 VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
 
+VM_SEC_TMP="${VM_SEC_TMP:-"${HOME}/.tmp"}"
+
 ######################################################################
 ##
 ## DEFAULTS:: extender
@@ -25,6 +27,14 @@ alias rustscan="rustscan -u '${VM_SEC_USER_AGENT}'"
 
 alias vm_sec_server='python3 -m http.server 4445'
 alias vm_sec_tunnel='ngrok http 4445'
+vm_sec_curl_up(){
+  if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <FILE> <URL>"
+    return 1
+  fi
+
+  curl -F file=@"$1" "$2"
+}
 
 ######################################################################
 ##
@@ -166,7 +176,6 @@ vm_sec_attack_sql() {
   # --level 5 --risk 3
 }
 
-
 ######################################################################
 ##
 ## FUNCTIONS:: tools
@@ -188,4 +197,20 @@ vm_sec_ettercap(){
   --mitm arp \
   "/$ip_h//" \
   "/$ip_t//"
+}
+
+######################################################################
+##
+## FUNCTIONS:: tools
+##
+######################################################################
+vm_sec_quick_binwalk(){
+  if [ "$#" -lt 1 ]; then
+    echo "Usage: $0 <BIN-FILE>"
+    return 1
+  fi
+  command -v docker >/dev/null 2>&1 || { echo "docker is not installed"; return 1; }
+
+  docker build -t binwalkv3 https://github.com/ReFirmLabs/binwalk.git && \
+  docker run -it -u "$UID" -v "$PWD":/analysis binwalkv3 -Me "$1"
 }
