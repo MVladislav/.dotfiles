@@ -25,6 +25,7 @@ source "./setup-helper"
 # CONFS :: variables -----------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
 RUN_INSTALL_DEPENDENCIES_DEV=0
+RUN_INSTALL_EXTENDED_TOOLS=0
 RUN_INSTALL_DEPENDENCIES_TMUX=0
 RUN_INSTALL_DEPENDENCIES_NVIM=0
 RUN_INSTALL_DEPENDENCIES_ZSH=0
@@ -49,7 +50,7 @@ RUN_INSTALL_ANDROID=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
-VERSION_NVIM=v0.11.5
+VERSION_NVIM=v0.11.6
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9
 VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
