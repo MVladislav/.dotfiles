@@ -140,8 +140,8 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n🚀 DEPS :: installing additional base services"
-  print_notes "   📥 installing [curl git jq rsync fzf wl-clipboard]..."
-  $RUN_WITH_SUDO apt-get install -y curl git jq rsync fzf wl-clipboard 1>/dev/null
+  print_notes "   📥 installing [curl git pigz jq rsync fzf wl-clipboard]..."
+  $RUN_WITH_SUDO apt-get install -y curl git pigz jq rsync fzf wl-clipboard 1>/dev/null
   print_notes "   📥 installing [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
@@ -856,7 +856,7 @@ usage() {
   print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
   print_info "     -h,            --help                          Show this help message and exit"
-  print_info "     -itools,       --install-additional-tools      Install additional tools [rsync fzf eza bat ripgrep fd-find ...]"
+  print_info "     -itools,       --install-additional-tools      Install additional tools [curl git pigz jq rsync fzf wl-clipboard eza bat ripgrep fd-find ...]"
   print_info "     -idev,         --install-additional-dev        Install additional dev [node rustup go shellcheck ...]"
   print_info "     -itmux,        --install-dependencies-tmux     Install/update service tmux"
   print_info "     -invim,        --install-dependencies-nvim     Install/update service nvim"

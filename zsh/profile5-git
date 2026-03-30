@@ -12,10 +12,10 @@ alias git_log1='git log --graph --abbrev-commit --decorate --format=format:'\''%
 alias git_log2='git log --graph --abbrev-commit --decorate --format=format:'\''%C(bold blue)%h%C(reset) - %C(bold cyan)%aD%C(reset) %C(bold green)(%ar)%C(reset)%C(bold yellow)%d%C(reset)%n'\'''\''          %C(white)%s%C(reset) %C(dim white)- %an%C(reset)'\'' --all'
 alias git_log3='git log --graph --all --pretty=format:'\''%C(magenta)%h %C(white) %an  %ar%C(auto)  %D%n%s%n'\'''
 git_pre() {
-  if command -v prek >/dev/null 2>&1; then
+  if check_command_q prek; then
     # shellcheck disable=SC2046
     prek run --hook-stage manual --files $(git ls-files | tr "\n" " ")
-  elif command -v pre-commit >/dev/null 2>&1; then
+  elif check_command_q pre-commit; then
     # shellcheck disable=SC2046
     pre-commit run --hook-stage manual --files $(git ls-files | tr "\n" " ")
   else
@@ -29,7 +29,8 @@ alias git_ss='git status --short'
 alias git_diff='git diff --output-indicator-new=" " --output-indicator-old=" "'
 
 vm_git_diff() {
-  if command -v delta >/dev/null 2>&1; then
+  check_command git || return 1
+  if check_command_q delta; then
     git diff --color=always "$@" | delta --dark --line-numbers
   else
     git difftool --tool=nvimdiff "$@"
@@ -37,6 +38,8 @@ vm_git_diff() {
 }
 
 vm_git_commit_search2() {
+  check_command git || return 1
+  check_command fzf || return 1
   # shellcheck disable=SC2016
   git log --graph --color=always --format="%C(auto)%h%d %s %C(black)%C(bold)%cr" "$@" |
     fzf --ansi --no-sort --reverse --tiebreak=index \

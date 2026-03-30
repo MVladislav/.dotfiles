@@ -6,6 +6,7 @@
   "window.title": "${activeEditorLong}",
   "window.customTitleBarVisibility": "auto",
   "window.commandCenter": true,
+  "window.autoDetectColorScheme": false,
   "keyboard.layout": "de",
   "workbench.activityBar.location": "top",
   "workbench.colorTheme": "Hack The Box",

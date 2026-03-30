@@ -9,6 +9,7 @@ vm_xterm_cp_ssh() {
   infocmp -x | ssh "$1" -- tic -x -
 }
 vm_xterm_cp_local() {
+  local term_dir term_path
   term_dir=$(echo "$TERM" | cut -c1)
   term_path="${TERMINFO:-$HOME/.terminfo}/$term_dir/$TERM"
 
@@ -22,16 +23,13 @@ vm_xterm_cp_local() {
 ### General ###
 alias rm='rm -i'
 alias cp='cp -i'
-# shellcheck disable=SC2032
 alias mv='mv -i'
 mann() {
   man "$@" | batcat -l man --style=-numbers
 }
 
 ### LS as EZA ###
-if command -v eza >/dev/null 2>&1; then
-  alias ls='eza --color=always --git'
-fi
+check_command_q eza && alias ls='eza --color=always --git'
 alias l='ls -a1'
 alias ll='ls -aalhg'
 alias lll='ll -muU --time-style long-iso'
@@ -64,7 +62,7 @@ alias grep-rq='grep -rawih'
 alias grep-rr='grep -Rai'
 alias grep-rrq='grep -Raih'
 alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
-if command -v rg >/dev/null 2>&1; then
+if check_command_q rg; then
   # https://github.com/BurntSushi/ripgrep
   alias rg-q='rg -wiIN'
   alias rg-r='rg -wi'
@@ -73,10 +71,8 @@ if command -v rg >/dev/null 2>&1; then
 fi
 
 ### FIND ###
-if command -v fdfind >/dev/null 2>&1; then
-  # https://github.com/sharkdp/fd
-  alias fd='fdfind --hidden --no-ignore'
-fi
+# https://github.com/sharkdp/fd
+check_command_q fdfind && alias fd='fdfind --hidden --no-ignore'
 alias find-no='sudo /usr/bin/find / -nouser -o -nogroup -ls 2>/dev/null'
 find-g() {
   sudo /usr/bin/find / \
@@ -103,9 +99,7 @@ alias ip='ip -c'
 alias watch-q='watch -n.5 -d'
 
 ### VIM ###
-if command -v nvim >/dev/null 2>&1; then
-  alias vim=nvim
-fi
+check_command_q nvim && alias vim=nvim
 
 ### TMUX ###
 alias vm_tl='tmux ls'
@@ -113,24 +107,26 @@ alias vm_ta='tmux attach -t'
 alias vm_tk='tmux kill-session -t'
 
 ### ZED ###
-if command -v flatpak >/dev/null 2>&1; then
-  alias zed-editor='flatpak run dev.zed.Zed'
-fi
+check_command_q flatpak && alias zed-editor='flatpak run dev.zed.Zed'
 
 ### COMPRESS ###
-alias pigz='pigz -k -p$(nproc)'
+check_command_q pigz && alias pigz='pigz -k -p$(nproc)'
+
 tar-p() {
   if [ "$#" -lt 1 ]; then
     echo "Usage: $0 <directory> [<password | 'pw'>]"
     return 1
   fi
+  check_command tar || return 1
+  check_command pigz || return 1
+  check_command gpg || return 1
 
-  PATH_TO_ENC="$1"
+  local PATH_TO_ENC="$1"
   if [ $# -eq 1 ]; then
     echo "disabled"
     tar --use-compress-program="pigz " -cpf "$(basename "$PATH_TO_ENC").tar.gz" -C "$PATH_TO_ENC" .
   elif [ $# -eq 2 ]; then
-    PASSWORD_FOR_ENC="$2"
+    local PASSWORD_FOR_ENC="$2"
     [[ "$PASSWORD_FOR_ENC" == "pw" ]] && { # pragma: allowlist secret
       echo "Password: "
       read -rs PASSWORD_FOR_ENC
@@ -143,9 +139,12 @@ untar-p() {
     echo "Usage: $0 <encrypted_file> <password | 'pw'>"
     return 1
   fi
+  check_command tar || return 1
+  check_command pigz || return 1
+  check_command gpg || return 1
 
-  PATH_TO_DEC="$1"
-  PASSWORD_FOR_DEC="$2"
+  local PATH_TO_DEC="$1"
+  local PASSWORD_FOR_DEC="$2"
   [[ "$PASSWORD_FOR_DEC" == "pw" ]] && { # pragma: allowlist secret
     echo "Password: "
     read -rs PASSWORD_FOR_DEC

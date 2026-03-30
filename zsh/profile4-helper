@@ -75,6 +75,7 @@ alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.a
 ### EMULATOR ###
 vm_quick_android_emulator() {
   local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
+  local selected_emulator
   selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
   if [[ -z "$selected_emulator" ]]; then
     echo "No emulator selected."
@@ -96,6 +97,7 @@ vm_quick_android_emulator() {
 }
 vm_quick_android_emulator_rm() {
   local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
+  local selected_emulator
   selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
   if [[ -z "$selected_emulator" ]]; then
     echo "No emulator selected."
@@ -115,15 +117,14 @@ alias vm_my_country='curl -s https://ipinfo.io/country' #'curl -s ifconfig.io/co
 alias vm_my_org='curl -s https://ipinfo.io/org'
 alias vm_my_all='curl -s https://ipinfo.io/json | jq' # 'curl -s ifconfig.io/all.json | jq'
 vm_my_bios() {
+  check_command "dmidecode" || return 1
+  local d
   for d in bios-vendor bios-version bios-release-date bios-revision system-manufacturer system-product-name system-version system-family system-serial-number baseboard-manufacturer baseboard-product-name baseboard-version processor-family processor-manufacturer processor-version processor-frequency; do
-    printf "  - %-25s: %s\n" "$d" "$(sudo /usr/sbin/dmidecode -s "$d")"
+    printf "  - %-25s: %s\n" "$d" "$(sudo dmidecode -s "$d")"
   done
 }
 vm_my_memory() {
-  echo -e "\\n${BRED}RAM Info:$NC"
-  echo -e "  - Total RAM              : $(free -h | awk '/^Mem:/ {print $2}')"
-
-  # Use dmidecode to get detailed memory device info
+  check_command "dmidecode" || return 1
   sudo dmidecode --type 17 | awk '
     BEGIN { dev_num = 0 }
     /^Memory Device$/ { dev_num++; in_device=1; next }
@@ -150,14 +151,43 @@ vm_my_memory() {
       print "      Part Number  : " part
       if (form) print "      Form Factor  : " form
       if (width) print "      Data Width   : " width
-      print ""
       size = type = speed = locator = mfg = part = conf_speed = form = width = ""
     }
   '
 }
+vm_my_drives(){
+  check_command "smartctl" || return 1
+  check_command "jq" || return 1
+
+  local MY_DRIVE="${1:-"/dev/$(lsblk | grep disk | cut -d" " -f1)"}"
+  if [[ -z "$MY_DRIVE" ]]; then
+    echo "No drive provided" >&2
+    return 1
+  fi
+
+  local MY_DRIVE_JSON
+  MY_DRIVE_JSON=$(sudo smartctl -j -a "$MY_DRIVE" | jq)
+  echo -e "  - $(echo "$MY_DRIVE_JSON" | jq -r '.model_name // empty'):"
+  echo -e "      Serial Number                    : $(echo "$MY_DRIVE_JSON" | jq -r '.serial_number // empty')"
+  echo -e "      Firmware Version                 : $(echo "$MY_DRIVE_JSON" | jq -r '.firmware_version // empty')"
+  echo -e "      Percentage Used                  : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.percentage_used // empty')%"
+  echo -e "      Temperature                      : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.temperature // empty')"
+  echo -e "      Critical Warning                 : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.critical_warning // empty')"
+  echo -e "      Media and Data Integrity Errors  : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.media_errors // empty')"
+  echo -e "      Error Information Log Entries    : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.num_err_log_entries // empty')"
+  echo -e "      Warning  Comp. Temperature Time  : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.warning_temp_time // empty')"
+  echo -e "      Critical Comp. Temperature Time  : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.critical_comp_time // empty')"
+  echo -e "      Data Units Read                  : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.data_units_read // empty')"
+  echo -e "      Data Units Written               : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.data_units_written // empty')"
+  echo -e "      Power Cycles                     : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.power_cycles // empty')"
+  echo -e "      Power On Hours                   : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.power_on_hours // empty')"
+  echo -e "      Unsafe Shutdowns                 : $(echo "$MY_DRIVE_JSON" | jq -r '.nvme_smart_health_information_log.unsafe_shutdowns // empty')"
+}
 
 vm_ii() {
   local run_bios=false
+  local run_mem=false
+  local run_drive=false
 
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -165,8 +195,16 @@ vm_ii() {
       run_bios=true
       shift
       ;;
+    -m | --mem)
+      run_mem=true
+      shift
+      ;;
+    -d | --drive)
+      run_drive=true
+      shift
+      ;;
     -h | --help)
-      echo "Usage: $0 [--bios|-b]"
+      echo "Usage: $0 [--bios|-b] [--mem|-m] [--drive|-d] [-h]"
       return 0
       ;;
     *)
@@ -175,6 +213,11 @@ vm_ii() {
       ;;
     esac
   done
+
+  if [[ "$run_bios" == true || "$run_mem" == true || "$run_drive" == true ]]; then
+    sudo -v || return 1
+    trap 'sudo -k' RETURN
+  fi
 
   echo -e "\\n${BRED}You are logged on:$NC $(hostname -f 2>/dev/null || hostname)"
   echo -e "\\n${BRED}Additional information:$NC"
@@ -194,27 +237,31 @@ vm_ii() {
   echo -e "  - hardware platform     : $(uname -i 2>/dev/null || echo 'Unknown')"
   echo -e "  - operating system      : $(uname -o 2>/dev/null || echo 'Unknown')"
 
-  if command -v mokutil >/dev/null 2>&1; then
+  if check_command_q mokutil; then
     echo -e "  - secure boot status    : $(mokutil --sb-state 2>/dev/null || echo 'Not available')"
   else
-    echo -e "  - secure boot status    : mokutil missing"
+    echo -e "  - secure boot status    : [WARN] 'mokutil' is not installed!"
   fi
 
   echo -e "\\n${BRED}GPU information:$NC"
-  if command -v vulkaninfo >/dev/null 2>&1; then
+  if check_command_q vulkaninfo; then
     echo -e "  - Vulkan instance       : $(vulkaninfo 2>/dev/null | awk -F': ' '/Vulkan Instance Version/ {print $2; exit}')"
+  else
+    echo -e "  [WARN] 'vulkaninfo' is not installed!"
   fi
-  if command -v glxinfo >/dev/null 2>&1; then
+  if check_command_q glxinfo; then
     echo -e "  - Mesa version          : $(glxinfo -B 2>/dev/null | awk -F'Mesa ' '/OpenGL version string/ {print $2; exit}')"
     echo -e "  - OpenGL renderer       : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL renderer/ {print $2; exit}')"
     echo -e "  - OpenGL version        : $(glxinfo -B 2>/dev/null | awk -F': ' '/OpenGL version string/ {print $2; exit}')"
+  else
+    echo -e "  [WARN] 'glxinfo' is not installed!"
   fi
 
   echo -e "\\n${BRED}Users logged on:$NC"
-  if command -v w >/dev/null 2>&1; then
+  if check_command_q w; then
     echo -e "  $(w -h)"
   else
-    echo -e "  w: command not found"
+    echo -e "  [WARN] 'w' is not installed!"
   fi
 
   echo -e "\\n${BRED}Current date:$NC"
@@ -228,10 +275,23 @@ vm_ii() {
     vm_my_bios
   fi
 
+  if [[ "$run_mem" == true ]]; then
+    echo -e "\\n${BRED}RAM Info:$NC"
+    echo -e "  - Total RAM              : $(free -h | awk '/^Mem:/ {print $2}')"
+    vm_my_memory
+  fi
+
+  if [[ "$run_drive" == true ]]; then
+    echo -e "\\n${BRED}DRIVE Info:$NC"
+    vm_my_drives
+  fi
+
   echo -e "\\n${BRED}CPU:$NC"
   echo -e "  - CPU cores (online)    : $(nproc --all 2>/dev/null || echo 'Unknown')"
-  if command -v lscpu >/dev/null 2>&1; then
+  if check_command_q lscpu; then
     echo -e "  - CPU model             : $(lscpu | awk -F: '/Model name/ {print $2; exit}' | xargs)"
+  else
+    echo -e "  - CPU model             : [WARN] 'lscpu' is not installed!"
   fi
   echo -e "  - microcode             : $(awk -F: '/microcode/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
   echo -e "  - family                : $(awk -F: '/cpu family/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"

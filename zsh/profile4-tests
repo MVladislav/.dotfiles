@@ -6,6 +6,8 @@ vm_test_curl() {
     echo "Usage: $0 <URL>"
     return 1
   fi
+  check_command curl || return 1
+
   local user_agent='Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'
   curl -sSfL -o /dev/null \
     -H "User-Agent: $user_agent" \
@@ -23,6 +25,7 @@ vm_test_speed_pub() {
     echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]"
     return 1
   fi
+  check_command iperf3 || return 1
 
   local servers=(
     'a209.speedtest.wobcom.de:5201' # 1
@@ -63,14 +66,8 @@ vm_test_fio() {
     echo "  <readwrite_type> = ${valid_types[*]}"
     return 1
   fi
-  command -v jq >/dev/null || {
-    echo "jq is not installed"
-    return 1
-  }
-  command -v fio >/dev/null || {
-    echo "fio is not installed"
-    return 1
-  }
+  check_command jq || return 1
+  check_command fio || return 1
 
   local FIO_RW_TYPE="$1"
   local FIO_BS="${FIO_BS:-128k}"
