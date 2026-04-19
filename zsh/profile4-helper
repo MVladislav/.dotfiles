@@ -87,12 +87,12 @@ vm_quick_android_emulator() {
   # && sed -i 's/^QuickbootFileBacked[[:space:]]*=.*/QuickbootFileBacked = off/' "$HOME/.android/advancedFeatures.ini" \
   # || echo 'QuickbootFileBacked = off' >> "$HOME/.android/advancedFeatures.ini"
 
+  # -netdelay none -netspeed full -accel off \
   QT_QPA_PLATFORM=xcb "${android_path}/Sdk/emulator/emulator" \
     -cores 4 -memory 3072 \
-    -netdelay none -netspeed full -accel off \
     -no-snapshot-load -no-snapshot -no-snapshot-save -no-snapstorage \
     -no-boot-anim -no-audio -no-metrics -gpu host \
-    -writable-system \
+    -grpc -writable-system \
     -avd "$selected_emulator" "$@" 1>/dev/null
 }
 vm_quick_android_emulator_rm() {

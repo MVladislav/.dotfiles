@@ -78,7 +78,7 @@ fi
 ##
 ######################################################################
 export GOPATH="$HOME/.go"
-addToPath '/usr/local/go/bin'
+#addToPath '/usr/local/go/bin'
 addToPath "$GOPATH/bin"
 
 NPM_PACKAGES="${HOME}/.npm-packages"
