@@ -64,10 +64,10 @@ alias grep-rrq='grep -Raih'
 alias grep-d='grep -r -n -H -C 5 --exclude-dir={.git,.svn,CVS}'
 if check_command_q rg; then
   # https://github.com/BurntSushi/ripgrep
-  alias rg-q='rg -wiIN'
   alias rg-r='rg -wi'
+  alias rg-rq='rg -wiIN'
   alias rg-d='rg -n -H -C 5 --glob "!.git/*" --glob "!.svn/*" --glob "!CVS/*"'
-  alias rg-github='rg -ioPIN "https://github\.com/[^/\s]+/[^/\s]+"'
+  alias rg-github='rg -ioPIN "https://github\.com/[^/\s]+/[^/\s]+" | sort -h | uniq'
 fi
 
 ### FIND ###

@@ -33,12 +33,12 @@ fi
 ## HELPER
 ##
 ######################################################################
-addToPath() {
+add_to_path() {
   if [[ ":$PATH:" != *":$1:"* ]]; then
     export PATH="$PATH:$1"
   fi
 }
-addToPathFront() {
+add_to_path_front() {
   if [[ ":$PATH:" != *":$1:"* ]]; then
     export PATH="$1:$PATH"
   fi
@@ -51,14 +51,18 @@ check_command_q() {
   command -v "$1" >/dev/null 2>&1 || return 1
 }
 
+is_snap_installed() {
+  snap list "$1" >/dev/null 2>&1
+}
+
 ######################################################################
 ##
 ## set PATH so it includes user's private bin if it exists
 ##
 ######################################################################
-addToPathFront "$HOME/.local/bin"
+add_to_path_front "$HOME/.local/bin"
 if [ -d "$HOME/.local/bin/vm" ]; then
-  addToPathFront "$HOME/.local/bin/vm"
+  add_to_path_front "$HOME/.local/bin/vm"
 fi
 if [ -d /etc/zsh/profile.d ]; then
   if ls /etc/zsh/profile.d/*.sh 1>/dev/null 2>&1; then
@@ -77,20 +81,38 @@ fi
 ## set PATH for dev env
 ##
 ######################################################################
-export GOPATH="$HOME/.go"
-#addToPath '/usr/local/go/bin'
-addToPath "$GOPATH/bin"
-
-NPM_PACKAGES="${HOME}/.npm-packages"
-if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
-  export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
+# sudo snap install go --classic
+if is_snap_installed go; then
+  export GOPATH="$HOME/.go"
+  #add_to_path '/usr/local/go/bin'
+  add_to_path "$GOPATH/bin"
 fi
-addToPathFront '/snap/node/current/bin'
-addToPath "$NPM_PACKAGES/bin"
 
-export GEM_HOME="$HOME/.gems"
-addToPath "$GEM_HOME/bin"
+# sudo snap install node --classic
+if is_snap_installed node; then
+  NPM_PACKAGES="${HOME}/.npm-packages"
+  if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
+    export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
+  fi
+  add_to_path_front '/snap/node/current/bin'
+  add_to_path "$NPM_PACKAGES/bin"
+fi
 
-export RUSTUP_HOME="$HOME/.rustup"
-# addToPath "$RUSTUP_HOME/bin"
-addToPath "$HOME/.cargo/bin"
+# sudo snap install ruby --classic
+if is_snap_installed ruby; then
+  export GEM_HOME="$HOME/.gems"
+  add_to_path "$GEM_HOME/bin"
+fi
+
+# sudo snap install rustup --classic
+if is_snap_installed rustup; then
+  export RUSTUP_HOME="$HOME/.rustup"
+  # add_to_path "$RUSTUP_HOME/bin"
+  add_to_path "$HOME/.cargo/bin"
+fi
+
+# sudo snap install openjdk
+if is_snap_installed openjdk; then
+  export JAVA_HOME="/snap/openjdk/current/jdk"
+  add_to_path "$JAVA_HOME/bin"
+fi
