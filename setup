@@ -50,7 +50,7 @@ RUN_INSTALL_ANDROID=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
-VERSION_NVIM=v0.12.1
+VERSION_NVIM=v0.12.2
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9
 VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
@@ -61,9 +61,9 @@ VERSION_GHOSTTY=v1.3.1
 VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
-VERSION_BTOP=v1.4.6
+VERSION_BTOP=v1.4.7
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
-VERSION_RSMI=rocm-7.2.2 # develop # rocm-7.0.1
+VERSION_RSMI=rocm-7.2.3 # develop # rocm-7.0.1
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
 LN_TMUX_ORIG_BASE="${LN_TMUX_ORIG_BASE:-"$HOME/.tmux"}"
@@ -538,6 +538,9 @@ setup_gitconfig() {
   print_info2 "\n🚀 GIT :: setup git..."
   mkdir -p "$GIT_HOOK_FOLDER"
 
+  local -a ssh_keys
+  local git_user_name git_user_email git_signing_key signing_key_path_expanded
+
   print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
   rm -f "${LN_GIT_HOOK_COMMIT_MSG}"
   ln -sf "${PWD}/git/commit-msg" "${LN_GIT_HOOK_COMMIT_MSG}"
@@ -582,6 +585,9 @@ setup_gitconfig() {
   fi
 
   print_info2 "  ⚙️ GITCONFIG :: Copying './git/.gitconfig' to '${HOME}/.gitconfig'"
+  if [ -f "${HOME}/.gitconfig" ]; then
+    cp "${HOME}/.gitconfig" "${HOME}/.gitconfig-$(date '+%Y%m%d-%H%M%S')"
+  fi
   rm -f "${HOME}/.gitconfig"
   cp "${PWD}/git/.gitconfig" "${HOME}/.gitconfig"
 
