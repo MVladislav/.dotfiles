@@ -1,21 +1,51 @@
 return {
-  {
-    'folke/trouble.nvim',
-    config = function()
-      local trouble = require("trouble")
-      trouble.setup {
-        icons = true
-      }
-
-      vim.keymap.set("n", "<leader>tt", function()
-        trouble.toggle();
-      end)
-      vim.keymap.set("n", "<leader>tn", function()
-        trouble.next({ skip_groups = true, jump = true });
-      end)
-      vim.keymap.set("n", "<leader>tp", function()
-        trouble.previous({ skip_groups = true, jump = true });
-      end)
-    end
-  }
+	"folke/trouble.nvim",
+	cmd = "Trouble",
+	event = "VeryLazy",
+	config = function()
+		require("trouble").setup({
+			modes = {
+				diagnostics = {
+					auto_open = false,
+					auto_close = true,
+				},
+        preview_float = {
+          mode = "diagnostics",
+          preview = {
+            type = "float",
+            relative = "editor",
+            border = "rounded",
+            title = "Preview",
+            title_pos = "center",
+            position = { 0, -2 },
+            size = { width = 0.3, height = 0.3 },
+            zindex = 200,
+          },
+        },
+			},
+			warn_no_results = false,
+		})
+	end,
+  keys = {
+    {
+      "<leader>tt",
+      "<cmd>Trouble diagnostics toggle focus=true filter.buf=0<cr>",
+      desc = "Trouble: Toggle diagnostics",
+    },
+    {
+      "<leader>tT",
+      "<cmd>Trouble diagnostics toggle focus=true<cr>",
+      desc = "Trouble: Toggle buffer diagnostics",
+    },
+    {
+      "<leader>ts",
+      "<cmd>Trouble symbols toggle focus=true<cr>",
+      desc = "Trouble: Toggle symbols",
+    },
+    {
+      "<leader>tq",
+      "<cmd>Trouble qflist toggle focus=true<cr>",
+      desc = "Trouble: Toggle quickfix list",
+    },
+  },
 }
