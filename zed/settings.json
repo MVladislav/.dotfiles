@@ -7,8 +7,35 @@
 // custom settings, run `zed: open default settings` from the
 // command palette (cmd-shift-p / ctrl-shift-p)
 {
+  "code_lens": "on",
+  "show_signature_help_after_edits": true,
+  "auto_signature_help": true,
+  "status_bar": {
+    "experimental.show": true
+  },
+  "gutter": {
+    "line_numbers": true
+  },
+  // "relative_line_numbers": "enabled",
+  "show_whitespaces": "selection",
+  "show_edit_predictions": true,
+  "file_finder": {
+    "modal_max_width": "medium"
+  },
+  "tab_bar": {
+    "show": true
+  },
+  // "autosave": {
+  //   "after_delay": {
+  //     "milliseconds": 5000
+  //   }
+  // },
+  // #################
   "project_panel": {
-    "dock": "left"
+    "dock": "left",
+    "auto_fold_dirs": false,
+    "button": true,
+    "git_status": true
   },
   "outline_panel": {
     "dock": "right"
@@ -18,11 +45,21 @@
   },
   "terminal": {
     "dock": "bottom",
+    "show_count_badge": true,
     "font_size": 16,
     "font_family": "Hack Nerd Font Mono",
     "line_height": {
       "custom": 1.25
     }
+    // "detect_venv": {
+    //   "on": {
+    //     "directories": [".venv", "~/.venv"],
+    //     "activate_script": "default",
+    //   },
+    // },
+    // "env": {
+    //   "EDITOR": "zed --wait",
+    // },
   },
   "debugger": {
     "dock": "bottom"
@@ -60,16 +97,19 @@
     "light": "Catppuccin Latte",
     "dark": "Catppuccin Macchiato"
   },
+  "colorize_brackets": true,
   "tabs": {
     "file_icons": true,
-    "git_status": true
+    "git_status": true,
+    "show_diagnostics": "errors"
   },
   // "vim_mode": true,
   "base_keymap": "VSCode",
   "use_autoclose": true,
   "current_line_highlight": "all",
   "indent_guides": {
-    "enabled": true
+    "enabled": true,
+    "coloring": "indent_aware"
   },
   "inlay_hints": {
     "enabled": true
@@ -90,8 +130,7 @@
   "languages": {
     "Markdown": {
       "preferred_line_length": 130,
-      "format_on_save": "on",
-      "use_on_type_format": false
+      "format_on_save": "on"
     },
     "SQL": {
       "formatter": "prettier"
@@ -102,22 +141,50 @@
         "parser": "json"
       }
     },
-    "JavaScript": {
-      "code_actions_on_format": {
-        "source.fixAll.eslint": true
-      }
+    "Shell Script": {
+      "preferred_line_length": 130,
+      "format_on_save": "on",
+      "enable_language_server": true,
+      "language_servers": ["bash-language-server"]
+    },
+    "Python": {
+      "preferred_line_length": 130,
+      "format_on_save": "on",
+      "hard_tabs": true,
+      "formatter": {
+        "language_server": {
+          "name": "ruff"
+        }
+      },
+      "enable_language_server": true,
+      "language_servers": [
+        "ty",
+        "ruff",
+        "!basedpyright",
+        "!pyrefly",
+        "!pyright",
+        "!pylsp"
+      ]
     },
     "Rust": {
       "preferred_line_length": 130,
       "format_on_save": "on",
       "use_on_type_format": false
     },
-    "Shell Script": {
+    "JavaScript": {
+      "code_actions_on_format": {
+        "source.fixAll.eslint": true
+      }
+    },
+    "TypeScript": {
       "preferred_line_length": 130,
-      "format_on_save": "on",
-      "use_on_type_format": false,
-      "enable_language_server": true,
-      "language_servers": ["bash-language-server"]
+      "hard_tabs": true,
+      "inlay_hints": {
+        "enabled": true,
+        "show_parameter_hints": false,
+        "show_other_hints": true,
+        "show_type_hints": true
+      }
     }
   },
   "file_types": {
@@ -136,7 +203,8 @@
     "Dockerfile": ["Dockerfile*"],
     "env": [".env*"],
     "Git Ignore": [".gitignore", ".dockerignore", ".gitattributes"],
-    "YAML": ["*.yml", "*.yaml", ".yamllint"]
+    "YAML": ["*.yml", "*.yaml", ".yamllint"],
+    "JSON": ["json", "jsonc", "*.code-snippets"]
   },
   "file_scan_exclusions": [
     "**/.git",
@@ -146,7 +214,20 @@
     "**/.DS_Store",
     "**/Thumbs.db",
     "**/.classpath",
-    "**/.settings"
+    "**/.settings",
+    // #############
+    "**/out",
+    "**/dist",
+    "**/.husky",
+    "**/.turbo",
+    "**/.vscode-test",
+    "**/.vscode",
+    "**/.next",
+    "**/.storybook",
+    "**/.tap",
+    "**/.nyc_output",
+    "**/report",
+    "**/node_modules"
   ],
   "auto_install_extensions": {
     "catppuccin": true,
@@ -159,6 +240,7 @@
   "edit_predictions": {
     "provider": "none"
   },
+  "disable_ai": true,
   "agent": {
     "dock": "right",
     "sidebar_side": "right",

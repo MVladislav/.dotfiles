@@ -299,9 +299,9 @@ vm_ii() {
   echo -e "  - stepping              : $(awk -F: '/stepping/{print $2; exit}' /proc/cpuinfo | xargs || echo 'Unknown')"
 
   echo -e "\\n${BRED}Public facing IP Address:$NC"
-  echo -e "  - $(vm_my_ip_4 2>/dev/null || echo 'Unavailable')"
-  echo -e "  - $(vm_my_ip_6 2>/dev/null || echo 'Unavailable')"
-  echo -e "  - $(vm_my_country 2>/dev/null || echo 'Unavailable')"
-  echo -e "  - $(vm_my_org 2>/dev/null || echo 'Unavailable')"
+  echo -e "  - $(vm_my_ip_4 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
+  echo -e "  - $(vm_my_ip_6 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
+  echo -e "  - $(vm_my_country 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
+  echo -e "  - $(vm_my_org 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
   echo
 }

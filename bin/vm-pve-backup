@@ -14,7 +14,7 @@ readonly FILES_TO_BACKUP_PVE=(
   "/etc/hosts"
   "/etc/passwd"
   "/etc/resolv.conf"
-  # "/etc/default/grub"
+  "/etc/default/grub"
   # "/etc/kernel/cmdline"
   "/etc/lvm/lvm.conf"
   "/etc/network/interfaces.d/sdn"
