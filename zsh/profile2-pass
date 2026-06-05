@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+### PASS ###
+if check_command_q pass; then
+  vm_pass_setup() {
+    # apt install gnupg pass
+    local use_gpg use_mail
+    use_gpg=$(echo -e "new\nexisting" | fzf --height=40% --prompt="Create new GPG key or use existing? ")
+
+    if [[ "$use_gpg" == "new" ]]; then
+      echo "  NOTE: Follow the prompts: '9' -> '1' -> '0' -> 'y' -> enter info -> 'O' -> set password"
+      gpg --full-generate-key
+
+      echo "  GPG key created:"
+      gpg --list-secret-keys --keyid-format=long
+    elif [[ "$use_gpg" == "existing" ]]; then
+      echo "  Existing GPG keys:"
+      gpg --list-secret-keys --keyid-format=long
+    fi
+
+    use_mail=$(printf "" | fzf --height=1 --prompt="Enter your GPG key email: " --print-query)
+    pass init "$use_mail"
+    pass git init
+    pass git config --local core.hooksPath /dev/null
+    echo "  Pass repository initialized at: ${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+  }
+
+  alias vm_pass='export PASSWORD_STORE_DIR="$PWD/.password-store"'
+
+  vm_pass_import_file() {
+    if [ "$#" -ne 1 ]; then
+      echo "Usage: $0 <file to upload>"
+      return 1
+    fi
+
+    local file_path="$1"
+    if [ ! -f "$file_path" ]; then
+      echo "Error: File '$file_path' does not exist."
+      return 1
+    fi
+
+    local dirname new_basename pass_name
+    dirname=$(dirname "$file_path")
+    new_basename=$(basename "$file_path")
+    # Remove leading dot from filename (e.g., .env -> env)
+    # new_basename=${new_basename#.}
+    pass_name="$dirname/$new_basename"
+
+    pass insert -m "$pass_name" < "$file_path" >/dev/null 2>&1 || { echo "Error: Failed to import file '$file_path' to pass."; return 1; }
+    echo "File '$file_path' imported to pass as '$pass_name'."
+  }
+
+  vm_pass_export_file() {
+    local pass_name
+    local prefix="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+
+    pass_name=$(
+      find -L "$prefix" -name "*.gpg" -type f |
+      sed -e "s#${prefix}/\{0,1\}##" -e 's#\.gpg##' -e 's#\\#\\\\#' |
+      fzf --height=40% --prompt="Select pass entry to export: "
+    )
+
+    if [ -z "$pass_name" ]; then
+      echo "No entry selected. Export cancelled."
+      return 0
+    fi
+
+    if [ -f "$pass_name" ]; then
+      local answer
+      printf "File '%s' already exists. Overwrite? [y/N] " "$pass_name"
+      read -r answer
+      if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        echo "Export cancelled."
+        return 0
+      fi
+    fi
+
+    pass show "$pass_name" > "$pass_name" || { echo "Error: Failed to export from pass."; return 1; }
+    echo "Exported '$pass_name' to '$pass_name'."
+  }
+
+  if check_command_q docker; then
+    vm_pass_import_docker_secrets() {
+      # Find all .env files
+      find . -type f -name ".env" | while read -r file; do
+        vm_pass_import_file "$file"
+      done
+
+      # Find all .txt files inside any 'secrets' folder
+      find . -type d -name "secrets" -exec find {} -type f -name "*.txt" \; | while read -r file; do
+        vm_pass_import_file "$file"
+      done
+    }
+
+    vm_pass_export_docker_secret() {
+      if [ "$#" -lt 2 ]; then
+        echo "Usage: $0 <pass-name> <docker-secret>"
+        return 1
+      fi
+      local pass_name="$1"
+      local docker_secret="$2"
+      pass show "$pass_name" | docker secret create "$docker_secret" - || { echo "Error: Failed to create Docker secret '$docker_secret' from '$pass_name'."; return 1; }
+      echo "Docker secret '$docker_secret' created from '$pass_name'."
+    }
+  fi
+fi

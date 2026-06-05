@@ -3,6 +3,7 @@
 # shellcheck disable=SC1091
 source "$HOME/.dotfiles/zsh/profile1-base"
 source "$HOME/.dotfiles/zsh/profile2-defaults"
+source "$HOME/.dotfiles/zsh/profile2-pass"
 source "$HOME/.dotfiles/zsh/profile3-containers"
 source "$HOME/.dotfiles/zsh/profile4-helper"
 source "$HOME/.dotfiles/zsh/profile4-tests"

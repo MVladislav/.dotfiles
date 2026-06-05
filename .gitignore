@@ -34,6 +34,7 @@ zsh/**
 !zsh/profile-append
 !zsh/profile1-base
 !zsh/profile2-defaults
+!zsh/profile2-pass
 !zsh/profile3-containers
 !zsh/profile4-helper
 !zsh/profile4-tests
