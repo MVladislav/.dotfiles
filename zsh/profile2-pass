@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+### PASS ###
+if check_command_q pass; then
+
+  alias vm_pass='export PASSWORD_STORE_DIR="$PWD/.password-store"'
+
+  vm_pass_setup() {
+    # apt install gnupg pass
+    local use_current_folder gpg_id_file use_gpg all_keys existing_gpg_ids combined_keys selected_key use_uid
+
+    use_current_folder=$(echo -e "yes\nno" | fzf --height=~40% --prompt="Initialize pass for current folder? ")
+    if [[ "$use_current_folder" == "yes" ]]; then
+      export PASSWORD_STORE_DIR="$PWD/.password-store"
+    elif [[ -z "$PASSWORD_STORE_DIR" ]]; then
+      export PASSWORD_STORE_DIR="$HOME/.password-store"
+    fi
+    gpg_id_file="${PASSWORD_STORE_DIR}/.gpg-id"
+
+    use_gpg=$(echo -e "existing\nnew" | fzf --height=~40% --prompt="Create new GPG key or use existing? ")
+    if [[ "$use_gpg" == "new" ]]; then
+      echo "NOTE: Follow the prompts: '9' -> '1' -> '0' -> 'y' -> enter info -> 'O' -> set password"
+      gpg --pinentry-mode loopback --full-generate-key
+    fi
+
+    # all_keys=$(gpg --list-secret-keys --keyid-format=long --with-colons |
+    #   awk -F: '
+    #     $1 == "sec" { key_id = $5 }
+    #     $1 == "uid" { print key_id, $10 }
+    #   ')
+    all_keys=$(gpg --list-keys --keyid-format=long --with-colons |
+      awk -F: '
+        $1 == "pub" { key_id = $5 }
+        $1 == "uid" { print key_id, $10 }
+      ')
+
+    existing_gpg_ids=""
+    if [[ -f "$gpg_id_file" ]]; then
+      while IFS= read -r key_id; do
+        [[ -z "$key_id" ]] && continue
+        local existing_uid
+        existing_uid=$(gpg --list-keys --with-colons "$key_id" 2>/dev/null |
+          awk -F: '
+            $1 == "pub" { key_id = $5 }
+            $1 == "uid" { print key_id, $10 }
+          ')
+        if [[ -n "$existing_uid" ]]; then
+          existing_gpg_ids+="$existing_uid"$'\n'
+        else
+          existing_gpg_ids+="$key_id (Key not found in keyring)"$'\n'
+        fi
+      done < "$gpg_id_file"
+    fi
+
+    combined_keys=$(echo -e "$existing_gpg_ids\n$all_keys" | awk '!seen[$0]++ && NF')
+    selected_key=$(echo "$combined_keys" | fzf --height=~40% --multi --cycle --border --prompt="Select GPG keys for pass: " --footer="Available GPG keys (multi select with 'Tab')")
+
+    if [[ -z "$selected_key" ]]; then
+      echo "No GPG key selected. Aborting."
+      return 1
+    fi
+
+    use_uid=$(echo "$selected_key" | awk '{print $1}')
+    pass init "$use_uid"
+    pass git init >/dev/null 2>&1
+    pass git config --local core.hooksPath /dev/null 1>/dev/null
+    echo "Pass repository initialized at: ${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+  }
+
+  vm_pass_import_file() {
+    if [ "$#" -ne 1 ]; then
+      echo "Usage: $0 <file to upload>"
+      return 1
+    fi
+
+    local file_path="$1"
+    if [ ! -f "$file_path" ]; then
+      echo "Error: File '$file_path' does not exist."
+      return 1
+    fi
+
+    local dirname new_basename pass_name
+    dirname=$(dirname "$file_path")
+    new_basename=$(basename "$file_path")
+    # Remove leading dot from filename (e.g., .env -> env)
+    # new_basename=${new_basename#.}
+    pass_name="$dirname/$new_basename"
+
+    pass insert -m "$pass_name" < "$file_path" >/dev/null 2>&1 || { echo "Error: Failed to import file '$file_path' to pass."; return 1; }
+    echo "File '$file_path' imported to pass as '$pass_name'."
+  }
+
+  vm_pass_export_file() {
+    local pass_name
+    local prefix="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+
+    pass_name=$(
+      find -L "$prefix" -name "*.gpg" -type f |
+      sed -e "s#${prefix}/\{0,1\}##" -e 's#\.gpg##' -e 's#\\#\\\\#' |
+      fzf --height=~40% --prompt="Select pass entry to export: "
+    )
+
+    if [ -z "$pass_name" ]; then
+      echo "No entry selected. Export cancelled."
+      return 0
+    fi
+
+    if [ -f "$pass_name" ]; then
+      local answer
+      printf "File '%s' already exists. Overwrite? [y/N] " "$pass_name"
+      read -r answer
+      if [[ ! "$answer" =~ ^[Yy]$ ]]; then
+        echo "Export cancelled."
+        return 0
+      fi
+    fi
+
+    pass show "$pass_name" > "$pass_name" || { echo "Error: Failed to export from pass."; return 1; }
+    echo "Exported '$pass_name' to '$pass_name'."
+  }
+
+  if check_command_q docker; then
+    vm_pass_import_docker_secrets() {
+      # Find all .env files
+      find . -type f -name ".env" | while read -r file; do
+        vm_pass_import_file "$file"
+      done
+
+      # Find all .txt files inside any 'secrets' folder
+      find . -type d -name "secrets" -exec find {} -type f -name "*.txt" \; | while read -r file; do
+        vm_pass_import_file "$file"
+      done
+    }
+
+    vm_pass_export_docker_secret() {
+      if [ "$#" -lt 2 ]; then
+        echo "Usage: $0 <pass-name> <docker-secret>"
+        return 1
+      fi
+      local pass_name="$1"
+      local docker_secret="$2"
+      pass show "$pass_name" | docker secret create "$docker_secret" - || { echo "Error: Failed to create Docker secret '$docker_secret' from '$pass_name'."; return 1; }
+      echo "Docker secret '$docker_secret' created from '$pass_name'."
+    }
+
+    vm_pass_gpg_export() {
+      local selected_key key_id
+
+      selected_key=$(gpg --list-secret-keys --keyid-format=long --with-colons |
+        awk -F: '
+          $1 == "sec" { key_id = $5 }
+          $1 == "uid" { print key_id, $10 }
+        ' |
+        fzf --height=~40% --cycle --border --prompt="Select GPG key to export: " --footer="Available GPG keys for export")
+
+      if [[ -z "$selected_key" ]]; then
+        echo "No GPG key selected. Export cancelled."
+        return 1
+      fi
+
+      key_id=$(echo "$selected_key" | awk '{print $1}')
+      gpg --export "$key_id" > "${key_id}_public.key" 2>/dev/null || { echo "Error: Failed to export public key."; return 1; }
+      gpg --pinentry-mode loopback --export-secret-key "$key_id" > "${key_id}_private.key" 2>/dev/null || { echo "Error: Failed to export private key."; return 1; }
+
+      echo "GPG key pair exported to: ${key_id}_public.key and ${key_id}_private.key"
+    }
+
+    vm_pass_gpg_import() {
+      local public_file private_file key_id
+
+      public_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select public key file: ")
+
+      if [[ -n "$public_file" ]]; then
+        key_id=$(gpg --with-colons --import-options show-only --import "$public_file" 2>/dev/null | awk -F: '/^pub:/ {print $5; exit}')
+        if [[ -n "$key_id" ]]; then
+          gpg --import "$public_file" >/dev/null 2>&1 || { echo "Error: Failed to import public key."; return 1; }
+          printf "trust\n5\ny\nsave\n" | gpg --command-fd 0 --no-tty --no-greeting -q --edit-key "$key_id" >/dev/null 2>&1
+          echo "GPG public-key imported successfully and trust set to ultimate."
+        else
+          echo "Error: Could not determine key ID from public key file."
+          return 1
+        fi
+      else
+        echo "GPG public-key import skipped. No public key file selected."
+        return 1
+      fi
+
+      private_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select private key file: ")
+      if [[ -n "$private_file" ]]; then
+        gpg --pinentry-mode loopback --import "$private_file" >/dev/null 2>&1 || { echo "Error: Failed to import private key."; return 1; }
+        echo "GPG private-key imported successfully."
+      else
+        echo "GPG private-key import skipped. No private key file selected."
+      fi
+    }
+  fi
+fi
