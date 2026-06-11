@@ -21,6 +21,7 @@ git/**
 !git/.gitconfig
 !git/commit-msg
 !git/pre-commit
+!git/lazygit.yml
 
 !zsh/
 zsh/**

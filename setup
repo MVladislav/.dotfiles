@@ -89,6 +89,7 @@ LN_LOGSEQ_PATH="$HOME/.logseq"
 GIT_HOOK_FOLDER="$HOME/.git-hooks"
 LN_GIT_HOOK_COMMIT_MSG="$GIT_HOOK_FOLDER/commit-msg"
 LN_GIT_HOOK_PRE_COMMIT="$GIT_HOOK_FOLDER/pre-commit"
+LN_LAZYGIT="${LN_LAZYGIT:-"$HOME/.config/lazygit/config.yml"}"
 
 # ******************************************************************************
 
@@ -140,8 +141,8 @@ initialize_base() {
 # DEPS :: install dependencies -------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n🚀 DEPS :: installing additional base services"
-  print_notes "   📥 installing [curl git pigz jq rsync fzf wl-clipboard]..."
-  $RUN_WITH_SUDO apt-get install -y curl git pigz jq rsync fzf wl-clipboard 1>/dev/null
+  print_notes "   📥 installing [curl git git-delta pigz jq rsync fzf wl-clipboard]..."
+  $RUN_WITH_SUDO apt-get install -y curl git git-delta pigz jq rsync fzf wl-clipboard 1>/dev/null
   print_notes "   📥 installing [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
@@ -540,6 +541,10 @@ setup_gitconfig() {
 
   local -a ssh_keys
   local git_user_name git_user_email git_signing_key signing_key_path_expanded
+
+  print_info2 "🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
+  rm -f "${LN_LAZYGIT}"
+  ln -sf "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
 
   print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
   rm -f "${LN_GIT_HOOK_COMMIT_MSG}"

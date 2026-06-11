@@ -14,6 +14,8 @@
   whitespace = error
   preloadindex = true
   editor = vim
+  # pager = delta
+  # pager = diff-so-fancy
 [init]
   defaultBranch = main
 [push]
@@ -24,6 +26,9 @@
   ff = only
   default = current
   rebase = true
+[merge]
+  # conflictSyle = diff3
+  conflictSyle = zdiff3
 [rebase]
   autoStash = true
   missingCommitsCheck = warn
@@ -48,14 +53,14 @@
   renames = copies
   interHunkContext = 10
   tool = nvimdiff
+  colorMoved = default
 [pager]
   branch = false
   tag = false
   # diff = diff-so-fancy | $PAGER
-[diff-so-fancy]
-  # markEmptyLines = false
 [interactive]
   # diffFilter = diff-so-fancy --patch
+  # diffFilter = delta --color-only
   # singlekey = true
 [color "diff"]
   meta = black bold
@@ -76,3 +81,10 @@
   plain = blue
 [url "git@github.com:"]
   insteadOf = "gh:"
+[diff-so-fancy]
+  markEmptyLines = false
+[delta]
+  dark = true
+  navigate = true
+  side-by-side = true
+  line-numbers = true

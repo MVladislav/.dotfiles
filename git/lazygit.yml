@@ -1,0 +1,8 @@
+gui:
+  sidePanelWidth: 0.2
+git:
+  pagers:
+    - colorArg: always
+      pager: delta --dark --paging=never --side-by-side --line-numbers --syntax-theme base16-256
+      # pager: delta --dark --paging=never --side-by-side --line-numbers
+      # pager: delta --dark --paging=never --side-by-side --line-numbers --hyperlinks --hyperlinks-file-link-format="lazygit-edit://{path}:{line}"
