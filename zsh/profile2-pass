@@ -53,7 +53,9 @@ if check_command_q pass; then
     fi
 
     combined_keys=$(echo -e "$existing_gpg_ids\n$all_keys" | awk '!seen[$0]++ && NF')
-    selected_key=$(echo "$combined_keys" | fzf --height=~40% --multi --cycle --border --prompt="Select GPG keys for pass: " --footer="Available GPG keys (multi select with 'Tab')")
+    selected_key=$(echo "$combined_keys" |
+      fzf --height=~40% --multi --cycle --border \
+      --prompt="Select GPG keys for pass: " --footer="Available GPG keys (multi select with 'Tab')")
 
     if [[ -z "$selected_key" ]]; then
       echo "No GPG key selected. Aborting."
@@ -64,7 +66,7 @@ if check_command_q pass; then
     pass init "$use_uid"
     pass git init >/dev/null 2>&1
     pass git config --local core.hooksPath /dev/null 1>/dev/null
-    echo "Pass repository initialized at: ${PASSWORD_STORE_DIR:-$HOME/.password-store}"
+    echo "Pass repository initialized at: '${PASSWORD_STORE_DIR:-$HOME/.password-store}'"
   }
 
   vm_pass_import_file() {
@@ -159,38 +161,38 @@ if check_command_q pass; then
       fi
 
       key_id=$(echo "$selected_key" | awk '{print $1}')
-      gpg --export "$key_id" > "${key_id}_public.key" 2>/dev/null || { echo "Error: Failed to export public key."; return 1; }
-      gpg --pinentry-mode loopback --export-secret-key "$key_id" > "${key_id}_private.key" 2>/dev/null || { echo "Error: Failed to export private key."; return 1; }
+      gpg --export "$key_id" > "${key_id}_public.key" 2>/dev/null || { echo "Error: Failed to export public-key."; return 1; }
+      gpg --pinentry-mode loopback --export-secret-key "$key_id" > "${key_id}_private.key" 2>/dev/null || { echo "Error: Failed to export private-key."; return 1; }
 
       echo "GPG key pair exported to: ${key_id}_public.key and ${key_id}_private.key"
     }
 
     vm_pass_gpg_import() {
       local public_file private_file key_id
+      local path_to_search="${1:-.}"
 
-      public_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select public key file: ")
+      public_file=$(find "$path_to_search" -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select public-key file: ")
 
       if [[ -n "$public_file" ]]; then
         key_id=$(gpg --with-colons --import-options show-only --import "$public_file" 2>/dev/null | awk -F: '/^pub:/ {print $5; exit}')
         if [[ -n "$key_id" ]]; then
-          gpg --import "$public_file" >/dev/null 2>&1 || { echo "Error: Failed to import public key."; return 1; }
+          gpg --import "$public_file" >/dev/null 2>&1 || { echo "Error: Failed to import public-key."; return 1; }
           printf "trust\n5\ny\nsave\n" | gpg --command-fd 0 --no-tty --no-greeting -q --edit-key "$key_id" >/dev/null 2>&1
-          echo "GPG public-key imported successfully and trust set to ultimate."
+          echo "GPG public-key imported successfully and trust set to 'ultimate'."
         else
-          echo "Error: Could not determine key ID from public key file."
+          echo "Error: Could not determine key ID from public-key file."
           return 1
         fi
       else
-        echo "GPG public-key import skipped. No public key file selected."
-        return 1
+        echo "GPG public-key import skipped. No public-key file selected."
       fi
 
-      private_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select private key file: ")
+      private_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select private-key file: ")
       if [[ -n "$private_file" ]]; then
-        gpg --pinentry-mode loopback --import "$private_file" >/dev/null 2>&1 || { echo "Error: Failed to import private key."; return 1; }
+        gpg --pinentry-mode loopback --import "$private_file" >/dev/null 2>&1 || { echo "Error: Failed to import private-key."; return 1; }
         echo "GPG private-key imported successfully."
       else
-        echo "GPG private-key import skipped. No private key file selected."
+        echo "GPG private-key import skipped. No private-key file selected."
       fi
     }
   fi
