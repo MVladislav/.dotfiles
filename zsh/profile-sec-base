@@ -21,23 +21,6 @@ alias rustscan="rustscan -u '${VM_SEC_USER_AGENT}'"
 
 ######################################################################
 ##
-## FUNCTIONS:: tools
-##
-######################################################################
-
-alias vm_sec_server='python3 -m http.server 4445'
-alias vm_sec_tunnel='ngrok http 4445'
-vm_sec_curl_up(){
-  if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <FILE> <URL>"
-    return 1
-  fi
-
-  curl -F file=@"$1" "$2"
-}
-
-######################################################################
-##
 ## FUNCTIONS:: tools :: NMAP
 ##
 ######################################################################
