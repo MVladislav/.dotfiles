@@ -55,9 +55,17 @@ alias vm_ux_term='tr -d '\''\r'\'' <'
 alias vm_find_command='apropos'
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
 
-alias vm_random='openssl rand -base64'
-vm_random2() {
-  tr -dc A-Za-z0-9 </dev/urandom | head -c "$1"
+vm_random_base() {
+  local size="${1:-32}"
+  openssl rand -base64 "$size" | tr -d '/+'
+}
+vm_random_hex() {
+  local size="${1:-32}"
+  openssl rand -hex "$size"
+}
+vm_random_plain() {
+  local size="${1:-32}"
+  tr -dc A-Za-z0-9 </dev/urandom | head -c "$size"
   echo ''
 }
 
