@@ -24,6 +24,23 @@ vm_xterm_cp_local() {
 alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
+man() {
+  LESS_TERMCAP_mb=$'\e[1;31m' \
+  LESS_TERMCAP_md=$'\e[1;31m' \
+  LESS_TERMCAP_me=$'\e[0m' \
+  LESS_TERMCAP_se=$'\e[0m' \
+  LESS_TERMCAP_so=$'\e[1;33;44m' \
+  LESS_TERMCAP_ue=$'\e[0m' \
+  LESS_TERMCAP_us=$'\e[4;1;32m' \
+  LESS_TERMCAP_mr=$'\e[7m' \
+  LESS_TERMCAP_mh=$'\e[2m' \
+  LESS_TERMCAP_ZN=$'\e[74m' \
+  LESS_TERMCAP_ZV=$'\e[75m' \
+  LESS_TERMCAP_ZO=$'\e[73m' \
+  LESS_TERMCAP_ZW=$'\e[75m' \
+  GROFF_NO_SGR=1 \
+  /usr/bin/man "$@"
+}
 mann() {
   man "$@" | batcat -l man --style=-numbers
 }
