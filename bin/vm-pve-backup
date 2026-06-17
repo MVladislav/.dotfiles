@@ -17,22 +17,24 @@ readonly FILES_TO_BACKUP_PVE=(
   "/etc/default/grub"
   # "/etc/kernel/cmdline"
   "/etc/lvm/lvm.conf"
+  "/etc/systemd/network/*.link"
+  "/etc/systemd/system/mnt-*.mount"
   "/etc/network/interfaces.d/sdn"
   "/etc/network/interfaces.new"
   "/etc/network/interfaces"
   "/etc/pve/datacenter.cfg"
   "/etc/pve/jobs.cfg"
+  "/etc/pve/notifications.cfg"
+  "/etc/pve/storage.cfg"
   "/etc/pve/mapping/pci.cfg"
   "/etc/pve/mapping/usb.cfg"
+  "/etc/pve/nodes/pve/config"
   "/etc/pve/nodes/pve/qemu-server/*.conf"
-  "/etc/pve/notifications.cfg"
   "/etc/pve/priv/acme/*"
+  "/etc/pve/sdn/pve-ipam-state.json"
   "/etc/pve/sdn/subnets.cfg"
   "/etc/pve/sdn/vnets.cfg"
   "/etc/pve/sdn/zones.cfg"
-  "/etc/pve/storage.cfg"
-  "/etc/systemd/network/*.link"
-  "/etc/systemd/system/mnt-*.mount"
 )
 # shellcheck disable=SC2034
 readonly FILES_TO_BACKUP_PBS=(
@@ -319,7 +321,7 @@ print_error1() { echo -e "🔴 $1" >&2; }
 print_error2() { echo -e "⚠️ $1" >&2; }
 
 usage() {
-  print_info3 "📖 Usage: $0 -r <REMOTE_HOST> [options]"
+  print_info3 "📖 Usage: $0 [-r <REMOTE_HOST>] [options]"
   print_info3 "📖 Options:"
   print_info3 "   -h, --help          Show this help message and exit"
   print_info3 "   -r, --remote-host   Remote server alias from .ssh/config. If not provided, you'll be prompted via fzf."
