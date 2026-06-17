@@ -100,6 +100,8 @@ alias watch-q='watch -n.5 -d'
 
 ### VIM ###
 check_command_q nvim && alias vim=nvim
+check_command_q nvim && alias vimdiff='nvim -d'
+
 
 ### TMUX ###
 alias vm_tl='tmux ls'

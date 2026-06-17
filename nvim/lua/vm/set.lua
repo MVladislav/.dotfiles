@@ -1,6 +1,9 @@
 -- Better netrw
 vim.g.netrw_liststyle = 3
 
+-- DIFF
+vim.opt.diffopt:append("filler,context:9999")
+
 -- UI
 vim.opt.background = "dark"
 vim.opt.guicursor = "" -- stable cursor in all modes
