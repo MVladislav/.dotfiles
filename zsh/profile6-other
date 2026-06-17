@@ -98,6 +98,32 @@ vm_convert_md_to_csv() {
       }' >"$(basename "$1" | cut -d. -f1).csv"
 }
 
+vm_convert_md_to_html() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <MARKDOWN_FILE>"
+    # sudo apt install fontconfig xz-utils pandoc texlive-xetex
+    return 1
+  fi
+  local input_file="$1"
+  local filename
+  filename=$(basename "$input_file" | cut -f 1 -d ".")
+
+  # Check if the input file exists
+  if [ ! -f "$input_file" ]; then
+    echo "Error: '$input_file' does not exist."
+    return 1
+  fi
+
+  # Check if pandoc is installed
+  if ! command -v pandoc &>/dev/null; then
+    echo "Error: pandoc is not installed."
+    return 1
+  fi
+
+  pandoc "$input_file" -o "$filename.html"
+  firefox "$filename.html"
+}
+
 vm_convert_md_to_pdf() {
   if [ -z "$1" ]; then
     echo "Usage: $0 <MARKDOWN_FILE>"
