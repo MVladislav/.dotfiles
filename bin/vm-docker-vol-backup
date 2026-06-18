@@ -2,117 +2,340 @@
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
-
-# Error handling: print a message and exit on any error
 trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" ERR
+trap cleanup EXIT ERR
 
-# Check if the script is run with sudo
-if [[ $EUID -ne 0 ]]; then
-  echo "-> This script must be run with sudo."
-  exit 1
-fi
+# --- Global Variables ---------------------------------------------------------
+RUN_WITH_SUDO=''
+REMOTE_MODE='local'
+REMOTE_HOST=''
+ORIGINAL_DOCKER_CONTEXT=''
 
-# Determine the current user
 CURRENT_USER="${SUDO_USER:-$(logname)}"
-
 BACKUP_DATE=$(date +'%Y-%m-%d-%H-%M')
-BACKUP_SRC="/var/lib/docker/volumes"
-BACKUP_DEST="."
-VERBOSE="v"
+BACKUP_SRC='/var/lib/docker/volumes'
+BACKUP_DEST='.'
+VERBOSE='' #v
 
-DOCKER_RUNNING_SERVICE=""
+DOCKER_IS_SWARM_MODE=''
+DOCKER_RUNNING_SERVICE=''
 DOCKER_ORIGINAL_SCALES=()
+DOCKER_PAUSED_CONTAINERS=()
 
-# ------------------------------------------------------------------------------
-
+# --- MAIN ---------------------------------------------------------------------
 main() {
-  echo "-> Starting backup for script '$0' on $BACKUP_DATE ..."
+  command -v "fzf" &>/dev/null || { echo "ERROR: Missing dependency: 'fzf'. Install it or add to PATH." >&2; exit 1; }
+  REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Select docker backup location: ")
   check_dependencies
 
-  # Get a list of running services in Docker Swarm
-  DOCKER_RUNNING_SERVICE=$(docker service ls --format "{{.ID}}")
-
-  service_scale_down
-  service_backup
-  service_scale_up
-
-  echo "-> Backup and scaling operations completed for script '$0'."
-}
-
-service_backup() {
-  # Perform the backup operation
-  echo "-> Starting backup of Docker volumes..."
-  #tar zcp"$VERBOSE"f "docker-backup-${BACKUP_DATE}.tar.gz" "$BACKUP_SRC"
-  tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz" -C "$BACKUP_SRC" .
-  chown "$CURRENT_USER:$CURRENT_USER" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
-}
-
-# ------------------------------------------------------------------------------
-
-service_scale_down() {
-  if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
-    echo "-> No running services found, nothing will be scaled down."
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    choose_remote_host
+    check_dependencies_remote
+    check_root_remote
+    echo
+    echo "-> Starting Docker volume backup on remote host '$REMOTE_HOST'..."
   else
-    # Collect the original scale (replicas) of services with replicas > 0
-    for service in $DOCKER_RUNNING_SERVICE; do
-      local replicas=0
-      replicas=$(docker service inspect --format "{{.Spec.Mode.Replicated.Replicas}}" "$service")
-      if [[ $replicas -gt 0 ]]; then
-        local service_name=""
-        service_name=$(docker service inspect --format "{{.Spec.Name}}" "$service")
-        DOCKER_ORIGINAL_SCALES+=("$service_name:$replicas")
+    check_root
+    echo "-> Starting Docker volume backup on local host..."
+  fi
+  echo
+
+  DOCKER_IS_SWARM_MODE=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)
+
+  container_pause
+  echo
+  service_scale_down
+  echo
+
+  service_backup
+  echo
+}
+
+# shellcheck disable=SC2329
+cleanup() {
+  local exit_code=$?
+
+  service_scale_up
+  echo
+  container_unpause
+  echo
+
+  if [[ -n "$ORIGINAL_DOCKER_CONTEXT" ]]; then
+    echo "-> Switching back to Docker context '$ORIGINAL_DOCKER_CONTEXT'..."
+    docker context use "$ORIGINAL_DOCKER_CONTEXT" 1>/dev/null
+    echo
+  fi
+
+  if [[ $exit_code -eq 0 ]]; then
+    echo "-> Backup and scaling operations completed."
+  fi
+
+  exit "$exit_code"
+}
+
+# --- Backup Docker Volumes ----------------------------------------------------
+service_backup() {
+  echo "  -> Backing up Docker volumes from '$BACKUP_SRC'..."
+
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    local REMOTE_BACKUP_DEST="/tmp/docker-backup-${BACKUP_DATE}.tar.gz"
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --use-compress-program=\"pigz -k\" -cp\"${VERBOSE}\"f \"$REMOTE_BACKUP_DEST\" -C \"$BACKUP_SRC\" ."
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown \"$CURRENT_USER:$CURRENT_USER\" \"$REMOTE_BACKUP_DEST\""
+    rsync -az --no-o --no-g --no-perms --no-times -q -e "ssh -T -o Compression=no -x" \
+      "$REMOTE_HOST:$REMOTE_BACKUP_DEST" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
+    # Clean up remote
+    ##ssh "$REMOTE_HOST" "rm -f $REMOTE_BACKUP_DEST" 1>/dev/null
+  else
+    "$RUN_WITH_SUDO" tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz" -C "$BACKUP_SRC" .
+    "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
+  fi
+
+  echo "  -> Backup saved to '${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz'."
+}
+
+# --- Swarm Service Scaling ----------------------------------------------------
+service_scale_down() {
+  if [[ "$DOCKER_IS_SWARM_MODE" != "active" ]]; then
+    return
+  fi
+
+  # Get a list of running services in Docker Swarm
+  DOCKER_RUNNING_SERVICE=$(docker service ls --format "{{.ID}}" 2>/dev/null || true)
+
+  if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
+    echo "  -> No Swarm services found. Skipping scale-down."
+    return
+  fi
+
+  # Collect the original scale (replicas) of services with replicas > 0
+  for service in $DOCKER_RUNNING_SERVICE; do
+    local replicas=0
+    replicas=$(docker service inspect --format "{{.Spec.Mode.Replicated.Replicas}}" "$service" 2>/dev/null || true)
+    if [[ $replicas -gt 0 ]]; then
+      local service_name=""
+      service_name=$(docker service inspect --format "{{.Spec.Name}}" "$service" 2>/dev/null || true)
+      DOCKER_ORIGINAL_SCALES+=("$service_name:$replicas")
+    fi
+  done
+
+  if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
+    echo "  -> No Swarm services with replicas > 0. Skipping scale-down."
+    return
+  fi
+
+  echo "  -> Scaling down Swarm services to 0 replicas..."
+  for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
+    local service_name replicas
+    service_name=$(echo "$original_scale" | cut -d ':' -f 1)
+    replicas=$(echo "$original_scale" | cut -d ':' -f 2)
+    echo "    -> Scaling down '$service_name' ($replicas replicas)..."
+    docker service scale "$service_name"=0 1>/dev/null
+  done
+  echo "  -> All Swarm services scaled down."
+}
+
+# shellcheck disable=SC2329
+service_scale_up() {
+  if [[ "$DOCKER_IS_SWARM_MODE" != "active" ]]; then
+    return
+  fi
+
+  if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
+    echo "  -> No Swarm services to restore. Skipping scale-up."
+    return
+  fi
+
+  echo "  -> Restoring Swarm services to original scale..."
+  for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
+    local service_name replicas
+    service_name=$(echo "$original_scale" | cut -d ':' -f 1)
+    replicas=$(echo "$original_scale" | cut -d ':' -f 2)
+    echo "    -> Scaling up '$service_name' to $replicas replicas..."
+    docker service scale "$service_name"="$replicas" 1>/dev/null
+  done
+  echo "  -> All Swarm services restored."
+}
+
+# --- Container Pause/Unpause --------------------------------------------------
+container_pause() {
+  DOCKER_RUNNING_CONTAINERS=$(docker ps -q --filter "status=running" 2>/dev/null || true)
+
+  if [[ -z $DOCKER_RUNNING_CONTAINERS ]]; then
+    echo "  -> No running containers. Skipping pause."
+    return
+  fi
+
+  local has_non_swarm=false
+  for container in $DOCKER_RUNNING_CONTAINERS; do
+    local is_swarm_container
+    is_swarm_container=$(docker inspect --format '{{index .Config.Labels "com.docker.swarm.service.id"}}' "$container" 2>/dev/null || true)
+    if [[ -z "$is_swarm_container" ]]; then
+      has_non_swarm=true
+      break
+    fi
+  done
+
+  if [[ "$has_non_swarm" == false ]]; then
+    echo "  -> No non-Swarm containers. Skipping pause."
+    return
+  fi
+
+  echo "  -> Pausing non-Swarm containers..."
+  for container in $DOCKER_RUNNING_CONTAINERS; do
+    local is_swarm_container
+    is_swarm_container=$(docker inspect --format '{{index .Config.Labels "com.docker.swarm.service.id"}}' "$container" 2>/dev/null || true)
+    if [[ -n "$is_swarm_container" ]]; then
+      continue
+    fi
+
+    local container_name
+    container_name=$(docker inspect --format '{{.Name}}' "$container" 2>/dev/null | sed 's|/||' || true)
+    echo "    -> Pausing '$container_name'..."
+    docker pause "$container" 1>/dev/null
+    DOCKER_PAUSED_CONTAINERS+=("$container_name")
+
+    local max_retries=5
+    local retry_count=0
+    local is_paused=false
+    while [[ $retry_count -lt $max_retries ]]; do
+      is_paused=$(docker inspect --format '{{.State.Paused}}' "$container" 2>/dev/null || false)
+      if [[ "$is_paused" == "true" ]]; then
+        break
       fi
+      sleep 1
+      ((retry_count++))
     done
 
-    if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
-      echo "-> No services with replicas > 0 found, nothing to scale down."
-    else
-      echo "-> Scaling down services to 0..."
-      for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
-        local service_name replicas
-        service_name=$(echo "$original_scale" | cut -d ':' -f 1)
-        replicas=$(echo "$original_scale" | cut -d ':' -f 2)
-        echo "-> Scaling down '$service_name' from '$replicas' replica(s)"
-        docker service scale "$service_name"=0
-      done
+    if [[ "$is_paused" != "true" ]]; then
+      echo "    -> WARNING: Failed to pause '$container_name' after $max_retries attempts."
     fi
-  fi
+  done
+  echo "  -> All non-Swarm containers paused."
 }
 
-service_scale_up() {
-  # Scale services back to their original replicas
-  if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
-    echo "-> No running services found before, nothing to scale back up."
-  else
-    if [[ ${#DOCKER_ORIGINAL_SCALES[@]} -eq 0 ]]; then
-      echo "-> No services with replicas > 0 found before, nothing to scale back up."
-    else
-      echo "-> Restoring services to their original scale..."
-      for original_scale in "${DOCKER_ORIGINAL_SCALES[@]}"; do
-        local service_name replicas
-        service_name=$(echo "$original_scale" | cut -d ':' -f 1)
-        replicas=$(echo "$original_scale" | cut -d ':' -f 2)
-        echo "-> Scaling up '$service_name' back to '$replicas' replica(s)"
-        docker service scale "$service_name"="$replicas"
-      done
-    fi
+# shellcheck disable=SC2329
+container_unpause() {
+  if [[ ${#DOCKER_PAUSED_CONTAINERS[@]} -eq 0 ]]; then
+    echo "  -> No paused containers. Skipping unpause."
+    return
   fi
+
+  echo "  -> Unpausing containers..."
+  for container_name in "${DOCKER_PAUSED_CONTAINERS[@]}"; do
+    echo "    -> Unpausing '$container_name'..."
+    docker unpause "$container_name" 1>/dev/null
+
+    local max_retries=5
+    local retry_count=0
+    local is_paused=true
+    while [[ $retry_count -lt $max_retries ]]; do
+      is_paused=$(docker inspect --format '{{.State.Paused}}' "$container_name" 2>/dev/null || false)
+      if [[ "$is_paused" != "true" ]]; then
+        break
+      fi
+      sleep 1
+      ((retry_count++))
+    done
+
+    if [[ "$is_paused" == "true" ]]; then
+      echo "    -> WARNING: Failed to unpause '$container_name' after $max_retries attempts."
+    fi
+  done
+  echo "  -> All containers unpaused."
 }
 
-# ------------------------------------------------------------------------------
+# --- Helper -------------------------------------------------------------------
 
-# Check for required dependencies before proceeding
 check_dependencies() {
-  local deps=(docker tar pigz)
+  local deps=()
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    deps=(docker fzf ssh rsync)
+  else
+    deps=(docker fzf tar pigz)
+  fi
   for dep in "${deps[@]}"; do
     if ! command -v "$dep" &>/dev/null; then
-      echo "ERROR: Required dependency '$dep' is not installed or not in PATH."
+      echo "ERROR: Missing dependency: '$dep'. Install it or add to PATH." >&2
       exit 1
     fi
   done
 }
 
-# ------------------------------------------------------------------------------
+check_dependencies_remote() {
+  local deps=(docker ssh rsync tar pigz)
+  for dep in "${deps[@]}"; do
+    if ! ssh "$REMOTE_HOST" command -v "$dep" &>/dev/null; then
+      echo "ERROR: Missing remote dependency: '$dep' on '$REMOTE_HOST'. Install it or add to PATH." >&2
+      exit 1
+    fi
+  done
+}
 
+check_root() {
+  [ $EUID -eq 0 ] && return
+
+  if ! command -v sudo &>/dev/null; then
+    echo "-> sudo is not available. Please run this script as root."
+    exit 1
+  fi
+
+  if ! sudo -v; then
+    echo "-> Could not authenticate with sudo. Please run this script with sudo or as root."
+    exit 1
+  fi
+  RUN_WITH_SUDO=sudo
+}
+
+check_root_remote() {
+  ssh "$REMOTE_HOST" '[ $EUID -eq 0 ]' &>/dev/null && return
+
+  if ! ssh "$REMOTE_HOST" command -v sudo &>/dev/null; then
+    echo "-> sudo is not available. Please run this script as root."
+    exit 1
+  fi
+
+  echo
+  echo "#############################################################################"
+  echo "!!! You will be prompted multiple times to provide remote 'sudo' password !!!"
+  echo "                           Stay interactive ;)                            "
+  echo "#############################################################################"
+  echo
+  if ! ssh -t "$REMOTE_HOST" sudo -v; then
+    echo "-> Could not authenticate with sudo. Please run this script with sudo or as root."
+    exit 1
+  fi
+  RUN_WITH_SUDO=sudo
+}
+
+# Select SSH host from ~/.ssh/config using fzf and set up Docker context
+choose_remote_host() {
+  local ssh_config=~/.ssh/config
+  if [[ ! -f $ssh_config ]]; then
+    echo "ERROR: No SSH config found at '$ssh_config'" >&2
+    exit 1
+  fi
+
+  local host
+  host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
+  if [[ -z $host ]]; then
+    echo "ERROR: No remote host selected." >&2
+    exit 1
+  fi
+  REMOTE_HOST="$host"
+
+  # Save current Docker context
+  ORIGINAL_DOCKER_CONTEXT=$(docker context ls --format '{{.Name}}::{{.Current}}' | awk -F'::' '$2 == "true" {print $1}')
+
+  # Create Docker context if it doesn't exist
+  if ! docker context inspect "$host" &>/dev/null; then
+    echo "-> Creating Docker context for '$host'..."
+    docker context create "$host" --docker "host=ssh://$host" 1>/dev/null
+  fi
+
+  # Switch to the remote Docker context
+  echo "-> Switching to Docker context '$host'..."
+  docker context use "$host" 1>/dev/null
+}
+
+# --- Entry Point --------------------------------------------------------------
 main
-exit 0
