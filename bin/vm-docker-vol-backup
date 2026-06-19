@@ -10,6 +10,8 @@ RUN_WITH_SUDO=''
 REMOTE_MODE='local'
 REMOTE_HOST=''
 ORIGINAL_DOCKER_CONTEXT=''
+SCALE_MODE='yes'
+RESCALE_MODE='yes'
 
 CURRENT_USER="${SUDO_USER:-$(logname)}"
 BACKUP_DATE=$(date +'%Y-%m-%d-%H-%M')
@@ -25,6 +27,12 @@ DOCKER_PAUSED_CONTAINERS=()
 # --- MAIN ---------------------------------------------------------------------
 main() {
   command -v "fzf" &>/dev/null || { echo "ERROR: Missing dependency: 'fzf'. Install it or add to PATH." >&2; exit 1; }
+  SCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container scaled down before backuped: ")
+  if [[ "$SCALE_MODE" == "yes" ]]; then
+    RESCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container restored into original running state after backup (scale-up/unpause): ")
+  else
+    RESCALE_MODE='no'
+  fi
   REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Select docker backup location: ")
   check_dependencies
 
@@ -42,10 +50,12 @@ main() {
 
   DOCKER_IS_SWARM_MODE=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)
 
-  container_pause
-  echo
-  service_scale_down
-  echo
+  if [[ "$SCALE_MODE" == "yes" ]]; then
+    container_pause
+    echo
+    service_scale_down
+    echo
+  fi
 
   service_backup
   echo
@@ -55,10 +65,14 @@ main() {
 cleanup() {
   local exit_code=$?
 
-  service_scale_up
-  echo
-  container_unpause
-  echo
+  if [[ "$RESCALE_MODE" == "yes" ]];then
+    service_scale_up
+    echo
+    container_unpause
+    echo
+  else
+    echo "-> Restored into original running state skipped."
+  fi
 
   if [[ -n "$ORIGINAL_DOCKER_CONTEXT" ]]; then
     echo "-> Switching back to Docker context '$ORIGINAL_DOCKER_CONTEXT'..."
@@ -89,6 +103,9 @@ service_backup() {
     "$RUN_WITH_SUDO" tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz" -C "$BACKUP_SRC" .
     "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
   fi
+
+  echo "     NOTE: for restore you can use following command:"
+  echo "       $RUN_WITH_SUDO tar --use-compress-program='pigz -d' -xpvf '${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz' -C '$BACKUP_SRC'"
 
   echo "  -> Backup saved to '${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz'."
 }
