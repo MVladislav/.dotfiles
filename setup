@@ -543,6 +543,7 @@ setup_gitconfig() {
   local git_user_name git_user_email git_signing_key signing_key_path_expanded
 
   print_info2 "🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
+  mkdir -p "$(dirname "$LN_LAZYGIT")"
   rm -f "${LN_LAZYGIT}"
   ln -sf "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
 
