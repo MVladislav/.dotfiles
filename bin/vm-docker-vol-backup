@@ -13,6 +13,7 @@ ORIGINAL_DOCKER_CONTEXT=''
 SCALE_MODE='yes'
 RESCALE_MODE='yes'
 
+BACKUP_FILE_NAME_INFIX=''
 CURRENT_USER="${SUDO_USER:-$(logname)}"
 BACKUP_DATE=$(date +'%Y-%m-%d-%H-%M')
 BACKUP_SRC='/var/lib/docker/volumes'
@@ -43,6 +44,7 @@ main() {
     echo
     echo "-> Starting Docker volume backup on remote host '$REMOTE_HOST'..."
   else
+    BACKUP_FILE_NAME_INFIX='local'
     check_root
     echo "-> Starting Docker volume backup on local host..."
   fi
@@ -95,8 +97,8 @@ service_backup() {
     local REMOTE_BACKUP_DEST="/tmp/docker-backup-${BACKUP_DATE}.tar.gz"
     ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --use-compress-program=\"pigz -k\" -cp\"${VERBOSE}\"f \"$REMOTE_BACKUP_DEST\" -C \"$BACKUP_SRC\" ."
     ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown \"$CURRENT_USER:$CURRENT_USER\" \"$REMOTE_BACKUP_DEST\""
-    rsync -az --no-o --no-g --no-perms --no-times -q -e "ssh -T -o Compression=no -x" \
-      "$REMOTE_HOST:$REMOTE_BACKUP_DEST" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
+    rsync --info=progress2 -az --no-o --no-g --no-perms --no-times -e "ssh -T -o Compression=no -x" \
+      "$REMOTE_HOST:$REMOTE_BACKUP_DEST" "${BACKUP_DEST}/docker-backup-${BACKUP_FILE_NAME_INFIX}-${BACKUP_DATE}.tar.gz"
     # Clean up remote
     ##ssh "$REMOTE_HOST" "rm -f $REMOTE_BACKUP_DEST" 1>/dev/null
   else
@@ -339,6 +341,7 @@ choose_remote_host() {
     exit 1
   fi
   REMOTE_HOST="$host"
+  BACKUP_FILE_NAME_INFIX="$host"
 
   # Save current Docker context
   ORIGINAL_DOCKER_CONTEXT=$(docker context ls --format '{{.Name}}::{{.Current}}' | awk -F'::' '$2 == "true" {print $1}')
