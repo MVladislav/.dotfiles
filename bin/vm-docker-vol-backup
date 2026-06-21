@@ -92,24 +92,29 @@ cleanup() {
 # --- Backup Docker Volumes ----------------------------------------------------
 service_backup() {
   echo "  -> Backing up Docker volumes from '$BACKUP_SRC'..."
+  local backup_file_name="docker-backup-${BACKUP_FILE_NAME_INFIX}-${BACKUP_DATE}.tar.gz"
+  local backup_file_path="$BACKUP_DEST/$backup_file_name"
 
   if [[ "$REMOTE_MODE" == "remote" ]]; then
-    local REMOTE_BACKUP_DEST="/tmp/docker-backup-${BACKUP_DATE}.tar.gz"
-    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --use-compress-program=\"pigz -k\" -cp\"${VERBOSE}\"f \"$REMOTE_BACKUP_DEST\" -C \"$BACKUP_SRC\" ."
-    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown \"$CURRENT_USER:$CURRENT_USER\" \"$REMOTE_BACKUP_DEST\""
+    local remote_backup_dest="/tmp/$backup_file_name"
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --use-compress-program='pigz -k' -cp'${VERBOSE}'f '$remote_backup_dest' -C '$BACKUP_SRC' ." \
+      2>/dev/null || { echo "Failed backup - compress volume could not processed"; exit 1; }
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown '$CURRENT_USER:$CURRENT_USER' '$remote_backup_dest'" \
+      2>/dev/null || { echo "Failed backup - chown could not processed"; exit 1; }
     rsync --info=progress2 -az --no-o --no-g --no-perms --no-times -e "ssh -T -o Compression=no -x" \
-      "$REMOTE_HOST:$REMOTE_BACKUP_DEST" "${BACKUP_DEST}/docker-backup-${BACKUP_FILE_NAME_INFIX}-${BACKUP_DATE}.tar.gz"
+      "$REMOTE_HOST:$remote_backup_dest" "$backup_file_path" \
+      2>/dev/null || { echo "Failed backup - download could not processed"; exit 1; }
     # Clean up remote
-    ##ssh "$REMOTE_HOST" "rm -f $REMOTE_BACKUP_DEST" 1>/dev/null
+    ##ssh "$REMOTE_HOST" "rm -f $remote_backup_dest" 1>/dev/null
   else
-    "$RUN_WITH_SUDO" tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz" -C "$BACKUP_SRC" .
-    "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz"
+    "$RUN_WITH_SUDO" tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "$backup_file_path" -C "$BACKUP_SRC" .
+    "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "$backup_file_path"
   fi
 
   echo "     NOTE: for restore you can use following command:"
-  echo "       $RUN_WITH_SUDO tar --use-compress-program='pigz -d' -xpvf '${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz' -C '$BACKUP_SRC'"
+  echo "       $RUN_WITH_SUDO tar --use-compress-program='pigz -d' -xpvf '$backup_file_path' -C '$BACKUP_SRC'"
 
-  echo "  -> Backup saved to '${BACKUP_DEST}/docker-backup-${BACKUP_DATE}.tar.gz'."
+  echo "  -> Backup saved to '$backup_file_path'."
 }
 
 # --- Swarm Service Scaling ----------------------------------------------------
