@@ -10,6 +10,8 @@ RUN_WITH_SUDO=''
 REMOTE_MODE='local'
 REMOTE_HOST=''
 ORIGINAL_DOCKER_CONTEXT=''
+STOP_MODE='scale'
+START_MODE='no'
 SCALE_MODE='yes'
 RESCALE_MODE='yes'
 
@@ -28,10 +30,17 @@ DOCKER_PAUSED_CONTAINERS=()
 # --- MAIN ---------------------------------------------------------------------
 main() {
   command -v "fzf" &>/dev/null || { echo "ERROR: Missing dependency: 'fzf'. Install it or add to PATH." >&2; exit 1; }
-  SCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container scaled down before backuped: ")
-  if [[ "$SCALE_MODE" == "yes" ]]; then
-    RESCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container restored into original running state after backup (scale-up/unpause): ")
+  STOP_MODE=$(echo -e "scale\nstop" | fzf --prompt="Should docker stopped complete or scale/pause all containers (on stop also (nfs)mounted volumes will be disconnected): ")
+  if [[ "$STOP_MODE" == "scale" ]]; then
+    SCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container scaled down before backuped: ")
+    if [[ "$SCALE_MODE" == "yes" ]]; then
+      RESCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container restored into original running state after backup (scale-up/unpause): ")
+    else
+      RESCALE_MODE='no'
+    fi
   else
+    START_MODE=$(echo -e "yes\nno" | fzf --prompt="Should docker start afterwards back on: ")
+    SCALE_MODE='no'
     RESCALE_MODE='no'
   fi
   REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Select docker backup location: ")
@@ -57,6 +66,8 @@ main() {
     echo
     service_scale_down
     echo
+  elif [[ "$STOP_MODE" == "stop" ]]; then
+    echo "TODO implement stop docker. need local run and remote run"
   fi
 
   service_backup
@@ -72,6 +83,8 @@ cleanup() {
     echo
     container_unpause
     echo
+  elif [[ "$STOP_MODE" == "stop" && "$START_MODE" == "yes" ]]; then
+    echo "TODO implement start docker. need local run and remote run"
   else
     echo "-> Restored into original running state skipped."
   fi
@@ -331,7 +344,6 @@ check_root_remote() {
   RUN_WITH_SUDO=sudo
 }
 
-# Select SSH host from ~/.ssh/config using fzf and set up Docker context
 choose_remote_host() {
   local ssh_config=~/.ssh/config
   if [[ ! -f $ssh_config ]]; then
