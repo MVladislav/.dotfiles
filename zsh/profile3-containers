@@ -85,27 +85,37 @@ if check_command_q docker; then
   }
 
   # shellcheck disable=SC2139
-  alias vm_quick_docker_ubuntu="mkdir -p ${HOME}/docker/$(date +'%Y-%m-%d') && docker run -it --rm --network host --user root -v ${HOME}/docker/$(date +'%Y-%m-%d'):/tmp/docker --name=ubuntu-server ubuntu:26.04"
+  vm_quick_docker_ubuntu() {
+    local ubuntu_version tmp_folder
+    ubuntu_version=${1:-26.04}
+    tmp_folder="${HOME}/.tmp/docker-$(date +'%Y-%m-%d')"
+    mkdir -p "$tmp_folder"
+    docker run -it --rm --network host --user root -v "$tmp_folder":/tmp/docker --name="ubuntu-server-$ubuntu_version" "ubuntu:$ubuntu_version"
+  }
 fi
 
 ### KUBERNETES ###
-alias h='helm'
-alias k='kubectl'
-alias kn='k config set-context --current --namespace'
-alias ka='kubectl apply -f'
-alias kg='kubectl get'
-alias kd='kubectl describe'
-alias kdel='kubectl delete'
-alias kl='kubectl logs -f'
-alias kgpo='kubectl get pod'
-alias kgd='kubectl get deployments'
-alias kc='kubectx'
-alias kns='kubens'
-alias ke='kubectl exec -it'
-alias kcns='kubectl config set-context --current --namespace'
+if check_command_q helm; then
+  alias h='helm'
+fi
+if check_command_q kubectl; then
+  alias k='kubectl'
+  alias kn='k config set-context --current --namespace'
+  alias ka='kubectl apply -f'
+  alias kg='kubectl get'
+  alias kd='kubectl describe'
+  alias kdel='kubectl delete'
+  alias kl='kubectl logs -f'
+  alias kgpo='kubectl get pod'
+  alias kgd='kubectl get deployments'
+  alias ke='kubectl exec -it'
+  alias kcns='kubectl config set-context --current --namespace'
+fi
+check_command_q kubectx && alias kc='kubectx'
+check_command_q kubens && alias kns='kubens'
 
 ### TERRAFORM ###
-alias tf='terraform'
+check_command_q terraform && alias tf='terraform'
 
 ######################################################################
 ##
@@ -223,11 +233,11 @@ fi
 
 ######################################################################
 ##
-## quick ubuntu: create and remove multipass ubuntu VM
+## MultiPass: create and remove multipass ubuntu VM
 ##
 ######################################################################
 if check_command_q multipass; then
-  vm_quick_ubuntu() {
+  vm_quick_multipass_ubuntu() {
     if [[ -z "$1" ]]; then
       echo "Usage: $0 <VM_NAME_VERSION> [<optional post-creation command>]"
       return 1
@@ -262,7 +272,7 @@ if check_command_q multipass; then
     multipass exec "ubuntu-$VM_NAME_VERSION" -- sh -c "${2:-neofetch}"
   }
 
-  vm_quick_ubuntu_rm() {
+  vm_quick_multipass_ubuntu_rm() {
     if [[ -z "$1" ]]; then
       echo "Usage: $0 <VM_NAME_VERSION>"
       return 1

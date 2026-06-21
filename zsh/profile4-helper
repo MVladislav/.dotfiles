@@ -5,6 +5,8 @@ alias vm_up_apt='sudo /usr/bin/apt update && sudo /usr/bin/apt upgrade'
 alias vm_up_snap='sudo /usr/bin/snap refresh'
 alias vm_up_flatpak='/usr/bin/flatpak update && /usr/bin/flatpak uninstall --unused'
 alias vm_up_py_pip='python3 -m pip list --user -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --user --no-cache-dir -U --break-system-packages'
+alias vm_up_py_pip_venv='python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
+alias vm_up_py_pip_venv='if [ -n "$VIRTUAL_ENV" ]; then python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages; else echo "Not in a virtual environment. Use vm_up_py_pip or vm_up_py_pip_root instead."; fi'
 alias vm_up_py_pip_root='sudo /usr/bin/python3 -m pip list -o | cut -f1 -d" " | tr " " "\n" | awk "{if(NR>=3)print}" | cut -d" " -f1 | sudo /usr/bin/xargs -n1 python3 -m pip install --no-cache-dir -U --break-system-packages'
 vm_update_clean_all() {
   print_separator() {
@@ -43,16 +45,17 @@ vm_update_clean_all() {
 
   echo -e "You could also run additional updates:"
   echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."
+  echo -e "  - run ${BPURPLE}'vm_up_py_pip_venv'${NC} to update Python pip installs inside venv."
   echo -e "  - run ${BRED}'vm_up_py_pip_root'${NC} to update Python pip installs by root (be cautious, could potentially break things)."
 
   [ -f /var/run/reboot-required ] && echo && cat /var/run/reboot-required
 }
 
 ### OTHER ###
-alias vm_mem_free='free -h && sudo /usr/bin/sysctl -w vm.drop_caches=3 && sudo /usr/bin/sync && echo 3 | sudo /usr/bin/tee /proc/sys/vm/drop_caches && free -h'
+alias vm_tool_mem_free='free -h && sudo /usr/bin/sysctl -w vm.drop_caches=3 && sudo /usr/bin/sync && echo 3 | sudo /usr/bin/tee /proc/sys/vm/drop_caches && free -h'
 alias chmod_ux='chmod u+x'
-alias vm_ux_term='tr -d '\''\r'\'' <'
-alias vm_find_command='apropos'
+alias vm_tool_ux_term='tr -d '\''\r'\'' <'
+alias vm_tool_find_command='apropos'
 alias vm_weather='curl https://wttr.in/${VM_WEATHER_LOCATION:-Stuttgart},${VM_WEATHER_COUNTRY:-de}'
 
 vm_random_base() {
@@ -70,19 +73,33 @@ vm_random_plain() {
 }
 
 ### PYTHON TOOLS ###
-alias vm_url_decode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
-alias vm_url_encode='python3 -c "import sys, urllib.parse as ul; print(ul.quote_plus(sys.argv[1]))"'
-alias vm_reverse='python3 -c "import sys; print(sys.argv[1][::-1])"'
+alias vm_tool_url_decode='python3 -c "import sys, urllib.parse as ul; print(ul.unquote_plus(sys.argv[1]))"'
+alias vm_tool_url_encode='python3 -c "import sys, urllib.parse as ul; print(ul.quote_plus(sys.argv[1]))"'
+alias vm_tool_reverse='python3 -c "import sys; print(sys.argv[1][::-1])"'
 
-alias vm_hun_to_min='python3 -c '\''import sys;x = sys.argv[1].split(":");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(f"{x3}m :: {divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m")'\'''
+alias vm_tool_hun_to_min='python3 -c '\''import sys;x = sys.argv[1].split(":");x3 = (int(x[0]) * 60) + ((int(x[1])/100)*60);print(f"{x3}m :: {divmod(x3, 60)[0]}h : {divmod(x3, 60)[1]}m")'\'''
 
 # $sudo apt install wl-clipboard
 # $pip3 install pyperclip
-alias vm_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
+alias vm_tool_copy_from_clip='python3 -c "import sys, pyperclip; pyperclip.copy(sys.argv[1])"'
 
 ### EMULATOR ###
+export VM_ANDROID_PATH="${VM_ANDROID_PATH:-"$HOME/.android"}"
+export ANDROID_HOME="${ANDROID_HOME:-"$VM_ANDROID_PATH/Sdk"}"
+export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-"$ANDROID_HOME"}"
+# shellcheck disable=SC2139
+[[ -f "$ANDROID_HOME/platform-tools/adb" ]] && alias adb="$ANDROID_HOME/platform-tools/adb"
+# shellcheck disable=SC2139
+[[ -f "$ANDROID_HOME/platform-tools/fastboot" ]] && alias fastboot="$ANDROID_HOME/platform-tools/fastboot"
+# shellcheck disable=SC2139
+[[ -f "$ANDROID_HOME/emulator/emulator" ]] && alias emulator="$ANDROID_HOME/emulator/emulator"
+# shellcheck disable=SC2139
+[[ -f "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" ]] && alias avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+# shellcheck disable=SC2139
+[[ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]] && alias sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+
 vm_quick_android_emulator() {
-  local android_path="${VM_ANDROID_PATH:-$HOME/.android}"
+  local android_path="${VM_ANDROID_PATH:-"$HOME/.android"}"
   local selected_emulator
   selected_emulator=$("${android_path}/Sdk/emulator/emulator" -list-avds | grep -v INFO | fzf)
   if [[ -z "$selected_emulator" ]]; then
@@ -312,4 +329,103 @@ vm_ii() {
   echo -e "  - $(vm_my_country 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
   echo -e "  - $(vm_my_org 2>/dev/null || { check_command curl && echo 'Unavailable'; })"
   echo
+}
+
+
+######################################################################
+##
+## extract: Extract most known archives with one command
+##
+######################################################################
+vm_extract() {
+  if [ -z "$1" ]; then
+    echo "Usage: $0 <path/file_name>.<zip|rar|bz2|gz|tar|tbz2|tgz|Z|7z|xz|exe|tar.bz2|tar.gz|tar.xz>"
+    return 1
+  fi
+
+  local file="$1"
+
+  # Check if the file exists
+  if [ ! -f "$file" ]; then
+    echo "Error: '$file' does not exist."
+    return 1
+  fi
+
+  # Extract based on file extension
+  case "$file" in
+  *.tar.bz2 | *.tbz2) tar xjf "$file" ;;
+  *.tar.gz | *.tgz) tar xzf "$file" ;;
+  *.tar.xz) tar xJf "$file" ;;
+  *.lzma) unlzma "$file" ;;
+  *.bz2) bunzip2 "$file" ;;
+  *.rar) unrar x -ad "$file" ;;
+  *.gz) gunzip "$file" ;;
+  *.tar) tar xf "$file" ;;
+  *.zip) unzip "$file" ;;
+  *.Z) uncompress "$file" ;;
+  *.7z) 7z x "$file" ;;
+  *.xz) unxz "$file" ;;
+  *.exe) cabextract "$file" ;;
+  *) echo "Error: Unknown archive method for '$file'" ;;
+  esac
+}
+
+######################################################################
+##
+## encrypt: Encrypt files using known archives with a single command
+##
+######################################################################
+vm_encrypt() {
+  if [ $# -lt 2 ]; then
+    echo "Usage: $0 <rar|7z> <file_or_path> [keyword 'sec'|password]"
+    return 1
+  fi
+
+  local type="$1"
+  local file_or_path="$2"
+  local password_option=""
+
+  # Validate type and set password_option
+  case "$type" in
+  rar)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for RAR
+      password_option="$([[ "$3" == "sec" ]] && echo "-hp")${3#sec}"
+    fi
+    ;;
+  7z)
+    if [ -n "$3" ]; then
+      # If 'sec' keyword is provided, set password for 7z
+      password_option="$([[ "$3" == "sec" ]] && echo "-p")${3#sec}"
+    fi
+    ;;
+  *)
+    echo "Error: Unsupported compression type '$type'. Supported types are 'rar' and '7z'."
+    return 1
+    ;;
+  esac
+
+  # Check if the file or path exists
+  if [ ! -e "$file_or_path" ]; then
+    echo "Error: '$file_or_path' is not a valid file or path."
+    return 1
+  fi
+
+  # Perform the compression and encryption
+  case "$type" in
+  rar)
+    if [ -n "$password_option" ]; then
+      rar a "$password_option" "${file_or_path}.rar" "$file_or_path"
+    else
+      rar a "${file_or_path}.rar" "$file_or_path"
+    fi
+    ;;
+  7z)
+    if [ -n "$password_option" ]; then
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "$password_option" "${file_or_path}.7z" "$file_or_path"
+    else
+      7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on -mhe=on "${file_or_path}.7z" "$file_or_path"
+    fi
+    ;;
+  esac
 }

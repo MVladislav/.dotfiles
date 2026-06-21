@@ -2,6 +2,16 @@
 
 ######################################################################
 ##
+## tools
+##
+######################################################################
+# Add an "alert" alias for long running commands.  Use like so:
+#   sleep 10; alert
+alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+
+
+######################################################################
+##
 ## history: cleanup history file
 ##
 ######################################################################
@@ -221,7 +231,7 @@ vm_convert_docs_to_md() {
 ##
 ##
 ######################################################################
-vm_reduce_img_size() {
+vm_convert_reduce_img_size() {
   local input="$1"
   local ext="${input##*.}"
   ext=$(echo "$ext" | tr '[:upper:]' '[:lower:]')

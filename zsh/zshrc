@@ -15,7 +15,9 @@
 # ---------------------------------------------------------------------------
 HISTFILE="$HOME/.zsh_history"     # Path where shell history is stored
 HISTSIZE=1000000                  # Number of lines to keep in memory
+HISTFILESIZE=1000000              #
 SAVEHIST=1000000                  # Number of lines to save to $HISTFILE
+HISTCONTROL=ignoreboth            # don't put duplicate lines or lines starting with space
 
 # History behavior tuning
 setopt EXTENDED_HISTORY           # Include timestamp and duration in history

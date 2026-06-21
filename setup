@@ -785,9 +785,9 @@ install_btop() {
 install_setup_android_emulator() {
   # sudo apt install openjdk-26-jre-headless
   # --- Paths ----------------------------------------------------------
-  export VM_ANDROID_PATH="$HOME/Downloads/android"
-  export ANDROID_HOME="$VM_ANDROID_PATH/Sdk"
-  export ANDROID_SDK_ROOT="$ANDROID_HOME"
+  export VM_ANDROID_PATH="${VM_ANDROID_PATH:-"$HOME/.android"}"
+  export ANDROID_HOME="${ANDROID_HOME:-"$VM_ANDROID_PATH/Sdk"}"
+  export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-"$ANDROID_HOME"}"
   mkdir -p "$ANDROID_HOME"
 
   command -v fzf >/dev/null 2>&1 || {

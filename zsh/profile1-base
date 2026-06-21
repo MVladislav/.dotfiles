@@ -23,7 +23,7 @@ alias sudo-env='sudo -E env "PATH=$PATH"'
 if command -v nvim >/dev/null 2>&1; then
   export EDITOR='nvim'
   export SUDO_EDITOR="nvim"
-else
+elif command -v vim >/dev/null 2>&1; then
   export EDITOR='vim'
   export SUDO_EDITOR="vim"
 fi
