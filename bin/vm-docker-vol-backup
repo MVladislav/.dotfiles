@@ -6,14 +6,15 @@ trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" E
 trap cleanup EXIT ERR
 
 # --- Global Variables ---------------------------------------------------------
-RUN_WITH_SUDO=''
+BACKUP_MODE=''       # 'stop' or 'scale'
+RESTORE_DOCKER='no'  # 'yes' or 'no'
+SCALE_DOWN='no'      # 'yes' or 'no'
+RESTORE_SCALE='no'    # 'yes' or 'no'
 REMOTE_MODE='local'
+
+RUN_WITH_SUDO=''
 REMOTE_HOST=''
-ORIGINAL_DOCKER_CONTEXT=''
-STOP_MODE='scale'
-START_MODE='no'
-SCALE_MODE='yes'
-RESCALE_MODE='yes'
+ORIGINAL_DOCKER_CONTEXT='default'
 
 BACKUP_FILE_NAME_INFIX=''
 CURRENT_USER="${SUDO_USER:-$(logname)}"
@@ -30,22 +31,17 @@ DOCKER_PAUSED_CONTAINERS=()
 # --- MAIN ---------------------------------------------------------------------
 main() {
   command -v "fzf" &>/dev/null || { echo "ERROR: Missing dependency: 'fzf'. Install it or add to PATH." >&2; exit 1; }
-  STOP_MODE=$(echo -e "scale\nstop" | fzf --prompt="Should docker stopped complete or scale/pause all containers (on stop also (nfs)mounted volumes will be disconnected): ")
-  if [[ "$STOP_MODE" == "scale" ]]; then
-    SCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container scaled down before backuped: ")
-    if [[ "$SCALE_MODE" == "yes" ]]; then
-      RESCALE_MODE=$(echo -e "yes\nno" | fzf --prompt="Should the container restored into original running state after backup (scale-up/unpause): ")
-    else
-      RESCALE_MODE='no'
-    fi
-  else
-    START_MODE=$(echo -e "yes\nno" | fzf --prompt="Should docker start afterwards back on: ")
-    SCALE_MODE='no'
-    RESCALE_MODE='no'
-  fi
-  REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Select docker backup location: ")
-  check_dependencies
 
+  BACKUP_MODE=$(echo -e "stop\nscale\nnone" | fzf --prompt="Backup mode (stop Docker or scale/pause containers): ")
+  if [[ "$BACKUP_MODE" == "stop" ]]; then
+    RESTORE_DOCKER=$(echo -e "yes\nno" | fzf --prompt="Start Docker after backup: ")
+  elif [[ "$BACKUP_MODE" == "scale" ]]; then
+    SCALE_DOWN=$(echo -e "yes\nno" | fzf --prompt="Scale down services before backup: ")
+    RESTORE_SCALE=$(echo -e "yes\nno" | fzf --prompt="Restore service scale after backup: ")
+  fi
+  REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Backup location: ")
+
+  check_dependencies
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     choose_remote_host
     check_dependencies_remote
@@ -54,20 +50,22 @@ main() {
     echo "-> Starting Docker volume backup on remote host '$REMOTE_HOST'..."
   else
     BACKUP_FILE_NAME_INFIX='local'
+    switch_docker_context
     check_root
     echo "-> Starting Docker volume backup on local host..."
   fi
   echo
 
-  DOCKER_IS_SWARM_MODE=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)
-
-  if [[ "$SCALE_MODE" == "yes" ]]; then
+  if [[ "$BACKUP_MODE" == "stop" ]]; then
+    docker_stop
+    echo
+  fi
+  if [[ "$SCALE_DOWN" == "yes" ]]; then
+    DOCKER_IS_SWARM_MODE=$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)
     container_pause
     echo
     service_scale_down
     echo
-  elif [[ "$STOP_MODE" == "stop" ]]; then
-    echo "TODO implement stop docker. need local run and remote run"
   fi
 
   service_backup
@@ -78,15 +76,16 @@ main() {
 cleanup() {
   local exit_code=$?
 
-  if [[ "$RESCALE_MODE" == "yes" ]];then
+    if [[ "$SCALE_DOWN" == "yes" && "$RESTORE_SCALE" == "yes" ]]; then
     service_scale_up
     echo
     container_unpause
     echo
-  elif [[ "$STOP_MODE" == "stop" && "$START_MODE" == "yes" ]]; then
-    echo "TODO implement start docker. need local run and remote run"
-  else
-    echo "-> Restored into original running state skipped."
+  fi
+
+  if [[ "$BACKUP_MODE" == "stop" && "$RESTORE_DOCKER" == "yes" ]]; then
+    docker_start
+    echo
   fi
 
   if [[ -n "$ORIGINAL_DOCKER_CONTEXT" ]]; then
@@ -96,7 +95,7 @@ cleanup() {
   fi
 
   if [[ $exit_code -eq 0 ]]; then
-    echo "-> Backup and scaling operations completed."
+    echo "-> Backup completed successfully."
   fi
 
   exit "$exit_code"
@@ -110,24 +109,48 @@ service_backup() {
 
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     local remote_backup_dest="/tmp/$backup_file_name"
-    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --use-compress-program='pigz -k' -cp'${VERBOSE}'f '$remote_backup_dest' -C '$BACKUP_SRC' ." \
+    echo "    -> Compress volume..."
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --numeric-owner --use-compress-program='pigz -k' -cp'${VERBOSE}'f '$remote_backup_dest' -C '$BACKUP_SRC' ." \
       2>/dev/null || { echo "Failed backup - compress volume could not processed"; exit 1; }
+    echo "    -> Change owner of compression..."
     ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown '$CURRENT_USER:$CURRENT_USER' '$remote_backup_dest'" \
       2>/dev/null || { echo "Failed backup - chown could not processed"; exit 1; }
     rsync --info=progress2 -az --no-o --no-g --no-perms --no-times -e "ssh -T -o Compression=no -x" \
       "$REMOTE_HOST:$remote_backup_dest" "$backup_file_path" \
       2>/dev/null || { echo "Failed backup - download could not processed"; exit 1; }
-    # Clean up remote
-    ##ssh "$REMOTE_HOST" "rm -f $remote_backup_dest" 1>/dev/null
+    ssh -t "$REMOTE_HOST" "rm -f '$remote_backup_dest'" 1>/dev/null
   else
-    "$RUN_WITH_SUDO" tar --use-compress-program="pigz -k " -cp"${VERBOSE}"f "$backup_file_path" -C "$BACKUP_SRC" .
+    "$RUN_WITH_SUDO" tar --numeric-owner --use-compress-program="pigz -k " -cp"${VERBOSE}"f "$backup_file_path" -C "$BACKUP_SRC" .
     "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "$backup_file_path"
   fi
 
   echo "     NOTE: for restore you can use following command:"
-  echo "       $RUN_WITH_SUDO tar --use-compress-program='pigz -d' -xpvf '$backup_file_path' -C '$BACKUP_SRC'"
+  echo "       $RUN_WITH_SUDO tar --numeric-owner --use-compress-program='pigz -d' -xpvf '$backup_file_path' -C '$BACKUP_SRC'"
 
   echo "  -> Backup saved to '$backup_file_path'."
+}
+
+# --- Docker Stop/Start --------------------------------------------------------
+docker_stop() {
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    echo "  -> Stopping Docker on '$REMOTE_HOST'..."
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl stop docker.socket" \
+    2>/dev/null || { echo "Failed to stop docker"; exit 1; }
+  else
+    echo "  -> Stopping Docker locally..."
+    "$RUN_WITH_SUDO" systemctl stop docker || exit 1
+  fi
+}
+
+docker_start() {
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    echo "  -> Starting Docker on '$REMOTE_HOST'..."
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl start docker" \
+    2>/dev/null || { echo "Failed to start docker"; exit 1; }
+  else
+    echo "  -> Starting Docker locally..."
+    "$RUN_WITH_SUDO" systemctl start docker || exit 1
+  fi
 }
 
 # --- Swarm Service Scaling ----------------------------------------------------
@@ -282,7 +305,6 @@ container_unpause() {
 }
 
 # --- Helper -------------------------------------------------------------------
-
 check_dependencies() {
   local deps=()
   if [[ "$REMOTE_MODE" == "remote" ]]; then
@@ -360,19 +382,28 @@ choose_remote_host() {
   REMOTE_HOST="$host"
   BACKUP_FILE_NAME_INFIX="$host"
 
+  switch_docker_context "$host"
+}
+
+switch_docker_context() {
+  local context="${1:-default}"
+
   # Save current Docker context
   ORIGINAL_DOCKER_CONTEXT=$(docker context ls --format '{{.Name}}::{{.Current}}' | awk -F'::' '$2 == "true" {print $1}')
 
   # Create Docker context if it doesn't exist
-  if ! docker context inspect "$host" &>/dev/null; then
-    echo "-> Creating Docker context for '$host'..."
-    docker context create "$host" --docker "host=ssh://$host" 1>/dev/null
+  if [[ "$context" != "default" ]]; then
+    if ! docker context inspect "$context" &>/dev/null; then
+      echo "-> Creating Docker context for '$context'..."
+      docker context create "$context" --docker "host=ssh://$context" 1>/dev/null
+    fi
   fi
 
   # Switch to the remote Docker context
-  echo "-> Switching to Docker context '$host'..."
-  docker context use "$host" 1>/dev/null
+  echo "-> Switching to Docker context '$context'..."
+  docker context use "$context" 1>/dev/null
 }
+
 
 # --- Entry Point --------------------------------------------------------------
 main
