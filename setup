@@ -83,6 +83,7 @@ LN_VS_CODE="${LN_VS_CODE:-"$HOME/.config/Code/User"}"
 LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
 LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
 # LN_ZED=$HOME/.config/zed
+LN_ZED_CODEBOOK="$HOME/.config/codebook"
 
 LN_LOGSEQ_PATH="$HOME/.logseq"
 
@@ -468,15 +469,21 @@ setup_code() {
 # ZED :: CREATE LINKS ----------------------------------------------------------
 setup_zed() {
   mkdir -p "$LN_ZED"
-  print_info2 "\n🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
-  rm -f "${LN_ZED}/keymap.json"
-  ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
   print_info2 "🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
   rm -f "${LN_ZED}/settings.json"
   ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
+  print_info2 "\n🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
+  rm -f "${LN_ZED}/keymap.json"
+  ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
   print_info2 "🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'"
   rm -f "${LN_ZED}/snippets"
   ln -sf "${PWD}/zed/snippets" "${LN_ZED}/snippets"
+
+  print_info2 "🚀 ZED :: Create symlink from './zed/codebook.toml' into '$LN_ZED_CODEBOOK/codebook.toml'"
+  mkdir -p "$LN_ZED_CODEBOOK"
+  rm -f "${LN_ZED_CODEBOOK}/codebook.toml"
+  ln -sf "${PWD}/zed/codebook.toml" "${LN_ZED_CODEBOOK}/codebook.toml"
+
   print_info2 "🚀 ZED :: All symlinks created."
 }
 

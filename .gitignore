@@ -109,6 +109,7 @@ zed/**
 !zed/snippets/
 zed/snippets/**
 !zed/snippets/*.json
+!zed/codebook.toml
 
 !logseq/
 logseq/**

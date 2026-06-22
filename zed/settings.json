@@ -159,8 +159,8 @@
     "Shell Script": {
       "preferred_line_length": 130,
       "format_on_save": "on",
-      "enable_language_server": true,
-      "language_servers": ["bash-language-server"]
+      "enable_language_server": true
+      // "language_servers": ["bash-language-server", "codebook"],
     },
     "Python": {
       "preferred_line_length": 130,
@@ -175,6 +175,7 @@
       "language_servers": [
         "ty",
         "ruff",
+        "codebook",
         "!basedpyright",
         "!pyrefly",
         "!pyright",
@@ -293,7 +294,11 @@
   "auto_install_extensions": {
     "catppuccin": true,
     "catppuccin-icons": true,
-    "tokyo-night": true
+    "tokyo-night": true,
+    "codebook": true,
+    "html": true,
+    "dockerfile": true,
+    "ansible": true
   },
   "telemetry": {
     "diagnostics": false,
