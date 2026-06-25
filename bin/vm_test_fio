@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -o pipefail
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
+trap 'echo "Script interrupted by user. Exiting..."; exit 1' SIGINT
+
+# --- MAIN ---------------------------------------------------------------------
+main() {
+  local FIO_RW_TYPE FIO_BS FIO_IOENGINE FIO_IODEPTH FIO_DIRECT FIO_NUMJOBS FIO_FSYNC FIO_FILESIZE
+  local valid_types=(randrw rw randread randwrite read write)
+  local GO_INTERACTIVE=no
+
+  echo "============================================="
+  echo " FIO Disk Performance Test"
+  echo "============================================="
+  echo "Measures disk I/O performance using fio (Flexible I/O Tester)."
+  echo "Tests can be run interactively or with command-line arguments."
+  echo ""
+
+  if [ "$#" -lt 1 ] && command -v fzf >/dev/null 2>&1; then
+    set -e
+    GO_INTERACTIVE=$(echo -e "yes\nno" | fzf --height=~40% --prompt="Do you want to use fzf for interactive selection? ")
+    if [[ "$GO_INTERACTIVE" == "yes" ]]; then
+      FIO_RW_TYPE=$(printf "%s\n" "${valid_types[@]}" | fzf --height=~40% --prompt="Select I/O pattern (read/write type): ")
+      FIO_BS=$(printf "%s\n" 128K 1M 4M 4K 8K 16K 32K 64K 256K | fzf --height=~40% --prompt="Select block size (I/O size per operation): ")
+      FIO_DIRECT=$(printf "%s\n" 1 0 | fzf --height=~40% --prompt="Use direct I/O? (1 = bypass cache, 0 = use cache): ")
+      FIO_NUMJOBS=$(printf "%s\n" auto $(seq 1 "$(nproc)") | fzf --height=~40% --prompt="Select number of parallel jobs (auto = CPU cores): ")
+      FIO_FSYNC=$(printf "%s\n" 0 1 | fzf --height=~40% --prompt="Enable fsync after writes? (1 = yes, 0 = no): ")
+      FIO_FILESIZE=$(printf "%s\n" 3G 2G 1G | fzf --height=~40% --prompt="Select test file size: ")
+      FIO_RUNTIME=$(printf "%s\n" 30s 5s 10s 20s 60s | fzf --height=~40% --prompt="Select run time: ")
+      [[ "$FIO_NUMJOBS" == "auto" ]] && FIO_NUMJOBS=$(($(nproc) / 2))
+    fi
+    set +e
+  fi
+
+  if [[ -z "$FIO_RW_TYPE" ]]; then
+    if [[ -z "$1" ]] || [[ ! " ${valid_types[*]} " =~ $1 ]]; then
+      local cmd_name
+      cmd_name="$(basename "$0")"
+      echo "Usage: $cmd_name <readwrite_type>"
+      echo ""
+      echo "Available read/write types:"
+      printf "  - %s\n" "${valid_types[@]}"
+      echo ""
+      echo "Examples:"
+      echo "  $cmd_name randrw    # Random read/write test"
+      echo "  $cmd_name read      # Sequential read test"
+      echo "  $cmd_name write     # Sequential write test"
+      exit 1
+    fi
+  fi
+
+  FIO_RW_TYPE="${FIO_RW_TYPE:-"$1"}"
+  FIO_BS="${FIO_BS:-128k}"
+  FIO_IOENGINE="${FIO_IOENGINE:-libaio}"
+  FIO_IODEPTH="${FIO_IODEPTH:-16}"
+  FIO_DIRECT="${FIO_DIRECT:-1}"
+  FIO_NUMJOBS="${FIO_NUMJOBS:-$(($(nproc) / 2))}"
+  FIO_FSYNC="${FIO_FSYNC:-0}"
+  FIO_FILESIZE="${FIO_FILESIZE:-3G}"
+  FIO_RUNTIME="${FIO_RUNTIME:-30s}"
+
+  # Apply block size logic only if not set interactively
+  if [[ "$GO_INTERACTIVE" == "no" ]]; then
+    if [[ "$FIO_RW_TYPE" == *"read"* || "$FIO_RW_TYPE" == *"rw"* ]]; then
+      FIO_BS="256k"
+    elif [[ "$FIO_RW_TYPE" == *"write"* ]]; then
+      FIO_BS="1M"
+    fi
+  fi
+
+  echo "=== Test Configuration ==="
+  echo "I/O pattern:        $FIO_RW_TYPE"
+  echo "Block size:         $FIO_BS"
+  echo "I/O engine:         $FIO_IOENGINE"
+  echo "I/O depth:          $FIO_IODEPTH"
+  echo "Direct I/O:         $FIO_DIRECT (1 = bypass cache, 0 = use cache)"
+  echo "Number of jobs:     $FIO_NUMJOBS"
+  echo "Fsync:              $FIO_FSYNC (1 = sync after each write, 0 = no sync)"
+  echo "Test file size:     $FIO_FILESIZE"
+  echo "Test duration:      $FIO_RUNTIME"
+  echo ""
+
+  # echo "Running ${FIO_RW_TYPE} test with block size ${FIO_BS}, ioengine ${FIO_IOENGINE}, iodepth ${FIO_IODEPTH}, direct ${FIO_DIRECT}, numjobs ${FIO_NUMJOBS}, fsync ${FIO_FSYNC}, size ${FIO_FILESIZE}, for $FIO_RUNTIME..."
+
+  # Initialize variables to store cumulative values
+  local OUTPUT
+  local TOTAL_READ_IOPS=0
+  local TOTAL_WRITE_IOPS=0
+  local TOTAL_READ_BW=0
+  local TOTAL_WRITE_BW=0
+  local TOTAL_READ_LAT=0
+  local TOTAL_WRITE_LAT=0
+
+  # Run the FIO benchmark
+  OUTPUT=$(fio \
+    --rw="$FIO_RW_TYPE" \
+    --numjobs="$FIO_NUMJOBS" \
+    --time_based \
+    --runtime="$FIO_RUNTIME" \
+    --size="$FIO_FILESIZE" \
+    --direct="$FIO_DIRECT" \
+    --iodepth="${FIO_IODEPTH}" \
+    --bs="$FIO_BS" \
+    --group_reporting \
+    --fsync="${FIO_FSYNC}" \
+    --ioengine="$FIO_IOENGINE" \
+    --name="test_$(date +%s%3N)" \
+    --filename="fio_test_$FIO_RW_TYPE" \
+    --output-format=json 2>&1)
+  local FIO_EXIT_STATUS=$?
+  if [[ $FIO_EXIT_STATUS -ne 0 ]]; then
+    echo "ERROR: FIO command failed with exit status $FIO_EXIT_STATUS" >&2
+    echo "       $OUTPUT" | head -n1 >&2
+    exit $FIO_EXIT_STATUS
+  fi
+  # Accumulate values
+  TOTAL_READ_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].read.iops + '"$TOTAL_READ_IOPS")
+  TOTAL_WRITE_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].write.iops + '"$TOTAL_WRITE_IOPS")
+  TOTAL_READ_BW=$(echo "$OUTPUT" | jq '(.jobs[0].read.bw / 1024) + '"$TOTAL_READ_BW")
+  TOTAL_WRITE_BW=$(echo "$OUTPUT" | jq '(.jobs[0].write.bw / 1024) + '"$TOTAL_WRITE_BW")
+  TOTAL_READ_LAT=$(echo "$OUTPUT" | jq '(.jobs[0].read.clat_ns.mean / 1000) + '"$TOTAL_READ_LAT")
+  TOTAL_WRITE_LAT=$(echo "$OUTPUT" | jq '(.jobs[0].write.clat_ns.mean / 1000) + '"$TOTAL_WRITE_LAT")
+
+  # Format and print averages, omitting 0 results
+  ((${TOTAL_READ_IOPS%.*} > 0)) && echo  "Average Read IOPS              : $TOTAL_READ_IOPS"
+  ((${TOTAL_WRITE_IOPS%.*} > 0)) && echo "Average Write IOPS             : $TOTAL_WRITE_IOPS"
+  ((${TOTAL_READ_BW%.*} > 0)) && echo    "Average Read Bandwidth (MB/s)  : $TOTAL_READ_BW"
+  ((${TOTAL_WRITE_BW%.*} > 0)) && echo   "Average Write Bandwidth (MB/s) : $TOTAL_WRITE_BW"
+  ((${TOTAL_READ_LAT%.*} > 0)) && echo   "Average Read Latency (µs)      : $TOTAL_READ_LAT"
+  ((${TOTAL_WRITE_LAT%.*} > 0)) && echo  "Average Write Latency (µs)     : $TOTAL_WRITE_LAT"
+  echo ""
+
+  echo "=== Results Interpretation ==="
+  echo "IOPS (Input/Output Operations Per Second):"
+  echo "  Number of read/write operations completed per second."
+  echo "  Higher = better. Measures storage device's ability to handle I/O requests."
+  echo "Bandwidth (MB/s):"
+  echo "  Data transfer rate in megabytes per second."
+  echo "  Higher = better. Measures throughput of the storage device."
+  echo "Latency (µs):"
+  echo "  Time taken to complete a single I/O operation (lower = better)."
+  # echo "  Critical for real-time applications (e.g., databases, VMs)."
+  # echo "  - <100µs: Excellent (NVMe SSD)"
+  # echo "  - 100µs–1ms: Good (SATA SSD)"
+  # echo "  - 1ms–10ms: Slow (HDD)"
+  # echo "  - >10ms: Very slow (network storage or high load)"
+  # echo ""
+  echo "Note: Results vary based on system load, cache state, and storage characteristics."
+}
+
+# --- Helper -------------------------------------------------------------------
+check_dependencies() {
+  local deps=(fio jq)
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" &>/dev/null; then
+      echo "ERROR: Missing dependency: '$dep'. Install it or add to PATH." >&2
+      exit 1
+    fi
+  done
+}
+
+# --- Entry Point --------------------------------------------------------------
+check_dependencies
+main "$@"

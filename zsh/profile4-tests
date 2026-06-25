@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# set -euo pipefail
+# trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
+# trap 'echo "Script interrupted by user. Exiting..."; exit 1' SIGINT
 
 ### TESTS ###
 vm_test_curl() {
@@ -65,69 +68,4 @@ vm_test_speed_pub() {
   else
     iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
   fi
-}
-
-vm_test_fio() {
-  local valid_types=(randread randwrite randrw read write rw)
-
-  if [[ -z "$1" ]] || [[ ! " ${valid_types[*]} " =~ $1 ]]; then
-    echo "Usage: $0 <readwrite_type>"
-    echo "  <readwrite_type> = ${valid_types[*]}"
-    return 1
-  fi
-  check_command jq || return 1
-  check_command fio || return 1
-
-  local FIO_RW_TYPE="$1"
-  local FIO_BS="${FIO_BS:-128k}"
-  local FIO_IOENGINE="${FIO_IOENGINE:-libaio}"
-  local FIO_IODEPTH="${FIO_IODEPTH:-16}"
-  local FIO_DIRECT="${FIO_DIRECT:-1}"
-  local FIO_NUMJOBS="${FIO_NUMJOBS:-$(($(nproc) / 2))}"
-  local FIO_FSYNC="${FIO_FSYNC:-0}"
-  local FIO_FILESIZE="${FIO_FILESIZE:-3G}"
-
-  # Check if the FIO_RW_TYPE contains "read" or "write" to set the block size accordingly
-  if [[ "$FIO_RW_TYPE" == *"read"* || "$FIO_RW_TYPE" == *"rw"* ]]; then
-    FIO_BS="256k"
-  elif [[ "$FIO_RW_TYPE" == *"write"* ]]; then
-    FIO_BS="1M"
-  fi
-
-  echo "Running ${FIO_RW_TYPE} test with block size ${FIO_BS}, ioengine ${FIO_IOENGINE}, iodepth ${FIO_IODEPTH}, direct ${FIO_DIRECT}, numjobs ${FIO_NUMJOBS}, fsync ${FIO_FSYNC}, size ${FIO_FILESIZE}, for 30s..."
-
-  # Initialize variables to store cumulative values
-  local OUTPUT
-  local TOTAL_READ_IOPS=0
-  local TOTAL_WRITE_IOPS=0
-  local TOTAL_READ_BW=0
-  local TOTAL_WRITE_BW=0
-
-  # Run the FIO benchmark
-  OUTPUT=$(fio \
-    --rw="$FIO_RW_TYPE" \
-    --numjobs="$FIO_NUMJOBS" \
-    --time_based \
-    --runtime=30s \
-    --size="$FIO_FILESIZE" \
-    --direct="$FIO_DIRECT" \
-    --iodepth="${FIO_IODEPTH}" \
-    --bs="$FIO_BS" \
-    --group_reporting \
-    --fsync="${FIO_FSYNC}" \
-    --ioengine="$FIO_IOENGINE" \
-    --name="test_$(date +%s%3N)" \
-    --filename="fio_test_$FIO_RW_TYPE" \
-    --output-format=json)
-  # Accumulate values
-  TOTAL_READ_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].read.iops + '"$TOTAL_READ_IOPS")
-  TOTAL_WRITE_IOPS=$(echo "$OUTPUT" | jq '.jobs[0].write.iops + '"$TOTAL_WRITE_IOPS")
-  TOTAL_READ_BW=$(echo "$OUTPUT" | jq '(.jobs[0].read.bw / 1024) + '"$TOTAL_READ_BW")
-  TOTAL_WRITE_BW=$(echo "$OUTPUT" | jq '(.jobs[0].write.bw / 1024) + '"$TOTAL_WRITE_BW")
-
-  # Format and print averages, omitting 0 results
-  ((${TOTAL_READ_IOPS%.*} > 0)) && echo "Average Read IOPS: $TOTAL_READ_IOPS"
-  ((${TOTAL_WRITE_IOPS%.*} > 0)) && echo "Average Write IOPS: $TOTAL_WRITE_IOPS"
-  ((${TOTAL_READ_BW%.*} > 0)) && echo "Average Read Bandwidth (MB/s): $TOTAL_READ_BW"
-  ((${TOTAL_WRITE_BW%.*} > 0)) && echo "Average Write Bandwidth (MB/s): $TOTAL_WRITE_BW"
 }
