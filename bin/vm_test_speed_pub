@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -o pipefail
+trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
+trap 'echo "Script interrupted by user. Exiting..."; exit 1' SIGINT
+
+# --- MAIN ---------------------------------------------------------------------
+main() {
+  local selected_entry server port
+  local servers=(
+    'a209.speedtest.wobcom.de:5201' # 1
+    'a205.speedtest.wobcom.de:5201' # 2
+    'speedtest.wobcom.de:5201'      # 3
+    'speedtest.myloc.de:5201'       # 4
+    'speedtest.lu.buyvm.net:5201'   # 5
+    'iperf3.moji.fr:5201'           # 6
+    'speedtest.shinternet.ch:5200'  # 7
+    'speedtest.init7.net:5201'      # 8
+  )
+  local servers_extended=(
+    'manual'
+  )
+  local use_docker="native"
+
+  # EXAMPLE: export VM_TEST_SPEED_SERVERS=$'192.168.1.1:5201\n192.168.1.1:5201'
+  [[ -v VM_TEST_SPEED_SERVERS ]] || VM_TEST_SPEED_SERVERS=()
+
+  if command -v fzf >/dev/null 2>&1; then
+    if command -v docker >/dev/null 2>&1; then
+      use_docker=$(printf "native\ndocker\n" | fzf --height=~20% --prompt="Run mode: " --cycle) || exit 1
+    fi
+    selected_entry=$(printf "%s\n" "${servers[@]}" "${VM_TEST_SPEED_SERVERS[@]}" "${servers_extended[@]}" | fzf --no-sort --height=~40% --prompt="Choose a server to use: " --cycle) || exit 1
+    if [[ -n "$selected_entry" && "$#" -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
+      shift
+    fi
+
+    if [[ "$selected_entry" == "manual" ]]; then
+      server=$(echo | fzf --height=~40% --print-query --bind 'enter:replace-query+print-query' --header $'\x1b[1;32mEnter iperf server ip/url:') || exit 1
+      port=$(echo | fzf --height=~40% --print-query --bind 'enter:replace-query+print-query' --header $'\x1b[1;32mEnter iperf server port:') || exit 1
+      [[ -z "$server" || -z "$port" ]] && { echo "Error: Server and port must be provided." >&2; exit 1; }
+    fi
+  fi
+
+  if [ "$#" -lt 1 ] && [[ -z "$selected_entry" ]]; then
+    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]" >&2
+    exit 1
+  fi
+
+  if [[ -z "$selected_entry" ]]; then
+    local num="$1"
+    shift
+    if ! [[ "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt "${#servers[@]}" ]; then
+      num=1
+    fi
+    selected_entry="${servers[$((num))]}"
+  fi
+
+  server="${server:-${selected_entry%%:*}}"
+  port="${port:-${selected_entry##*:}}"
+  if [[ "$server" == "$selected_entry" || -z "$port" ]]; then
+    echo "Error: Invalid server entry '$selected_entry' (expected format: host:port)." >&2
+    exit 1
+  fi
+
+  clear
+  if [[ "$use_docker" == "docker" ]]; then
+    docker run -it --rm networkstatic/iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@" || exit 1
+  else
+    iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@" || exit 1
+  fi
+}
+
+# --- Helper -------------------------------------------------------------------
+check_dependencies() {
+  local deps=(iperf3)
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" &>/dev/null; then
+      echo "ERROR: Missing dependency: '$dep'. Install it or add to PATH." >&2
+      exit 1
+    fi
+  done
+}
+
+# --- Entry Point --------------------------------------------------------------
+check_dependencies
+main "$@"

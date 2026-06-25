@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# set -euo pipefail
-# trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
-# trap 'echo "Script interrupted by user. Exiting..."; exit 1' SIGINT
 
 ### TESTS ###
 vm_test_curl() {
@@ -32,40 +29,3 @@ alias vm_test_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -
 alias vm_test_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
 alias vm_test_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
 # https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php
-vm_test_speed_pub() {
-  if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <NUM> [ADDITIONAL_IPERF3_PARAMS... (-w128M | -R | -t0 | -4 | -6)]"
-    return 1
-  fi
-  check_command iperf3 || return 1
-
-  local servers=(
-    'a209.speedtest.wobcom.de:5201' # 1
-    'a205.speedtest.wobcom.de:5201' # 2
-    'speedtest.wobcom.de:5201'      # 3
-    'speedtest.myloc.de:5201'       # 4
-    'speedtest.lu.buyvm.net:5201'   # 5
-    'iperf3.moji.fr:5201'           # 6
-    'speedtest.shinternet.ch:5200'  # 7
-    'speedtest.init7.net:5201'      # 8
-  )
-
-  local num="$1"
-  shift
-  if ! [[ "$num" =~ ^[0-9]+$ ]] || [ "$num" -lt 1 ] || [ "$num" -gt "${#servers[@]}" ]; then
-    num=1
-  fi
-
-  local entry="${servers[$((num))]}"
-  local server="${entry%%:*}" # Extract server name (before :)
-  local port="${entry##*:}"   # Extract port number (after :)
-
-  clear
-
-  local use_docker=0
-  if [[ $use_docker -eq 1 ]]; then
-    docker run -it --rm networkstatic/iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
-  else
-    iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@"
-  fi
-}
