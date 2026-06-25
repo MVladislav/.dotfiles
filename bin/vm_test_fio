@@ -17,19 +17,17 @@ main() {
   echo ""
 
   if [ "$#" -lt 1 ] && command -v fzf >/dev/null 2>&1; then
-    set -e
-    GO_INTERACTIVE=$(echo -e "yes\nno" | fzf --height=~40% --prompt="Do you want to use fzf for interactive selection? ")
+    GO_INTERACTIVE=$(echo -e "yes\nno" | fzf --height=~40% --prompt="Do you want to use fzf for interactive selection? ") || exit 1
     if [[ "$GO_INTERACTIVE" == "yes" ]]; then
-      FIO_RW_TYPE=$(printf "%s\n" "${valid_types[@]}" | fzf --height=~40% --prompt="Select I/O pattern (read/write type): ")
-      FIO_BS=$(printf "%s\n" 128K 1M 4M 4K 8K 16K 32K 64K 256K | fzf --height=~40% --prompt="Select block size (I/O size per operation): ")
-      FIO_DIRECT=$(printf "%s\n" 1 0 | fzf --height=~40% --prompt="Use direct I/O? (1 = bypass cache, 0 = use cache): ")
-      FIO_NUMJOBS=$(printf "%s\n" auto $(seq 1 "$(nproc)") | fzf --height=~40% --prompt="Select number of parallel jobs (auto = CPU cores): ")
-      FIO_FSYNC=$(printf "%s\n" 0 1 | fzf --height=~40% --prompt="Enable fsync after writes? (1 = yes, 0 = no): ")
-      FIO_FILESIZE=$(printf "%s\n" 3G 2G 1G | fzf --height=~40% --prompt="Select test file size: ")
-      FIO_RUNTIME=$(printf "%s\n" 30s 5s 10s 20s 60s | fzf --height=~40% --prompt="Select run time: ")
+      FIO_RW_TYPE=$(printf "%s\n" "${valid_types[@]}" | fzf --height=~40% --prompt="Select I/O pattern (read/write type): ") || exit 1
+      FIO_BS=$(printf "%s\n" 128K 1M 4M 4K 8K 16K 32K 64K 256K | fzf --height=~40% --prompt="Select block size (I/O size per operation): ") || exit 1
+      FIO_DIRECT=$(printf "%s\n" 1 0 | fzf --height=~40% --prompt="Use direct I/O? (1 = bypass cache, 0 = use cache): ") || exit 1
+      FIO_NUMJOBS=$(printf "%s\n" auto $(seq 1 "$(nproc)") | fzf --height=~40% --prompt="Select number of parallel jobs (auto = CPU cores): ") || exit 1
+      FIO_FSYNC=$(printf "%s\n" 0 1 | fzf --height=~40% --prompt="Enable fsync after writes? (1 = yes, 0 = no): ") || exit 1
+      FIO_FILESIZE=$(printf "%s\n" 3G 2G 1G | fzf --height=~40% --prompt="Select test file size: ") || exit 1
+      FIO_RUNTIME=$(printf "%s\n" 30s 5s 10s 20s 60s | fzf --height=~40% --prompt="Select run time: ") || exit 1
       [[ "$FIO_NUMJOBS" == "auto" ]] && FIO_NUMJOBS=$(($(nproc) / 2))
     fi
-    set +e
   fi
 
   if [[ -z "$FIO_RW_TYPE" ]]; then
