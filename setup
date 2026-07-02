@@ -40,6 +40,8 @@ RUN_SETUP_PROFILES=1
 RUN_SETUP_LOGSEQ=1
 RUN_SETUP_GITCONFIG=1
 
+RUN_SETUP_ZSH=0
+
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
 RUN_INSTALL_BTOP=0
@@ -119,6 +121,8 @@ main() {
   [[ $RUN_SETUP_PROFILES -eq 1 ]] && setup_profiles
   [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
   [[ $RUN_SETUP_GITCONFIG -eq 1 ]] && setup_gitconfig
+
+  [[ $RUN_SETUP_ZSH -eq 1 ]] && setup_zsh
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
@@ -313,24 +317,7 @@ install_dependencies_zsh() {
   zsh_install_bin_path=$(command -v zsh >/dev/null 2>&1 || echo "/usr/bin/zsh")
   # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
-  print_info2 "🚀 ZSH :: Load git submodules"
-  git submodule update -q --init --remote \
-    zsh/themes/spaceship \
-    zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting \
-    zsh/plugins/zsh-history-substring-search
-
-  mkdir -p "$LN_ZSH/custom/"{themes,plugins}
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
-  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme" 1>/dev/null
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
-  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
-  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
-  ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
-
-  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
-  rm -f "${LN_ZSHRC}"
-  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
+  setup_zsh
 
   print_notes "   💡 new installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
 
@@ -443,6 +430,34 @@ setup_tmux() {
   print_info2 "🚀 TMUX :: All symlinks created."
 }
 
+# ZSH :: CREATE LINKS ---------------------------------------------------------
+setup_zsh() {
+  print_info2 "\n🚀 ZSH :: Load git submodules"
+
+  git submodule update -q --init --remote \
+    zsh/themes/spaceship \
+    zsh/plugins/zsh-autosuggestions \
+    zsh/plugins/zsh-syntax-highlighting \
+    zsh/plugins/zsh-history-substring-search
+
+  mkdir -p "$LN_ZSH/custom/"{themes,plugins}
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
+  rm -f "$LN_ZSH/custom/themes/spaceship.zsh-theme"
+  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
+  rm -f "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  rm -f "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  rm -f "$LN_ZSH/custom/plugins/zsh-history-substring-search"
+  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
+
+  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
+  rm -f "${LN_ZSHRC}"
+  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
+  print_info2 "🚀 ZSH :: All symlinks created."
+}
+
 # NVIM :: CREATE LINKS ---------------------------------------------------------
 setup_nvim() {
   print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
@@ -469,10 +484,10 @@ setup_code() {
 # ZED :: CREATE LINKS ----------------------------------------------------------
 setup_zed() {
   mkdir -p "$LN_ZED"
-  print_info2 "🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
+  print_info2 "\n🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
   rm -f "${LN_ZED}/settings.json"
   ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
-  print_info2 "\n🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
+  print_info2 "🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
   rm -f "${LN_ZED}/keymap.json"
   ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
   print_info2 "🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'"
@@ -890,6 +905,7 @@ usage() {
   print_info "     -nsl,          --not-setup-logseq              Skip setup_logseq"
   print_info "     -nsg,          --not-setup-gitconfig           Skip setup_gitconfig"
   print_info "     -ds,           --disable-setups                Skip all setup"
+  print_info "     -szh,          --setup-zsh                     Run setup_zsh (when install zsh this will run auto)"
   print_info "     -ice,          --install-code-ext              Run install install_code_ext"
   print_info "     -ifont,        --install-fonts                 Run install install_fonts"
   print_info "     -ibtop,        --install-btop                  Run install install_btop"
@@ -967,12 +983,16 @@ parse_args() {
     -ds | --disable-setups)
       RUN_SETUP_BIN=0
       RUN_SETUP_TMUX=0
+      # RUN_SETUP_ZSH=0
       RUN_SETUP_NVIM=0
       RUN_SETUP_CODE=0
       RUN_SETUP_ZED=0
       RUN_SETUP_PROFILES=0
       RUN_SETUP_LOGSEQ=0
       RUN_SETUP_GITCONFIG=0
+      ;;
+    -szh | --setup-zsh)
+      RUN_SETUP_ZSH=1
       ;;
     -ice | --install-code-ext)
       RUN_INSTALL_CODE_EXT=1
