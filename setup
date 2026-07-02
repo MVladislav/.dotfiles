@@ -32,15 +32,16 @@ RUN_INSTALL_DEPENDENCIES_ZSH=0
 RUN_INSTALL_DEPENDENCIES_GHOSTTY=0
 
 RUN_SETUP_BIN=1
-RUN_SETUP_TMUX=1
 RUN_SETUP_NVIM=1
-RUN_SETUP_CODE=1
 RUN_SETUP_ZED=1
 RUN_SETUP_PROFILES=1
-RUN_SETUP_LOGSEQ=1
 RUN_SETUP_GITCONFIG=1
 
+RUN_SETUP_TMUX=0
 RUN_SETUP_ZSH=0
+
+RUN_SETUP_CODE=0
+RUN_SETUP_LOGSEQ=0
 
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
@@ -108,21 +109,21 @@ main() {
   [[ $RUN_INSTALL_DEPENDENCIES_DEV -eq 1 ]] && install_dependencies_dev
   [[ $RUN_INSTALL_EXTENDED_TOOLS -eq 1 ]] && install_extended_tools
 
-  [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
   [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
+  [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
   [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
   [[ $RUN_INSTALL_DEPENDENCIES_GHOSTTY -eq 1 ]] && install_dependencies_ghostty
 
   [[ $RUN_SETUP_BIN -eq 1 ]] && setup_bin
-  [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
-  [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
   [[ $RUN_SETUP_ZED -eq 1 ]] && setup_zed
   [[ $RUN_SETUP_PROFILES -eq 1 ]] && setup_profiles
-  [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
   [[ $RUN_SETUP_GITCONFIG -eq 1 ]] && setup_gitconfig
 
+  [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_ZSH -eq 1 ]] && setup_zsh
+  [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
+  [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
@@ -208,42 +209,6 @@ install_extended_tools(){
 
 # ******************************************************************************
 
-# SERVICE :: install tmux ------------------------------------------------------
-install_dependencies_tmux() {
-  print_info2 "\n🚀 TMUX :: install tmux..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=(libevent-dev)
-  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
-    cd "$DEPS_INSTALL_PATH/tmux"
-    bash ./autogen.sh 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    mkdir -p "$DEPS_INSTALL_PATH/tmux"
-    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
-    tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
-    rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
-    cd "$DEPS_INSTALL_PATH/tmux"
-  fi
-
-  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-  make 1>/dev/null
-  make install 1>/dev/null
-  cd - 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_info2 "🚀 TMUX :: tmux installed!"
-}
-
 # SERVICE :: install nvim ------------------------------------------------------
 install_dependencies_nvim() {
   print_info2 "\n🚀 NVIM :: install nvim..."
@@ -279,6 +244,44 @@ install_dependencies_nvim() {
 
   print_notes "   💡 You should also install 'node', which is required by some tools like 'Mason plugins'."
   print_info2 "🚀 NVIM :: nvim installed!"
+}
+
+# SERVICE :: install tmux ------------------------------------------------------
+install_dependencies_tmux() {
+  print_info2 "\n🚀 TMUX :: install tmux..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=(libevent-dev)
+  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
+    cd "$DEPS_INSTALL_PATH/tmux"
+    bash ./autogen.sh 1>/dev/null
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+    mkdir -p "$DEPS_INSTALL_PATH/tmux"
+    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
+    tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
+    rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
+    cd "$DEPS_INSTALL_PATH/tmux"
+  fi
+
+  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+  make 1>/dev/null
+  make install 1>/dev/null
+  cd - 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
+
+  setup_tmux
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 TMUX :: tmux installed!"
 }
 
 # SERVICE :: install zsh -------------------------------------------------------
@@ -317,9 +320,9 @@ install_dependencies_zsh() {
   zsh_install_bin_path=$(command -v zsh >/dev/null 2>&1 || echo "/usr/bin/zsh")
   # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
-  setup_zsh
-
   print_notes "   💡 new installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
+
+  setup_zsh
 
   if [[ "$(basename "$SHELL")" != "zsh" ]]; then
     print_info2 "🚀 ZSH :: Set 'zsh' as new shell für user '$USER'"
@@ -411,6 +414,14 @@ setup_bin() {
   print_info2 "🚀 BIN :: All symlinks created."
 }
 
+# NVIM :: CREATE LINKS ---------------------------------------------------------
+setup_nvim() {
+  print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
+  rm -f "${LN_NVIM_ORIG_BASE}"
+  ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
+  print_info2 "🚀 NVIM :: All symlinks created."
+}
+
 # TMUX :: CREATE LINKS ---------------------------------------------------------
 setup_tmux() {
   print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
@@ -433,7 +444,6 @@ setup_tmux() {
 # ZSH :: CREATE LINKS ---------------------------------------------------------
 setup_zsh() {
   print_info2 "\n🚀 ZSH :: Load git submodules"
-
   git submodule update -q --init --remote \
     zsh/themes/spaceship \
     zsh/plugins/zsh-autosuggestions \
@@ -456,14 +466,6 @@ setup_zsh() {
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
   print_info2 "🚀 ZSH :: All symlinks created."
-}
-
-# NVIM :: CREATE LINKS ---------------------------------------------------------
-setup_nvim() {
-  print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
-  rm -f "${LN_NVIM_ORIG_BASE}"
-  ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
-  print_info2 "🚀 NVIM :: All symlinks created."
 }
 
 # CODE :: CREATE LINKS ---------------------------------------------------------
@@ -875,7 +877,7 @@ install_setup_android_emulator() {
 
 # Function to show usage information
 usage() {
-  print_info "📑 Usage: $0 [options]"
+  print_info "\n📑 Usage: $0 [options]"
   print_info "   Examples:"
   print_info "     $0                                             Run only config setups without installations"
   print_info "     $0 -itools -ifont                              Run config setups without small additional installs"
@@ -889,32 +891,32 @@ usage() {
   print_info "     $0 -it -invim -izsh -itmux                     Install nvim, zsh and tmux with additional tools + config setup"
   print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
   print_info "   Options:"
-  print_info "     -h,            --help                          Show this help message and exit"
-  print_info "     -itools,       --install-additional-tools      Install additional tools [curl git pigz jq rsync fzf wl-clipboard eza bat ripgrep fd-find ...]"
-  print_info "     -idev,         --install-additional-dev        Install additional dev [node rustup go shellcheck ...]"
-  print_info "     -itmux,        --install-dependencies-tmux     Install/update service tmux"
-  print_info "     -invim,        --install-dependencies-nvim     Install/update service nvim"
-  print_info "     -izsh,         --install-dependencies-zsh      Install/update service zsh"
-  print_info "     -ighost,       --install-dependencies-ghostty  Install/update service ghostty"
-  print_info "     -nsb,          --not-setup-bin                 Skip setup_bin"
-  print_info "     -nst,          --not-setup-tmux                Skip setup_tmux"
-  print_info "     -nsv,          --not-setup-nvim                Skip setup_nvim"
-  print_info "     -nsc,          --not-setup-code                Skip setup_code"
-  print_info "     -nsz,          --not-setup-zed                 Skip setup_zed"
-  print_info "     -nsp,          --not-setup-profiles            Skip setup_profiles"
-  print_info "     -nsl,          --not-setup-logseq              Skip setup_logseq"
-  print_info "     -nsg,          --not-setup-gitconfig           Skip setup_gitconfig"
-  print_info "     -ds,           --disable-setups                Skip all setup"
-  print_info "     -szh,          --setup-zsh                     Run setup_zsh (when install zsh this will run auto)"
-  print_info "     -ice,          --install-code-ext              Run install install_code_ext"
-  print_info "     -ifont,        --install-fonts                 Run install install_fonts"
-  print_info "     -ibtop,        --install-btop                  Run install install_btop"
-  print_info "     -ibtop-amd,    --install-btop-amd              Run install install_btop with AMD GPU support"
-  print_info "     -ibtop-intel,  --install-btop-intel            Run install install_btop with intel GPU support"
-  print_info "     -iemu,         --install-android-emulator      Run install install_setup_android_emulator"
-  print_info "     -igh,          --install-github-cli            Run install gh-cli-binary from github releases"
-  print_info "     -upc,          --update-check                  Check if new version for builds exists"
-  print_info "     -s                                             Use 'source' instead 'release' used for install services"
+  print_info "     -h,            --help                             Show this help message and exit"
+  print_info "     -itools,       --install-additional-tools         Install additional tools [curl git pigz jq rsync fzf wl-clipboard eza bat ripgrep fd-find ...]"
+  print_info "     -idev,         --install-additional-dev           Install additional dev [node rustup go shellcheck ...]"
+  print_info "     -invim,        --install-dependencies-nvim        Install/update service nvim"
+  print_info "     -itmux,        --install-dependencies-tmux        Install/update service tmux"
+  print_info "     -izsh,         --install-dependencies-zsh         Install/update service zsh"
+  print_info "     -ighost,       --install-dependencies-ghostty     Install/update service ghostty"
+  print_info "     -nsb,          --not-setup-bin                    Skip setup_bin"
+  print_info "     -nsv,          --not-setup-nvim                   Skip setup_nvim"
+  print_info "     -nsz,          --not-setup-zed                    Skip setup_zed"
+  print_info "     -nsp,          --not-setup-profiles               Skip setup_profiles"
+  print_info "     -nsg,          --not-setup-gitconfig              Skip setup_gitconfig"
+  print_info "     -ds,           --disable-setups                   Skip all setup"
+  print_info "     -stx,          --setup-tmux                       Run setup_tmux (when install tmux, with '-itmux', this will run auto)"
+  print_info "     -szh,          --setup-zsh                        Run setup_zsh (when install zsh, with '-izsh', this will run auto)"
+  print_info "     -scd,          --setup-code                       Run setup_code"
+  print_info "     -sls,          --setup-logseq                     Run setup_logseq"
+  print_info "     -ice,          --install-code-ext                 Run install install_code_ext"
+  print_info "     -ifont,        --install-fonts                    Run install install_fonts"
+  print_info "     -ibtop,        --install-btop                     Run install install_btop"
+  print_info "     -ibtop-amd,    --install-btop-amd                 Run install install_btop with AMD GPU support"
+  print_info "     -ibtop-intel,  --install-btop-intel               Run install install_btop with intel GPU support"
+  print_info "     -iemu,         --install-android-emulator         Run install install_setup_android_emulator"
+  print_info "     -igh,          --install-github-cli               Run install gh-cli-binary from github releases"
+  print_info "     -upc,          --update-check                     Check if new version for builds exists"
+  print_info "     -s                                                Use 'source' instead 'release' used for install services"
 }
 
 # Function to parse command-line arguments
@@ -932,11 +934,11 @@ parse_args() {
     -idev | --install-additional-dev)
       RUN_INSTALL_DEPENDENCIES_DEV=1
       ;;
-    -itmux | --install-dependencies-tmux)
-      RUN_INSTALL_DEPENDENCIES_TMUX=1
-      ;;
     -invim | --install-dependencies-nvim)
       RUN_INSTALL_DEPENDENCIES_NVIM=1
+      ;;
+    -itmux | --install-dependencies-tmux)
+      RUN_INSTALL_DEPENDENCIES_TMUX=1
       ;;
     -izsh | --install-dependencies-zsh)
       RUN_INSTALL_DEPENDENCIES_ZSH=1
@@ -954,19 +956,13 @@ parse_args() {
       RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
       RUN_INSTALL_DEPENDENCIES_NVIM=1
       RUN_INSTALL_DEPENDENCIES_GHOSTTY=1
-      RUN_SETUP_TMUX=0
+      # RUN_SETUP_TMUX=0
       ;;
     -nsb | --not-setup-bin)
       RUN_SETUP_BIN=0
       ;;
-    -nst | --not-setup-tmux)
-      RUN_SETUP_TMUX=0
-      ;;
     -nsv | --not-setup-nvim)
       RUN_SETUP_NVIM=0
-      ;;
-    -nsc | --not-setup-code)
-      RUN_SETUP_CODE=0
       ;;
     -nsz | --not-setup-zed)
       RUN_SETUP_ZED=0
@@ -974,25 +970,31 @@ parse_args() {
     -nsp | --not-setup-profiles)
       RUN_SETUP_PROFILES=0
       ;;
-    -nsl | --not-setup-logseq)
-      RUN_SETUP_LOGSEQ=0
-      ;;
     -nsg | --not-setup-gitconfig)
       RUN_SETUP_GITCONFIG=0
       ;;
     -ds | --disable-setups)
       RUN_SETUP_BIN=0
-      RUN_SETUP_TMUX=0
-      # RUN_SETUP_ZSH=0
       RUN_SETUP_NVIM=0
-      RUN_SETUP_CODE=0
       RUN_SETUP_ZED=0
       RUN_SETUP_PROFILES=0
-      RUN_SETUP_LOGSEQ=0
       RUN_SETUP_GITCONFIG=0
+      # RUN_SETUP_TMUX=0
+      # RUN_SETUP_ZSH=0
+      # RUN_SETUP_CODE=0
+      # RUN_SETUP_LOGSEQ=0
+      ;;
+    -stx | --setup-tmux)
+      RUN_SETUP_TMUX=1
       ;;
     -szh | --setup-zsh)
       RUN_SETUP_ZSH=1
+      ;;
+    -scd | --setup-code)
+      RUN_SETUP_CODE=1
+      ;;
+    -sls | --setup-logseq)
+      RUN_SETUP_LOGSEQ=1
       ;;
     -ice | --install-code-ext)
       RUN_INSTALL_CODE_EXT=1
@@ -1025,14 +1027,16 @@ parse_args() {
       ;;
     -upc | --update-check)
       RUN_SETUP_BIN=0
-      RUN_SETUP_TMUX=0
       RUN_SETUP_NVIM=0
-      RUN_SETUP_CODE=0
       RUN_SETUP_ZED=0
       RUN_SETUP_PROFILES=0
-      RUN_SETUP_LOGSEQ=0
       RUN_SETUP_GITCONFIG=0
+      # RUN_SETUP_TMUX=0
+      # RUN_SETUP_ZSH=0
+      # RUN_SETUP_CODE=0
+      # RUN_SETUP_LOGSEQ=0
 
+      echo
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
       check_for_newer_tag "$VERSION_ZSH_G" "$VERSION_ZSH" "-test"
       check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
@@ -1052,7 +1056,7 @@ parse_args() {
 
 # ******************************************************************************
 
-print_info2 "▶️ Starting script $0 ...\n"
+print_info2 "▶️ Starting script $0 ..."
 
 # Parse command-line arguments
 parse_args "$@"
