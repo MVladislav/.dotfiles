@@ -53,7 +53,7 @@ RUN_INSTALL_ANDROID=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
-VERSION_NVIM=v0.12.2
+VERSION_NVIM=v0.12.3
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9.1
 VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
