@@ -77,11 +77,12 @@
     "show_count_badge": true,
     "folder_icons": true,
     "file_icons": true,
-    "sort_by_path": false,
     "status_style": "icon",
     "collapse_untracked_diff": true,
-    "dock": "left",
-    "tree_view": true
+    "dock": "right",
+    "tree_view": true,
+    "diff_stats": true,
+    "entry_primary_click_action": "file_diff"
   },
   "diff_view_style": "split",
   "session": {
@@ -186,6 +187,19 @@
       "preferred_line_length": 130,
       "format_on_save": "on",
       "use_on_type_format": false
+    },
+    "HTML": {
+      "preferred_line_length": 999,
+      "format_on_save": "on",
+      "formatter": {
+        "language_server": {
+          "name": "vscode-html-language-server"
+        }
+      },
+      "prettier": {
+        "allowed": false
+      },
+      "language_servers": ["vscode-html-language-server", "vtsls", "..."]
     },
     "JavaScript": {
       "code_actions_on_format": {
