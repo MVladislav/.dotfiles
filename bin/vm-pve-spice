@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
+# Proxmox VE VM Helper Script
+# Quickly access and manage VMs on Proxmox from a Linux terminal.
+# Uses Proxmox API, fzf for interactive selection, and virt-viewer for SPICE connections.
+
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 
-# Default values for Proxmox and API credentials
+# -----------------------------------------------------------------------------
+# Global Defaults
+# -----------------------------------------------------------------------------
+
 PVE_NODE="${PVE_NODE:-pve}"
 PVE_PROTOCOL="${PVE_PROTOCOL:-https}"
 PVE_PROXY="${PVE_PROXY:-pve.home.local}"
@@ -13,18 +20,19 @@ PVE_VM_PROCESS="start"
 PVE_VMID=""
 PVE_TOKEN="${PVE_TOKEN:-}"
 
-# ******************************************************************************
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
 
-# Main function
 main() {
   prompt_credentials
 
   if [ -z "$PVE_VMID" ]; then
-    fetch_vm_list
+    fetch_and_select_vm
   fi
 
   if [ -z "$PVE_VMID" ]; then
-    print_error1 "VM ID not provided or selected."
+    print_error "VM ID not provided or selected."
   fi
 
   validate_vmid
@@ -32,9 +40,11 @@ main() {
   launch_spice
 }
 
-# ******************************************************************************
+# -----------------------------------------------------------------------------
+# Core Functions
+# -----------------------------------------------------------------------------
 
-# Function to make API requests
+# Make API request to Proxmox
 api_request() {
   local url="$1"
   local method="$2"
@@ -43,63 +53,93 @@ api_request() {
   curl -f -s -S -k -X "$method" \
     -H "Authorization: PVEAPIToken=$PVE_API_USER=$PVE_TOKEN" \
     ${data:+-d "$data"} \
-    "$url" || {
-    print_error1 "API request failed for URL: $url"
-  }
+    "$url" || print_error "API request failed for URL: $url"
 }
 
-# ******************************************************************************
-
-# Function to prompt for missing API credentials
+# Prompt for missing API credentials
 prompt_credentials() {
   if [ -z "$PVE_API_USER" ]; then
     read -rp "API User: " PVE_API_USER
   fi
-
   if [ -z "$PVE_TOKEN" ]; then
     read -rsp "Token: " PVE_TOKEN
     echo
   fi
 }
 
-# Function to fetch and display VM list
-fetch_vm_list() {
+# Fetch VM list and let user select via fzf
+fetch_and_select_vm() {
   local response
   response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu" "GET")
-  echo "$response" | jq -r '.data | .[] | " \(.status | if . == "stopped" then "🔴" elif . == "running" then "🟢" else . end) \(.vmid) :: \(.name)"' | sort -h
-  read -rp "VM ID: " PVE_VMID
+
+  local vm_list
+  vm_list=$(echo "$response" | jq -r '
+    .data | map(
+      select(.vmid != null) |
+      {
+        vmid: (.vmid | tonumber),
+        display: (
+          (if .status == "stopped" then "🔴"
+           elif .status == "running" then "🟢"
+           else .status end) + " " +
+          (.vmid | tostring) + " :: " + .name
+        )
+      }
+    ) | sort_by(.vmid) | .[].display
+  ')
+
+  if [ -z "$vm_list" ]; then
+    print_error "No VMs found on node $PVE_NODE."
+  fi
+
+  PVE_VMID=$(echo "$vm_list" | fzf --height=40% --reverse --prompt="Select VM: " | awk '{print $2}') || true
 }
 
-# Function to start or stop VM
+# Start or stop VM
 manage_vm() {
   local status
   local response
+
   response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/current" "GET")
-  status=$(echo "$response" | jq -r '.data.qmpstatus')
+  status=$(echo "$response" | jq -r '.data.qmpstatus // .data.status')
 
   if [[ $PVE_VM_PROCESS == "stop" ]]; then
     if [[ $status == "running" ]]; then
-      print_info "Stopping VM ..."
+      print_info "Stopping VM $PVE_VMID..."
       api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/shutdown" "POST" >/dev/null
+      print_info "VM $PVE_VMID stopped."
     else
-      print_info "VM is not running."
+      print_info "VM $PVE_VMID is not running."
+    fi
+    exit 0
+  elif [[ $PVE_VM_PROCESS == "kill" ]]; then
+    if [[ $status == "running" ]]; then
+      print_info "Killing VM $PVE_VMID..."
+      api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/stop?overrule-shutdown=1" "POST" >/dev/null
+      print_info "VM $PVE_VMID killed."
+    else
+      print_info "VM $PVE_VMID is not running."
     fi
     exit 0
   fi
 
   if [[ $status == "stopped" ]]; then
-    print_info "VM is stopped. Starting VM ..."
+    print_info "VM $PVE_VMID is stopped. Starting..."
     api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/start" "POST" >/dev/null
-    print_info "Waiting 3 seconds before attempting a Spice connection ..."
+    print_info "Waiting 3 seconds before attempting a SPICE connection..."
     sleep 3
   fi
 }
 
-# Function to generate and launch Spice configuration
+# Generate and launch SPICE configuration
 launch_spice() {
   local response
   local pve_tmp
-  local spice_keys=("secure-attention" "delete-this-file" "proxy" "type" "ca" "toggle-fullscreen" "title" "host" "password" "host-subject" "release-cursor" "tls-port")
+  local spice_keys=(
+    "secure-attention" "delete-this-file" "proxy" "type" "ca"
+    "toggle-fullscreen" "title" "host" "password" "host-subject"
+    "release-cursor" "tls-port"
+  )
 
   response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/spiceproxy" "POST" "proxy=$PVE_PROXY")
   pve_tmp="$(mktemp).vv"
@@ -109,90 +149,105 @@ launch_spice() {
     for key in "${spice_keys[@]}"; do
       echo "$key=$(echo "$response" | jq -r ".data.\"$key\"" | sed ':a;N;$!ba;s/\n/\\\\n/g')"
     done
-    # echo "resolution=3840x2160"
     echo "resolution=1920x1080"
-    echo "color-depth=16"      # 16|24
-    echo "disable-effects=all" # wallpaper, font-smooth, animation or all
+    echo "color-depth=16"
+    echo "disable-effects=all"
     echo "image-compression=off"
     echo "streaming-video=all"
     echo "fullscreen=0"
-  } >"$pve_tmp"
+  } > "$pve_tmp"
 
   if false && command -v flatpak &>/dev/null && flatpak list | grep -q 'org.virt_manager.virt-viewer'; then
     nohup flatpak run org.virt_manager.virt-viewer "$pve_tmp" >/dev/null 2>&1 &
   elif command -v virt-viewer &>/dev/null; then
     nohup remote-viewer --auto-resize=always "$pve_tmp" >/dev/null 2>&1 &
   else
-    print_error1 "virt-viewer is not installed. Please install it via Flatpak or your package manager."
+    print_error "virt-viewer is not installed. Install via Flatpak or your package manager."
   fi
 }
 
-# ******************************************************************************
+# -----------------------------------------------------------------------------
+# Helper Functions
+# -----------------------------------------------------------------------------
 
-# Function to check for required dependencies
 check_dependencies() {
-  for cmd in jq curl; do
+  for cmd in jq curl fzf; do
     if ! command -v "$cmd" >/dev/null; then
-      print_error1 "Command '$cmd' is required but not installed."
+      print_error "Required command '$cmd' is not installed."
     fi
   done
 }
 
-# Function to validate VM ID
 validate_vmid() {
   if [[ ! $PVE_VMID =~ ^[0-9]+$ ]]; then
-    print_error1 "Invalid VM ID. VM ID must be a number."
+    print_error "Invalid VM ID. Must be a number."
   fi
 }
 
-# ******************************************************************************
+# -----------------------------------------------------------------------------
+# Output Functions
+# -----------------------------------------------------------------------------
 
-print_info() { echo -e "$1"; }
-print_error1() {
-  echo -e "🔴 ERROR: $1" >&2
-  exit 1
-}
-print_error2() { echo -e "🔴 ERROR: $1" >&2; }
+print_info()  { echo "$1"; }
+print_error() { echo "ERROR: $1" >&2; exit 1; }
+print_error2() { echo "ERROR: $1" >&2; }
+
+# -----------------------------------------------------------------------------
+# Argument Parsing
+# -----------------------------------------------------------------------------
 
 usage() {
-  print_info "📖 Description:"
-  print_info "     This script interacts with a Proxmox Virtual Environment (PVE) to manage VMs via the PVE API."
-  print_info "     It can start, stop, and connect to VMs using virt-viewer or a similar tool."
-  print_info ""
-  print_info "📖 Usage: $0 [options]"
-  print_info "📖 Options:"
-  print_info "     -h, --help          Show this help message and exit"
-  print_info "     -id, --vm-id <ID>   Specify the VM ID"
-  print_info "     -s, --stop          Stop the specified VM"
+  echo "Usage: $(basename "$0") [options]"
+  echo ""
+  echo "Options:"
+  echo "  -h, --help          Show this help message"
+  echo "  -id, --vm-id <ID>   Specify the VM ID"
+  echo "  -s, --stop          Stop the specified VM"
+  echo "  -k, --kill          Overrule shutdown the specified VM"
+  echo "  -d, --debug         Enable debug mode"
+  echo ""
+  echo "Description:"
+  echo "  Manage and connect to Proxmox VMs via SPICE."
+  echo "  Uses fzf for interactive VM selection if no ID is provided."
+  echo ""
+  echo "Proxmox API User Setup:"
+  echo "  To create a restricted API user for this script:"
+  echo "    pveum group add spice --comment 'Spice vm access group'"
+  echo "    pveum user add api_spice@pam --groups spice"
+  echo "    pveum user token add api_spice@pam spice --privsep 0"
+  echo "    pveum acl modify /vms --roles PVEVMUser --groups 'spice' --propagate 1"
+  echo "  Use the generated token (format: user@realm!tokenid=tokenvalue) as PVE_TOKEN."
 }
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
-    -h | --help)
-      usage
-      exit 0
-      ;;
-    -id | --vm-id)
-      PVE_VMID="$2"
-      shift
-      ;;
-    -s | --stop)
-      PVE_VM_PROCESS="stop"
-      ;;
-    *)
-      print_error2 "Unknown option: $1"
-      usage
-      exit 1
-      ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      -id|--vm-id)
+        PVE_VMID="$2"
+        shift
+        ;;
+      -s|--stop)
+        PVE_VM_PROCESS="stop"
+        ;;
+      -k|--kill)
+        PVE_VM_PROCESS="kill"
+        ;;
+      *)
+        print_error2 "Unknown option: $1"
+        usage
+        exit 1
+        ;;
     esac
     shift
   done
 }
 
-# ******************************************************************************
+# -----------------------------------------------------------------------------
 
-# Parse arguments and run main script
 check_dependencies
 parse_args "$@"
 main
