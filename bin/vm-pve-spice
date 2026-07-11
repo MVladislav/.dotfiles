@@ -36,6 +36,12 @@ main() {
   fi
 
   validate_vmid
+
+  if [[ $PVE_VM_PROCESS == "status" ]]; then
+    show_vm_status
+    exit 0
+  fi
+
   manage_vm
   launch_spice
 }
@@ -93,6 +99,46 @@ fetch_and_select_vm() {
   fi
 
   PVE_VMID=$(echo "$vm_list" | fzf --height=40% --reverse --prompt="Select VM: " | awk '{print $2}') || true
+}
+
+# Show VM status and IP addresses
+show_vm_status() {
+  local response
+  local status
+  local ip_addresses=()
+
+  # Get VM power status
+  response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/status/current" "GET")
+  status=$(echo "$response" | jq -r '.data.qmpstatus // .data.status // "unknown"')
+  print_info "VM $PVE_VMID status: $status"
+
+  # Get network interfaces from QEMU guest agent
+  local net_response
+  net_response=$(api_request "$PVE_PROTOCOL://$PVE_PROXY:$PVE_PORT/api2/json/nodes/$PVE_NODE/qemu/$PVE_VMID/agent/network-get-interfaces" "GET" 2>/dev/null) || true
+
+  if [[ -n "$net_response" && "$net_response" != "null" ]]; then
+    # Extract all IPv4 addresses (excluding loopback)
+    while IFS= read -r ip; do
+      [[ -n "$ip" ]] && ip_addresses+=("$ip")
+    done < <(echo "$net_response" | jq -r '
+      .data.result[] |
+      select(.name != "lo") |
+      .["ip-addresses"][]? |
+      select(.["ip-address-type"] == "ipv4") |
+      .["ip-address"] // empty
+    ')
+
+    if [[ ${#ip_addresses[@]} -gt 0 ]]; then
+      print_info "IP Addresses:"
+      for ip in "${ip_addresses[@]}"; do
+        print_info "  - $ip"
+      done
+    else
+      print_info "No IPv4 addresses found."
+    fi
+  else
+    print_info "Guest agent not responding or not installed."
+  fi
 }
 
 # Start or stop VM
@@ -202,8 +248,9 @@ usage() {
   echo "Options:"
   echo "  -h, --help          Show this help message"
   echo "  -id, --vm-id <ID>   Specify the VM ID"
-  echo "  -s, --stop          Stop the specified VM"
-  echo "  -k, --kill          Overrule shutdown the specified VM"
+  echo "  -S, --stop          Stop the specified VM"
+  echo "  -K, --kill          Overrule shutdown the specified VM"
+  echo "  -s, --status        Show VM status and IP addresses, then exit"
   echo "  -d, --debug         Enable debug mode"
   echo ""
   echo "Description:"
@@ -230,11 +277,14 @@ parse_args() {
         PVE_VMID="$2"
         shift
         ;;
-      -s|--stop)
+      -S|--stop)
         PVE_VM_PROCESS="stop"
         ;;
-      -k|--kill)
+      -K|--kill)
         PVE_VM_PROCESS="kill"
+        ;;
+      -s|--status)
+        PVE_VM_PROCESS="status"
         ;;
       *)
         print_error2 "Unknown option: $1"
