@@ -2,6 +2,36 @@
 
 VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:147.0) Gecko/20100101 Firefox/147.0'}
 
+
+######################################################################
+##
+## HELPER:: default
+##
+######################################################################
+get_distro() {
+    if [[ -f /etc/os-release ]]; then
+        local id
+        id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        if [[ -n "$id" ]]; then
+            echo "${id}"
+            return
+        fi
+    fi
+    echo "linux"
+}
+get_distro_version() {
+    if [[ -f /etc/os-release ]]; then
+        local id version
+        id=$(grep '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        version=$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        if [[ -n "$id" && -n "$version" ]]; then
+            echo "${id}:${version}"
+            return
+        fi
+    fi
+    echo "linux:unknown"
+}
+
 ######################################################################
 ##
 ## HELPER:: converter

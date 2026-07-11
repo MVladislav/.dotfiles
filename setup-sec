@@ -57,8 +57,12 @@ JTR_ROCM_FOLDER="/opt/rocm"
 main() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
-  [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
   [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
+  [[ $RUN_INSTALL_TOOLS_REVERSE -eq 1 ]] && install_tools_reverse
+  [[ $RUN_INSTALL_TOOLS_VULN_SCAN -eq 1 ]] && install_tools_vuln_scan
+  [[ $RUN_INSTALL_TOOLS_HARD_SCAN -eq 1 ]] && install_tools_hard_scan
+
+  [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
   [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
   [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
   [[ $RUN_INSTALL_TIO -eq 1 ]] && install_tio
@@ -72,23 +76,6 @@ main() {
 }
 
 # ******************************************************************************
-
-# SERVICE :: install ROCM ------------------------------------------------------
-install_rocm() {
-  print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
-
-  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb \
-    -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
-  $RUN_WITH_SUDO apt install -y "$DEPS_INSTALL_PATH/amdgpu-install.deb"
-  $RUN_WITH_SUDO apt update
-  $RUN_WITH_SUDO apt install -y python3-setuptools python3-wheel
-  $RUN_WITH_SUDO usermod -a -G render,video "$LOGNAME"
-  $RUN_WITH_SUDO apt install -y rocm
-  # $RUN_WITH_SUDO amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
-
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_info2 "🚀 ROCM :: AMD ROCm support installed!"
-}
 
 # SERVICE :: install TOOLS -----------------------------------------------------
 install_tools() {
@@ -126,36 +113,9 @@ install_tools() {
   go_github_commit_date_and_download 'tomnomnom/waybackurls'
   go_github_commit_date_and_download 'tomnomnom/gf'
 
-  ### TOOLS ###
-  curl -sSfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
-  curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b "$USER_LOCAL_PREFIX_BIN"
-  DOCKLE_VERSION=0.4.15
-  curl -sSfL "https://github.com/goodwithtech/dockle/releases/download/v${DOCKLE_VERSION}/dockle_${DOCKLE_VERSION}_Linux-64bit.tar.gz" | tar -xz -C "$USER_LOCAL_PREFIX_BIN" dockle
-
   ### MicroShit ###
-  # sudo snap install dotnet --classic
   # sudo snap install powershell --classic
 
-  ### REVERSE ###
-  # print_notes "   📥 installing 'exiftool'"
-  # sudo apt install exiftool
-  # print_notes "   📥 installing 'binwalk'"
-  # sudo apt install build-essential libfontconfig1-dev liblzma-dev
-  # cargo install binwalk
-  # print_notes "   📥 installing 'hexwalk'"
-  # sudo apt install hexwalk
-  # print_notes "   📥 installing 'volatility3'"
-  # python3 -m venv "$HOME/.venv" && source "$HOME/.venv/bin/activate"
-  # python3 -m pip install volatility3
-
-  ### OTHER ###
-  # git clone https://github.com/icsharpcode/ILSpy "$VM_SEC_OPT/ILSpy" && cd "$VM_SEC_OPT/ILSpy" && git submodule update --init --recursive
-
-  # print_notes "   📥 installing 'radare2'"
-  # sudo snap install radare2 --classic
-  # sudo snap install iaito --classic
-  # print_notes "   📥 installing 'ghidra'"
-  # sudo snap install ghidra
   # print_notes "   📥 installing 'dotnet'"
   # # sudo snap install dotnet --classic
   # sudo apt install dotnet-sdk-8.0
@@ -166,10 +126,73 @@ install_tools() {
   # sudo apt install wine32 wine64 winetricks
   # winetricks dotnet48
 
+  ### OTHER ###
+  # git clone https://github.com/icsharpcode/ILSpy "$VM_SEC_OPT/ILSpy" && cd "$VM_SEC_OPT/ILSpy" && git submodule update --init --recursive
+
+  # print_notes "   📥 installing 'radare2'"
+  # sudo snap install radare2 --classic
+  # print_notes "   📥 installing 'iaito'"
+  # sudo snap install iaito --classic
+  # print_notes "   📥 installing 'ghidra'"
+  # sudo snap install ghidra
+
   print_info2 "🚀 TOOLS :: Additional tools installed!"
 
   print_info2 "\n🚀 TOOLS :: Extend manually install:"
   print_info2 "     - https://addons.mozilla.org/en-US/firefox/addon/hackbar/"
+}
+
+# SERVICE :: install TOOLS REVERSE ---------------------------------------------
+install_tools_reverse() {
+  print_info2 "\n🚀 TOOLS :: Installing additional reverse tools..."
+  print_notes "   📥 installing 'exiftool'"
+  sudo apt install exiftool
+  print_notes "   📥 installing 'binwalk'"
+  sudo apt install build-essential libfontconfig1-dev liblzma-dev
+  cargo install binwalk
+  print_notes "   📥 installing 'hexwalk'"
+  sudo apt install hexwalk
+  print_notes "   📥 installing 'volatility3'"
+  # shellcheck disable=SC1091
+  python3 -m venv "$HOME/.venv" && source "$HOME/.venv/bin/activate"
+  python3 -m pip install volatility3
+  print_info2 "🚀 TOOLS :: Additional reverse tools installed!"
+}
+
+# SERVICE :: install TOOLS VULNERABILITY SCANNER -------------------------------
+install_tools_vuln_scan() {
+  print_info2 "\n🚀 TOOLS :: Installing additional vulnerability scan tools..."
+  download_github_binary 'https://github.com/anchore/grype' 'grype.*linux.*amd64\.tar\.gz'
+  download_github_binary 'https://github.com/aquasecurity/trivy' 'trivy.*Linux.*64bit\.tar\.gz'
+  print_info2 "🚀 TOOLS :: Additional vulnerability scan tools installed!"
+}
+
+# SERVICE :: install TOOLS HARDENING SCANNER ------------------------------------------------------
+install_tools_hard_scan() {
+  print_info2 "\n🚀 TOOLS :: Installing additional hardening scan tools..."
+  download_github_binary 'https://github.com/anchore/syft' 'syft.*linux.*amd64\.tar\.gz'
+  download_github_binary 'https://github.com/mondoohq/cnspec' 'cnspec.*linux.*amd64\.tar\.gz'
+  download_github_binary 'https://github.com/goodwithtech/dockle' 'dockle.*Linux.*64bit\.tar\.gz'
+  print_info2 "🚀 TOOLS :: Additional hardening scan tools installed!"
+}
+
+# ******************************************************************************
+
+# SERVICE :: install ROCM ------------------------------------------------------
+install_rocm() {
+  print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
+
+  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb \
+    -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  $RUN_WITH_SUDO apt install -y "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  $RUN_WITH_SUDO apt update
+  $RUN_WITH_SUDO apt install -y python3-setuptools python3-wheel
+  $RUN_WITH_SUDO usermod -a -G render,video "$LOGNAME"
+  $RUN_WITH_SUDO apt install -y rocm
+  # $RUN_WITH_SUDO amdgpu-install --accept-eula --no-dkms --no-32 --usecase=graphics,rocm
+
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_info2 "🚀 ROCM :: AMD ROCm support installed!"
 }
 
 # SERVICE :: install JOHN ------------------------------------------------------

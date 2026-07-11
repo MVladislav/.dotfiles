@@ -11,14 +11,102 @@ VM_SEC_USER_AGENT=${VM_SEC_USER_AGENT:-'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; 
 # shellcheck disable=SC2139
 alias whatweb="whatweb -U='${VM_SEC_USER_AGENT}'"
 
-alias trivy-img='trivy image --disable-telemetry --severity "CRITICAL,HIGH"'
-alias trivy-img-sarif='trivy-img -f sarif -o trivy-results.sarif'
-alias trivy-img-html='trivy-img --format template --template "@$VM_SEC_LISTS_TEMPLATES/trivy-html.tpl" -o trivy-results.html'
-alias grype='grype --scope all-layers --only-fixed'
-alias grype-sarif='grype -o sarif --file grype-results.sarif'
-alias grype-html='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-html.tmpl" --file grype-results.html'
-alias grype-md='grype -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-markdown.tmpl" --file grype-results.md'
-alias dockle-sarif='dockle --exit-code 1 --format sarif --output dockle-results.sarif'
+# Syft - https://github.com/anchore/syft
+# Usage: syft <target> [flags]
+#   Target can be: . (current dir), <image> (container), docker:<image>, etc.
+alias syft='syft'
+alias syft-cyclonedx='syft -o cyclonedx-json=syft-sbom-cyclonedx.json'
+alias syft-spdx='syft -o spdx-json=syft-sbom-spdx.json'
+
+# Grype - https://github.com/anchore/grype
+# Usage: grype <target> [flags]
+#   Target can be: <image>, ./<directory>, etc.
+alias grype='grype --scope all-layers'
+alias grype-local='grype --distro "$(get_distro_version)"'
+alias grype-local-sarif='grype-local -o sarif --file grype-sarif.json'
+alias grype-local-sbom='grype-local -o cyclonedx-json --file grype-sbom-cyclonedx.json'
+alias grype-local-html='grype-local -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-html.tmpl" --file grype-results.html'
+alias grype-local-md='grype-local -o template -t "$VM_SEC_LISTS_TEMPLATES/grype-markdown.tmpl" --file grype-results.md'
+
+# Trivy - https://github.com/aquasecurity/trivy
+# Usage: trivy image <image> [flags]
+alias trivy-local='trivy fs --disable-telemetry --severity "CRITICAL,HIGH" --distro "$(get_distro)"'
+alias trivy-local-sarif='trivy-local -f sarif -o trivy-results.sarif'
+#alias trivy-local-html='trivy-local --format template --template "@$VM_SEC_LISTS_TEMPLATES/trivy-html.tpl" -o trivy-results.html'
+alias trivy-local-sbom-spdx='trivy-local --format spdx-json -o trivy-sbom-spdx.json'
+alias trivy-local-sbom-cyclonedx='trivy-local --format cyclonedx -o trivy-sbom-cyclonedx.json'
+alias trivy-docker='trivy image --disable-telemetry --severity "CRITICAL,HIGH"'
+alias trivy-docker-sarif='trivy-docker -f sarif -o trivy-results.sarif'
+#alias trivy-docker-html='trivy-docker --format template --template "@$VM_SEC_LISTS_TEMPLATES/trivy-html.tpl" -o trivy-results.html'
+alias trivy-docker-sbom-spdx='trivy-docker --format spdx-json -o trivy-sbom-spdx.json'
+alias trivy-docker-sbom-cyclonedx='trivy-docker --format cyclonedx -o trivy-sbom-cyclonedx.json'
+
+# Mondoo - https://github.com/mondoohq/cnspec
+# Note: Mondoo CLI uses cnspec; for container scanning, use: cnspec scan docker <image>
+# Usage: mondoo scan <target> [flags]
+alias mondoo='cnspec scan --discover=auto --incognito'
+alias mondoo-local='mondoo local --discover=auto --incognito'
+alias mondoo-local-json='mondoo-local -o json' # mondoo-results.json
+alias mondoo-docker='mondoo container'
+alias mondoo-docker-json='mondoo-docker -o json' # mondoo-results.json
+
+# Dockle - https://github.com/goodwithtech/dockle
+# Usage: dockle <image> [flags]
+alias dockle='dockle --exit-code 1'
+alias dockle-sarif='dockle -f sarif -o dockle-results.sarif'
+
+tcpdump-pcap() {
+    # Check if tcpdump is installed
+    command -v tcpdump >/dev/null 2>&1 || {
+        echo "Error: tcpdump is not installed. Please install it and try again." >&2
+        return 1
+    }
+
+    # Usage check
+    if [ "$#" -lt 1 ]; then
+        echo "Usage: tcpdump-pcap <interface> [output_base] [max_size_mb] [max_files]"
+        echo "Example: tcpdump-pcap eth0 /tmp/capture 100 5"
+        return 1
+    fi
+
+    local interface="${1}"
+    local output_base="${2:-${OUTFILE:-/tmp/tcpdump}}"
+    local max_size_mb="${3:-100}"  # Default: 100MB per file
+    local max_files="${4:-5}"      # Default: 5 rotated files
+
+    # Validate interface
+    if ! ip link show "$interface" &>/dev/null; then
+        echo "Error: Interface '$interface' not found." >&2
+        return 1
+    fi
+    local output_dir timestamp output_file
+
+    # Create output directory if needed
+    output_dir=$(dirname "$output_base")
+    if [ -n "$output_dir" ] && [ ! -d "$output_dir" ]; then
+        mkdir -p "$output_dir" || { echo "Error: Cannot create directory '$output_dir'." >&2; return 1; }
+    fi
+
+    # Build output filename with timestamp
+    timestamp=$(date +"%Y%m%d_%H%M%S")
+    output_file="${output_base}_${timestamp}.pcap"
+
+    # Smart capture options
+    tcpdump -i "$interface" \
+           -w "$output_file" \
+           -s0 \
+           -C "$max_size_mb" \
+           -W "$max_files" \
+           -U \
+           -n \
+           -nn \
+           -q \
+           -tttt \
+           --immediate-mode \
+           --buffer-size=1000000
+
+    echo "Capturing on $interface -> $output_file (max $max_size_mb MB, $max_files files)"
+}
 
 ######################################################################
 ##
