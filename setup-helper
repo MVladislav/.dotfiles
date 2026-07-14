@@ -131,7 +131,7 @@ download_github_binary() {
   fi
 
   # Check for required tools
-  for cmd in curl jq; do
+  for cmd in file curl jq; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
       print_error "❌ Required command '$cmd' not found."
       return 1
