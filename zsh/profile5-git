@@ -24,6 +24,8 @@ if check_command_q git; then
       return 1
     fi
   }
+
+  alias git_bare='git init --bare my-repo.git'
   alias git_rei='git rm -r --cached . && git add . && git commit -m "refactor: reapply .gitignore rules"'
 
   alias git_ss='git status --short'
