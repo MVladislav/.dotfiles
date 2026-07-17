@@ -293,8 +293,8 @@ restore_zfs_info() {
 
 # Function to list SSH hosts from ~/.ssh/config using fzf
 choose_remote_host() {
-  local ssh_config=~/.ssh/config
-  if [[ ! -f $ssh_config ]]; then
+  local ssh_config="$HOME/.ssh/config"
+  if [[ ! -f "$ssh_config" ]]; then
     echo "No SSH config found at $ssh_config" >&2
     exit 1
   fi
