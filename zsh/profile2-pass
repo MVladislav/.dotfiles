@@ -20,7 +20,7 @@ if check_command_q pass; then
     use_gpg=$(echo -e "existing\nnew" | fzf --height=~40% --prompt="Create new GPG key or use existing? ")
     if [[ "$use_gpg" == "new" ]]; then
       echo "NOTE: Follow the prompts: '9' -> '1' -> '0' -> 'y' -> enter info -> 'O' -> set password"
-      gpg --pinentry-mode loopback --full-generate-key
+      gpg --full-generate-key --pinentry-mode loopback
     fi
 
     # all_keys=$(gpg --list-secret-keys --keyid-format=long --with-colons |
@@ -121,7 +121,7 @@ if check_command_q pass; then
     echo "Exported '$pass_name' to '$pass_name'."
   }
 
-  vm_pass_import_secrets_recursiv() {
+  vm_pass_import_secrets_recursive() {
     local search_path="${1:-.}"
     find "$search_path" \
       -type d \( -name ".password-store" -o -name ".git" \) -prune \
@@ -130,6 +130,21 @@ if check_command_q pass; then
       vm_pass_import_file "$file"
     done
   }
+
+  if check_command_q git && check_command_q scp-r; then
+    vm_pass_sync_ssh() {
+      local ssh_host
+      local ssh_config="$HOME/.ssh/config"
+      [[ ! -f "$ssh_config" ]] && { echo "No SSH config found at $ssh_config" >&2; return 1; }
+
+      ssh_host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
+      [[ -z $ssh_host ]] && { echo "No remote host selected. Exiting." >&2; return 1; }
+
+      [[ ! -d "$PASSWORD_STORE_DIR" ]] && { echo "No PASS config found at '$PASSWORD_STORE_DIR'" >&2; return 1; }
+      echo "Running: scp-r '$PASSWORD_STORE_DIR' '$ssh_host:'"
+      scp-r "$PASSWORD_STORE_DIR" "$ssh_host:"
+    }
+  fi
 
   if check_command_q docker; then
     vm_pass_import_docker_secrets() {
