@@ -10,14 +10,22 @@ main() {
   # - https://github.com/R0GGER/public-iperf3-servers
   # - https://iperf.fr/iperf-servers.php
   local servers=(
-    'a209.speedtest.wobcom.de:5201' # 1
-    'a205.speedtest.wobcom.de:5201' # 2
-    'speedtest.wobcom.de:5201'      # 3
-    'speedtest.myloc.de:5201'       # 4
-    'speedtest.lu.buyvm.net:5201'   # 5
-    'iperf3.moji.fr:5201'           # 6
-    'speedtest.shinternet.ch:5200'  # 7
-    'speedtest.init7.net:5201'      # 8
+    'speedtest.wtnet.de:5200' # 40
+    'speedtest.wtnet.de:5203' # 40
+    'speedtest.wtnet.de:5206' # 40
+    'speedtest.wtnet.de:5209' # 40
+    'a110.speedtest.wobcom.de:5201' # 2x25
+    'a205.speedtest.wobcom.de:5201' # 2x25
+    'a208.speedtest.wobcom.de:5201' # 2x25
+    'a209.speedtest.wobcom.de:5201' # 2x25
+    'a210.speedtest.wobcom.de:5201' # 2x25
+    'a400.speedtest.wobcom.de:5201' # 2x25
+    'speedtest.wobcom.de:5201' # 2x25
+    'iperf3.moji.fr:5201' # 100 FR
+    'speedtest.shinternet.ch:5200' # 10 CH
+    'speedtest.init7.net:5201' # 20 CH
+    'speedtest.lu.buyvm.net:5201' # ? LU
+    'speedtest.myloc.de:5201' #
   )
   local servers_extended=(
     'manual'
@@ -25,13 +33,35 @@ main() {
   local use_docker="native"
 
   # EXAMPLE: export VM_TEST_SPEED_SERVERS=$'192.168.1.1:5201\n192.168.1.1:5201'
-  [[ -v VM_TEST_SPEED_SERVERS ]] || VM_TEST_SPEED_SERVERS=()
+  [[ -v VM_TEST_SPEED_SERVERS ]] || VM_TEST_SPEED_SERVERS=""
+
+  # Define icons
+  local public_icon="🌍"
+  local manual_icon="✏️"
+  local local_icon="🏠"
+
+  # Build fzf list with icons
+  local vm_servers_array s fzf_list=()
+  for s in "${servers[@]}"; do
+    fzf_list+=("$public_icon $s")
+  done
+  if [[ -n "$VM_TEST_SPEED_SERVERS" ]]; then
+    mapfile -t vm_servers_array <<< "$VM_TEST_SPEED_SERVERS"
+    for s in "${vm_servers_array[@]}"; do
+      [ -z "$s" ] && continue  # Skip empty lines
+      fzf_list+=("$local_icon $s")
+    done
+  fi
+  for s in "${servers_extended[@]}"; do
+    fzf_list+=("$manual_icon $s")
+  done
 
   if command -v fzf >/dev/null 2>&1; then
     if command -v docker >/dev/null 2>&1; then
       use_docker=$(printf "native\ndocker\n" | fzf --height=~20% --prompt="Run mode: " --cycle) || exit 1
     fi
-    selected_entry=$(printf "%s\n" "${servers[@]}" "${VM_TEST_SPEED_SERVERS[@]}" "${servers_extended[@]}" | fzf --no-sort --height=~40% --prompt="Choose a server to use: " --cycle) || exit 1
+    selected_entry=$(printf "%s\n" "${fzf_list[@]}" | fzf --no-sort --height=~40% --prompt="Choose a server to use: " --cycle) || exit 1
+    selected_entry="${selected_entry#? }"  # Trim icon
     if [[ -n "$selected_entry" && "$#" -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
       shift
     fi
