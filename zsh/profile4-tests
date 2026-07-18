@@ -25,7 +25,4 @@ vm_quick_iperf() {
     return 1
   fi
 }
-alias vm_test_speed_local='clear && iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
-alias vm_test_speed_local_docker='clear && docker run -it --rm networkstatic/iperf3 -p 5201 -Tl1 -4 -b0 -i3 -O1 -P1 -t0 -c'
 alias vm_test_speed_pub_py='curl -s https://raw.githubusercontent.com/sivel/speedtest-cli/master/speedtest.py | python3 - --secure'
-# https://github.com/R0GGER/public-iperf3-servers | https://iperf.fr/iperf-servers.php

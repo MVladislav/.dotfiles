@@ -6,6 +6,9 @@ trap 'echo "Script interrupted by user. Exiting..."; exit 1' SIGINT
 # --- MAIN ---------------------------------------------------------------------
 main() {
   local selected_entry server port
+  # Lists:
+  # - https://github.com/R0GGER/public-iperf3-servers
+  # - https://iperf.fr/iperf-servers.php
   local servers=(
     'a209.speedtest.wobcom.de:5201' # 1
     'a205.speedtest.wobcom.de:5201' # 2
