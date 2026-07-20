@@ -506,12 +506,12 @@ setup_zed() {
 
 # PROFILES :: CREATE LINKS -----------------------------------------------------
 setup_profiles() {
-  print_info2 "\n🚀 PROFILES :: Create symlink for './zsh/profile-append' as '$LN_PROFILES_01'"
+  print_info2 "\n🚀 PROFILES :: Create symlink for './profiles/profile-append' as '$LN_PROFILES_01'"
   rm -f "${LN_PROFILES_01}"
-  ln -sf "${PWD}/zsh/profile-append" "${LN_PROFILES_01}"
-  print_info2 "🚀 PROFILES :: Create symlink for './zsh/profile-sec' as '$LN_PROFILES_02'"
+  ln -sf "${PWD}/profiles/profile-append" "${LN_PROFILES_01}"
+  print_info2 "🚀 PROFILES :: Create symlink for './profiles/profile-sec' as '$LN_PROFILES_02'"
   rm -f "${LN_PROFILES_02}"
-  ln -sf "${PWD}/zsh/profile-sec" "${LN_PROFILES_02}"
+  ln -sf "${PWD}/profiles/profile-sec" "${LN_PROFILES_02}"
 
   local PROFILE_SECRETS="${HOME}/.profile-secrets"
   print_info2 "🚀 PROFILES :: Create secrets file as '$PROFILE_SECRETS'"
