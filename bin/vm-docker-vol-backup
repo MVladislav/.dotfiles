@@ -1,21 +1,27 @@
 #!/usr/bin/env bash
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
+
+# --- Error Handling ----------------------------------------------------------
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 trap "echo 'ERROR: Script failed: see failed command above. Exiting.'; exit 1" ERR
 trap cleanup EXIT ERR
 
-# --- Global Variables ---------------------------------------------------------
-BACKUP_MODE=''       # 'stop' or 'scale'
+# --- Global Variables --------------------------------------------------------
+# Backup mode
+BACKUP_MODE='none'   # 'stop', 'scale', or 'none'
 RESTORE_DOCKER='no'  # 'yes' or 'no'
 SCALE_DOWN='no'      # 'yes' or 'no'
-RESTORE_SCALE='no'    # 'yes' or 'no'
-REMOTE_MODE='local'
+RESTORE_SCALE='no'   # 'yes' or 'no'
+REMOTE_MODE='local'  # 'local' or 'remote'
 
+# Docker context
 RUN_WITH_SUDO=''
 REMOTE_HOST=''
 ORIGINAL_DOCKER_CONTEXT='default'
+DOCKER_NAMESPACE=''   # Namespace for user volumes (e.g., "100000")
 
+# Backup settings
 BACKUP_FILE_NAME_INFIX=''
 CURRENT_USER="${SUDO_USER:-$(logname)}"
 BACKUP_DATE=$(date +'%Y-%m-%d-%H-%M')
@@ -23,6 +29,7 @@ BACKUP_SRC='/var/lib/docker/volumes'
 BACKUP_DEST='.'
 VERBOSE='' #v
 
+# Docker state
 DOCKER_IS_SWARM_MODE=''
 DOCKER_RUNNING_SERVICE=''
 DOCKER_ORIGINAL_SCALES=()
@@ -32,26 +39,47 @@ DOCKER_PAUSED_CONTAINERS=()
 main() {
   command -v "fzf" &>/dev/null || { echo "ERROR: Missing dependency: 'fzf'. Install it or add to PATH." >&2; exit 1; }
 
-  BACKUP_MODE=$(echo -e "stop\nscale\nnone" | fzf --prompt="Backup mode (stop Docker or scale/pause containers): ")
+  # Step 1: Select backup mode
+  BACKUP_MODE=$(echo -e "stop\nscale\nnone" | fzf --prompt="Backup mode: ")
+
+  # Step 2: Configure based on backup mode
   if [[ "$BACKUP_MODE" == "stop" ]]; then
     RESTORE_DOCKER=$(echo -e "yes\nno" | fzf --prompt="Start Docker after backup: ")
   elif [[ "$BACKUP_MODE" == "scale" ]]; then
     SCALE_DOWN=$(echo -e "yes\nno" | fzf --prompt="Scale down services before backup: ")
     RESTORE_SCALE=$(echo -e "yes\nno" | fzf --prompt="Restore service scale after backup: ")
   fi
+
+  # Step 3: Select location
   REMOTE_MODE=$(echo -e "local\nremote" | fzf --prompt="Backup location: ")
 
+  # Step 4: Detect and handle namespace for both local and remote
   check_dependencies
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     choose_remote_host
     check_dependencies_remote
     check_root_remote
+    detect_docker_namespace
+    if [[ -n "$DOCKER_NAMESPACE" ]]; then
+      BACKUP_FILE_NAME_INFIX="namespace-${DOCKER_NAMESPACE}"
+      BACKUP_SRC="/var/lib/docker/${DOCKER_NAMESPACE}/volumes"
+    else
+      BACKUP_FILE_NAME_INFIX="$REMOTE_HOST"
+      BACKUP_SRC='/var/lib/docker/volumes'
+    fi
     echo
     echo "-> Starting Docker volume backup on remote host '$REMOTE_HOST'..."
   else
-    BACKUP_FILE_NAME_INFIX='local'
     switch_docker_context
     check_root
+    detect_docker_namespace
+    if [[ -n "$DOCKER_NAMESPACE" ]]; then
+      BACKUP_FILE_NAME_INFIX="namespace-${DOCKER_NAMESPACE}"
+      BACKUP_SRC="/var/lib/docker/${DOCKER_NAMESPACE}/volumes"
+    else
+      BACKUP_FILE_NAME_INFIX='local'
+      BACKUP_SRC='/var/lib/docker/volumes'
+    fi
     echo "-> Starting Docker volume backup on local host..."
   fi
   echo
@@ -72,28 +100,33 @@ main() {
   echo
 }
 
+# --- Cleanup Handler --------------------------------------------------------
 # shellcheck disable=SC2329
 cleanup() {
   local exit_code=$?
 
-    if [[ "$SCALE_DOWN" == "yes" && "$RESTORE_SCALE" == "yes" ]]; then
+  # Restore scaling if we scaled down
+  if [[ "$SCALE_DOWN" == "yes" && "$RESTORE_SCALE" == "yes" ]]; then
     service_scale_up
     echo
     container_unpause
     echo
   fi
 
+  # Restart Docker if we stopped it
   if [[ "$BACKUP_MODE" == "stop" && "$RESTORE_DOCKER" == "yes" ]]; then
     docker_start
     echo
   fi
 
-  if [[ -n "$ORIGINAL_DOCKER_CONTEXT" ]]; then
+  # Switch back Docker context if we changed it
+  if [[ "$ORIGINAL_DOCKER_CONTEXT" != "default" ]]; then
     echo "-> Switching back to Docker context '$ORIGINAL_DOCKER_CONTEXT'..."
     docker context use "$ORIGINAL_DOCKER_CONTEXT" 1>/dev/null
     echo
   fi
 
+  # Success message only on normal exit
   if [[ $exit_code -eq 0 ]]; then
     echo "-> Backup completed successfully."
   fi
@@ -104,29 +137,31 @@ cleanup() {
 # --- Backup Docker Volumes ----------------------------------------------------
 service_backup() {
   echo "  -> Backing up Docker volumes from '$BACKUP_SRC'..."
-  local backup_file_name="docker-backup-${BACKUP_FILE_NAME_INFIX}-${BACKUP_DATE}.tar.gz"
+  local backup_file_name="docker-backup-${BACKUP_FILE_NAME_INFIX:-local}-${BACKUP_DATE}.tar.gz"
   local backup_file_path="$BACKUP_DEST/$backup_file_name"
 
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     local remote_backup_dest="/tmp/$backup_file_name"
-    echo "    -> Compress volume..."
+    echo "    -> Compressing volumes..."
     ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO tar --numeric-owner --use-compress-program='pigz -k' -cp'${VERBOSE}'f '$remote_backup_dest' -C '$BACKUP_SRC' ." \
-      2>/dev/null || { echo "Failed backup - compress volume could not processed"; exit 1; }
-    echo "    -> Change owner of compression..."
+      2>/dev/null || { echo "ERROR: Failed to compress volumes on '$REMOTE_HOST'." >&2; exit 1; }
+    echo "    -> Setting file ownership..."
     ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO chown '$CURRENT_USER:$CURRENT_USER' '$remote_backup_dest'" \
-      2>/dev/null || { echo "Failed backup - chown could not processed"; exit 1; }
+      2>/dev/null || { echo "ERROR: Failed to change ownership on '$REMOTE_HOST'." >&2; exit 1; }
+    echo "    -> Downloading backup..."
     rsync --info=progress2 -az --no-o --no-g --no-perms --no-times -e "ssh -T -o Compression=no -x" \
       "$REMOTE_HOST:$remote_backup_dest" "$backup_file_path" \
-      2>/dev/null || { echo "Failed backup - download could not processed"; exit 1; }
-    ssh -t "$REMOTE_HOST" "rm -f '$remote_backup_dest'" 1>/dev/null
+      2>/dev/null || { echo "ERROR: Failed to download backup from '$REMOTE_HOST'." >&2; exit 1; }
+    # shellcheck disable=SC2029
+    ssh "$REMOTE_HOST" "rm -f '$remote_backup_dest'" 1>/dev/null
   else
+    echo "    -> Compressing volumes..."
     "$RUN_WITH_SUDO" tar --numeric-owner --use-compress-program="pigz -k " -cp"${VERBOSE}"f "$backup_file_path" -C "$BACKUP_SRC" .
     "$RUN_WITH_SUDO" chown "$CURRENT_USER:$CURRENT_USER" "$backup_file_path"
   fi
 
-  echo "     NOTE: for restore you can use following command:"
-  echo "       $RUN_WITH_SUDO tar --numeric-owner --use-compress-program='pigz -d' -xpvf '$backup_file_path' -C '$BACKUP_SRC'"
-
+  echo "  NOTE: for restore you can use following command:"
+  echo "     $RUN_WITH_SUDO tar --numeric-owner --use-compress-program='pigz -d' -xpvf '$backup_file_path' -C '$BACKUP_SRC'"
   echo "  -> Backup saved to '$backup_file_path'."
 }
 
@@ -134,34 +169,32 @@ service_backup() {
 docker_stop() {
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     echo "  -> Stopping Docker on '$REMOTE_HOST'..."
-    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl stop docker.socket" \
-    2>/dev/null || { echo "Failed to stop docker"; exit 1; }
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl stop docker.socket docker" 2>/dev/null || { echo "ERROR: Failed to stop Docker on '$REMOTE_HOST'." >&2; exit 1; }
   else
     echo "  -> Stopping Docker locally..."
-    "$RUN_WITH_SUDO" systemctl stop docker || exit 1
+    "$RUN_WITH_SUDO" systemctl stop docker.socket docker || { echo "ERROR: Failed to stop Docker locally." >&2; exit 1; }
   fi
 }
 
 docker_start() {
   if [[ "$REMOTE_MODE" == "remote" ]]; then
     echo "  -> Starting Docker on '$REMOTE_HOST'..."
-    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl start docker" \
-    2>/dev/null || { echo "Failed to start docker"; exit 1; }
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO systemctl start docker" 2>/dev/null || { echo "ERROR: Failed to start Docker on '$REMOTE_HOST'." >&2; exit 1; }
   else
     echo "  -> Starting Docker locally..."
-    "$RUN_WITH_SUDO" systemctl start docker || exit 1
+    "$RUN_WITH_SUDO" systemctl start docker || { echo "ERROR: Failed to start Docker locally." >&2; exit 1; }
   fi
 }
 
 # --- Swarm Service Scaling ----------------------------------------------------
 service_scale_down() {
   if [[ "$DOCKER_IS_SWARM_MODE" != "active" ]]; then
+    echo "  -> Not in Swarm mode. Skipping scale-down."
     return
   fi
 
   # Get a list of running services in Docker Swarm
   DOCKER_RUNNING_SERVICE=$(docker service ls --format "{{.ID}}" 2>/dev/null || true)
-
   if [[ -z $DOCKER_RUNNING_SERVICE ]]; then
     echo "  -> No Swarm services found. Skipping scale-down."
     return
@@ -172,7 +205,7 @@ service_scale_down() {
     local replicas=0
     replicas=$(docker service inspect --format "{{.Spec.Mode.Replicated.Replicas}}" "$service" 2>/dev/null || true)
     if [[ $replicas -gt 0 ]]; then
-      local service_name=""
+      local service_name
       service_name=$(docker service inspect --format "{{.Spec.Name}}" "$service" 2>/dev/null || true)
       DOCKER_ORIGINAL_SCALES+=("$service_name:$replicas")
     fi
@@ -219,7 +252,6 @@ service_scale_up() {
 # --- Container Pause/Unpause --------------------------------------------------
 container_pause() {
   DOCKER_RUNNING_CONTAINERS=$(docker ps -q --filter "status=running" 2>/dev/null || true)
-
   if [[ -z $DOCKER_RUNNING_CONTAINERS ]]; then
     echo "  -> No running containers. Skipping pause."
     return
@@ -304,13 +336,49 @@ container_unpause() {
   echo "  -> All containers unpaused."
 }
 
-# --- Helper -------------------------------------------------------------------
+# --- Helper Functions ---------------------------------------------------------
+# Detect Docker namespace from /etc/docker/daemon.json and /etc/subuid
+detect_docker_namespace() {
+  echo "    -> Checking if Docker is configured with a namespace..."
+  if [[ "$REMOTE_MODE" == "remote" ]]; then
+    # Remote detection
+    local userns_remap
+    local temp_file="/tmp/docker_namespace_$$_${RANDOM}"
+    ssh -t "$REMOTE_HOST" "$RUN_WITH_SUDO bash -c 'grep userns-remap /etc/docker/daemon.json > $temp_file && chmod 666 $temp_file'" 2>/dev/null
+    # shellcheck disable=SC2029
+    userns_remap=$(ssh "$REMOTE_HOST" "cat $temp_file 2>/dev/null || true" | sed -E 's/.*: *"([^"]+)".*/\1/' | head -n1 || true)
+    if [[ -n "$userns_remap" ]]; then
+      local user n_user n_group
+      user=$(echo "$userns_remap" | cut -d: -f1)
+      # shellcheck disable=SC2029
+      n_user=$(ssh "$REMOTE_HOST" "grep \"^${user}:\" /etc/subuid" 2>/dev/null | head -n1 | cut -d: -f2 || true)
+      # shellcheck disable=SC2029
+      n_group=$(ssh "$REMOTE_HOST" "grep \"^${user}:\" /etc/subgid" 2>/dev/null | head -n1 | cut -d: -f2 || true)
+      DOCKER_NAMESPACE="$n_user.$n_group"
+    fi
+  else
+    # Local detection
+    local userns_remap
+    userns_remap=$($RUN_WITH_SUDO grep 'userns-remap' /etc/docker/daemon.json 2>/dev/null | \
+      sed -E 's/.*: *"([^"]+)".*/\1/' | head -n1 || true)
+    if [[ -n "$userns_remap" ]]; then
+      local user n_user n_group
+      user=$(echo "$userns_remap" | cut -d: -f1)
+      n_user=$($RUN_WITH_SUDO grep "^${user}:" /etc/subuid 2>/dev/null | head -n1 | cut -d: -f2)
+      n_group=$($RUN_WITH_SUDO grep "^${user}:" /etc/subgid 2>/dev/null | head -n1 | cut -d: -f2)
+      DOCKER_NAMESPACE="$n_user.$n_group"
+    fi
+  fi
+  [[ -n "$DOCKER_NAMESPACE" ]] && echo "    -> Namespace configuration found: $DOCKER_NAMESPACE"
+}
+
+# --- Dependency Checks --------------------------------------------------------
 check_dependencies() {
   local deps=()
   if [[ "$REMOTE_MODE" == "remote" ]]; then
-    deps=(docker fzf ssh rsync)
+    deps=(docker fzf ssh rsync grep sed)
   else
-    deps=(docker fzf tar pigz)
+    deps=(docker fzf tar pigz grep sed)
   fi
   for dep in "${deps[@]}"; do
     if ! command -v "$dep" &>/dev/null; then
@@ -321,7 +389,7 @@ check_dependencies() {
 }
 
 check_dependencies_remote() {
-  local deps=(docker ssh rsync tar pigz)
+  local deps=(docker ssh rsync tar pigz grep sed)
   for dep in "${deps[@]}"; do
     if ! ssh "$REMOTE_HOST" command -v "$dep" &>/dev/null; then
       echo "ERROR: Missing remote dependency: '$dep' on '$REMOTE_HOST'. Install it or add to PATH." >&2
@@ -334,12 +402,12 @@ check_root() {
   [ $EUID -eq 0 ] && return
 
   if ! command -v sudo &>/dev/null; then
-    echo "-> sudo is not available. Please run this script as root."
+    echo "ERROR: sudo is not available. Please run this script as root." >&2
     exit 1
   fi
 
   if ! sudo -v; then
-    echo "-> Could not authenticate with sudo. Please run this script with sudo or as root."
+    echo "ERROR: Could not authenticate with sudo. Please run this script with sudo or as root." >&2
     exit 1
   fi
   RUN_WITH_SUDO=sudo
@@ -349,18 +417,18 @@ check_root_remote() {
   ssh "$REMOTE_HOST" '[ $EUID -eq 0 ]' &>/dev/null && return
 
   if ! ssh "$REMOTE_HOST" command -v sudo &>/dev/null; then
-    echo "-> sudo is not available. Please run this script as root."
+    echo "ERROR: sudo is not available on '$REMOTE_HOST'. Please run this script as root." >&2
     exit 1
   fi
 
   echo
   echo "#############################################################################"
-  echo "!!! You will be prompted multiple times to provide remote 'sudo' password !!!"
-  echo "                           Stay interactive ;)                            "
+  echo "!!!    You will be prompted for remote 'sudo' password multiple times     !!!"
+  echo "                            Stay interactive ;)                             "
   echo "#############################################################################"
   echo
   if ! ssh -t "$REMOTE_HOST" sudo -v; then
-    echo "-> Could not authenticate with sudo. Please run this script with sudo or as root."
+    echo "ERROR: Could not authenticate with sudo on '$REMOTE_HOST'." >&2
     exit 1
   fi
   RUN_WITH_SUDO=sudo
@@ -380,8 +448,6 @@ choose_remote_host() {
     exit 1
   fi
   REMOTE_HOST="$host"
-  BACKUP_FILE_NAME_INFIX="$host"
-
   switch_docker_context "$host"
 }
 
@@ -391,7 +457,7 @@ switch_docker_context() {
   # Save current Docker context
   ORIGINAL_DOCKER_CONTEXT=$(docker context ls --format '{{.Name}}::{{.Current}}' | awk -F'::' '$2 == "true" {print $1}')
 
-  # Create Docker context if it doesn't exist
+  # Skip context creation for "default" (built-in local context)
   if [[ "$context" != "default" ]]; then
     if ! docker context inspect "$context" &>/dev/null; then
       echo "-> Creating Docker context for '$context'..."
@@ -399,11 +465,10 @@ switch_docker_context() {
     fi
   fi
 
-  # Switch to the remote Docker context
+  # Switch to the context
   echo "-> Switching to Docker context '$context'..."
   docker context use "$context" 1>/dev/null
 }
-
 
 # --- Entry Point --------------------------------------------------------------
 main
