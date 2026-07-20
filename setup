@@ -41,13 +41,14 @@ RUN_SETUP_TMUX=0
 RUN_SETUP_ZSH=0
 
 RUN_SETUP_CODE=0
-
 RUN_INSTALL_CODE_EXT=0
+
 RUN_INSTALL_FONTS=0
 RUN_INSTALL_BTOP=0
 RUN_INSTALL_BTOP_AMD=0
 RUN_INSTALL_BTOP_INTEL=0
 RUN_INSTALL_ANDROID=0
+RUN_INSTALL_HUNK=0
 
 RUN_INSTALL_GH=0
 
@@ -96,6 +97,7 @@ LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
 LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
 
 LN_BTOP="${LN_BTOP:-"$HOME/.config/btop/btop.conf"}"
+LN_HUNK="${LN_HUNK:-"$HOME/.config/hunk/config.toml"}"
 
 # ******************************************************************************
 
@@ -130,6 +132,7 @@ main() {
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
   [[ $RUN_INSTALL_BTOP -eq 1 ]] && install_btop
   [[ $RUN_INSTALL_ANDROID -eq 1 ]] && install_setup_android_emulator
+  [[ $RUN_INSTALL_HUNK -eq 1 ]] && install_hunk
 
   [[ $RUN_INSTALL_GH -eq 1 ]] && download_github_binary 'https://github.com/cli/cli' 'gh_.*_linux_amd64\.tar\.gz'
 
@@ -416,7 +419,7 @@ setup_ghostty() {
   mkdir -p "${LN_GHOSTTY_FOLDER}"
   rm -f "${LN_GHOSTTY_FOLDER}/config"
   ln -sf "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY_FOLDER}/config"
-  print_info2 "🚀 GHOSTTY :: All copings done."
+  print_info2 "🚀 GHOSTTY :: All symlinks created."
 }
 
 # NVIM :: CREATE LINKS ---------------------------------------------------------
@@ -564,7 +567,7 @@ setup_gitconfig() {
   print_info2 "🚀 GIT :: Setup complete!"
 }
 
-# LAZYGIT :: CREATE LINK AND SETUP -------------------------------------------
+# LAZYGIT :: CREATE LINK AND SETUP ---------------------------------------------
 setup_lazygit() {
   print_info2 "\n🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
   mkdir -p "$(dirname "$LN_LAZYGIT")"
@@ -574,7 +577,7 @@ setup_lazygit() {
   print_info2 "🚀 LAZYGIT :: All symlinks created."
 }
 
-# ZSH :: CREATE LINKS ---------------------------------------------------------
+# ZSH :: CREATE LINKS ----------------------------------------------------------
 setup_zsh() {
   print_info2 "\n🚀 ZSH :: Load git submodules"
   git submodule update -q --init --remote \
@@ -635,7 +638,7 @@ setup_code() {
   print_info2 "🚀 CODE :: All symlinks created."
 }
 
-# BTOP :: CREATE LINK AND SETUP -------------------------------------------
+# BTOP :: CREATE LINK AND SETUP ------------------------------------------------
 setup_btop() {
   print_info2 "\n🚀 BTOP :: Copying './configs-single/btop.conf' to '$LN_BTOP'"
   mkdir -p "$(dirname "$LN_BTOP")"
@@ -813,7 +816,7 @@ install_btop() {
   setup_btop
 }
 
-# ANDROID :: setup emulator
+# ANDROID :: setup emulator ----------------------------------------------------
 install_setup_android_emulator() {
   # sudo apt install openjdk-26-jre-headless
   # --- Paths ----------------------------------------------------------
@@ -881,6 +884,29 @@ install_setup_android_emulator() {
   "$EMULATOR" -list-avds
 }
 
+# apt update
+# apt install git curl jq file vim
+# git clone https://github.com/mvladislav/.dotfiles && cd .dotfiles
+# bash setup -ds -ihunk
+
+# SERVICE :: install hunk ------------------------------------------------------
+install_hunk() {
+  print_info2 "\n🚀 HUNK :: install hunk..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
+  download_github_binary 'https://github.com/modem-dev/hunk' 'hunkdiff-linux-x64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
+  print_info2 "🚀 HUNK :: hunk installed!"
+
+  print_info2 "\n🚀 HUNK :: Set hunk for git as pager"
+  git config --global core.pager "hunk pager"
+
+  print_info2 "🚀 HUNK :: Create symlink from './configs-single/hunk.toml' as '$LN_HUNK'"
+  mkdir -p "$(dirname "${LN_HUNK}")"
+  rm -f "${LN_HUNK}"
+  ln -sf "${PWD}/configs-single/hunk.toml" "${LN_HUNK}"
+  print_info2 "🚀 HUNK :: All symlinks created."
+}
+
 # ******************************************************************************
 
 # Function to show usage information
@@ -921,6 +947,7 @@ usage() {
   print_info "     -ibtop-amd,    --install-btop-amd                 Run install install_btop with AMD GPU support"
   print_info "     -ibtop-intel,  --install-btop-intel               Run install install_btop with intel GPU support"
   print_info "     -iemu,         --install-android-emulator         Run install install_setup_android_emulator"
+  print_info "     -ihunk,        --install-hunk                     Run install install_hunk"
   print_info "     -igh,          --install-github-cli               Run install gh-cli-binary from github releases"
   print_info "     -upc,          --update-check                     Check if new version for builds exists"
   print_info "     -s                                                Use 'source' instead 'release' used for install services"
@@ -1018,6 +1045,9 @@ parse_args() {
       ;;
     -iemu | --install-android-emulator)
       RUN_INSTALL_ANDROID=1
+      ;;
+    -ihunk | --install-hunk)
+      RUN_INSTALL_HUNK=1
       ;;
     -igh | --install-github-cli)
       RUN_INSTALL_GH=1

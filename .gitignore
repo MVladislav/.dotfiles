@@ -113,3 +113,4 @@ zed/snippets/**
 configs-single/**
 !configs-single/ghostty.conf
 !configs-single/btop.conf
+!configs-single/hunk.toml
