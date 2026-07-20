@@ -74,7 +74,7 @@
     "dock": "bottom"
   },
   "git_panel": {
-    "group_by": "none",
+    "group_by": "status",
     "show_count_badge": true,
     "folder_icons": true,
     "file_icons": true,
@@ -314,7 +314,8 @@
     "html": true,
     "dockerfile": true,
     "ansible": true,
-    "env": true
+    "env": true,
+    "toml": true
   },
   "telemetry": {
     "diagnostics": false,
