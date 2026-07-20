@@ -113,12 +113,6 @@ zed/snippets/**
 !zed/snippets/*.json
 !zed/codebook.toml
 
-!logseq/
-logseq/**
-!logseq/*.edn
-!logseq/*.json
-!logseq/*.css
-
 !btop/
 btop/**
 !btop/*.conf

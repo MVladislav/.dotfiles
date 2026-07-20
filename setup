@@ -41,7 +41,6 @@ RUN_SETUP_TMUX=0
 RUN_SETUP_ZSH=0
 
 RUN_SETUP_CODE=0
-RUN_SETUP_LOGSEQ=0
 
 RUN_INSTALL_CODE_EXT=0
 RUN_INSTALL_FONTS=0
@@ -76,6 +75,7 @@ LN_NVIM_ORIG_BASE="${LN_NVIM_ORIG_BASE:-"$HOME/.config/nvim"}"
 
 LN_ZSH="$HOME/.zsh"
 LN_ZSHRC="$HOME/.zshrc"
+
 LN_PROFILES_01="$HOME/.profile-append"
 LN_PROFILES_02="$HOME/.profile-sec"
 
@@ -87,8 +87,6 @@ LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
 LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
 # LN_ZED=$HOME/.config/zed
 LN_ZED_CODEBOOK="$HOME/.config/codebook"
-
-LN_LOGSEQ_PATH="$HOME/.logseq"
 
 GIT_HOOK_FOLDER="$HOME/.git-hooks"
 LN_GIT_HOOK_COMMIT_MSG="$GIT_HOOK_FOLDER/commit-msg"
@@ -123,7 +121,6 @@ main() {
   [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_ZSH -eq 1 ]] && setup_zsh
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
-  [[ $RUN_SETUP_LOGSEQ -eq 1 ]] && setup_logseq
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
   [[ $RUN_INSTALL_FONTS -eq 1 ]] && install_fonts
@@ -541,23 +538,6 @@ setup_profiles() {
   print_info2 "🚀 PROFILES :: All symlinks created."
 }
 
-# LOGSEQ :: CREATE LINKS -------------------------------------------------------
-setup_logseq() {
-  mkdir -p "${LN_LOGSEQ_PATH}/config/"
-
-  print_info2 "\n🚀 LOGSEQ :: Create symlink from './logseq/preferences.json' as '$LN_LOGSEQ_PATH/preferences.json'"
-  rm -f "${LN_LOGSEQ_PATH}/preferences.json"
-  ln -sf "${PWD}/logseq/preferences.json" "${LN_LOGSEQ_PATH}/preferences.json"
-  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/config.edn' as '$LN_LOGSEQ_PATH/config/config.edn'"
-  rm -f "${LN_LOGSEQ_PATH}/config/config.edn"
-  ln -sf "${PWD}/logseq/config.edn" "${LN_LOGSEQ_PATH}/config/config.edn"
-  print_info2 "🚀 LOGSEQ :: Create symlink from './logseq/plugins.edn' as '$LN_LOGSEQ_PATH/config/plugins.edn'"
-  rm -f "${LN_LOGSEQ_PATH}/config/plugins.edn"
-  ln -sf "${PWD}/logseq/plugins.edn" "${LN_LOGSEQ_PATH}/config/plugins.edn"
-
-  print_info2 "🚀 LOGSEQ :: All symlinks created."
-}
-
 # GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
 setup_gitconfig() {
   print_info2 "\n🚀 GIT :: setup git..."
@@ -907,7 +887,6 @@ usage() {
   print_info "     -stx,          --setup-tmux                       Run setup_tmux (when install tmux, with '-itmux', this will run auto)"
   print_info "     -szh,          --setup-zsh                        Run setup_zsh (when install zsh, with '-izsh', this will run auto)"
   print_info "     -scd,          --setup-code                       Run setup_code"
-  print_info "     -sls,          --setup-logseq                     Run setup_logseq"
   print_info "     -ice,          --install-code-ext                 Run install install_code_ext"
   print_info "     -ifont,        --install-fonts                    Run install install_fonts"
   print_info "     -ibtop,        --install-btop                     Run install install_btop"
@@ -982,7 +961,6 @@ parse_args() {
       # RUN_SETUP_TMUX=0
       # RUN_SETUP_ZSH=0
       # RUN_SETUP_CODE=0
-      # RUN_SETUP_LOGSEQ=0
       ;;
     -stx | --setup-tmux)
       RUN_SETUP_TMUX=1
@@ -992,9 +970,6 @@ parse_args() {
       ;;
     -scd | --setup-code)
       RUN_SETUP_CODE=1
-      ;;
-    -sls | --setup-logseq)
-      RUN_SETUP_LOGSEQ=1
       ;;
     -ice | --install-code-ext)
       RUN_INSTALL_CODE_EXT=1
@@ -1034,7 +1009,6 @@ parse_args() {
       # RUN_SETUP_TMUX=0
       # RUN_SETUP_ZSH=0
       # RUN_SETUP_CODE=0
-      # RUN_SETUP_LOGSEQ=0
 
       echo
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
