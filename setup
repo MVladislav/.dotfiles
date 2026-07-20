@@ -250,10 +250,6 @@ install_dependencies_ghostty() {
   update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
 
-  print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
-  mkdir -p "${LN_GHOSTTY_FOLDER}"
-  ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
-
   print_info2 "🚀 GHOSTTY :: Switch default keybind to open terminal ('<Ctrl><Alt>T')"
   gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
@@ -267,6 +263,8 @@ install_dependencies_ghostty() {
   install_dependencies_needs_rm
 
   print_info2 "🚀 GHOSTTY :: ghostty installed!"
+
+  setup_ghostty
 }
 
 # SERVICE :: install nvim ------------------------------------------------------
@@ -410,6 +408,15 @@ setup_bin() {
   rm -f "$LN_VM_BIN"
   ln -sf "$PWD/bin" "$LN_VM_BIN"
   print_info2 "🚀 BIN :: All symlinks created."
+}
+
+# GHOSTTY :: CREATE LINK AND SETUP -------------------------------------------
+setup_ghostty() {
+  print_info2 "\n🚀 GHOSTTY :: Create symlink from './configs-single/ghostty.conf' as '$LN_GHOSTTY_FOLDER/config'"
+  mkdir -p "${LN_GHOSTTY_FOLDER}"
+  rm -f "${LN_GHOSTTY_FOLDER}/config"
+  ln -sf "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY_FOLDER}/config"
+  print_info2 "🚀 GHOSTTY :: All copings done."
 }
 
 # NVIM :: CREATE LINKS ---------------------------------------------------------

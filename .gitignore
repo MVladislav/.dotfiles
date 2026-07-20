@@ -60,10 +60,6 @@ zsh/plugins/zsh-syntax-highlighting/**
 !zsh/plugins/zsh-history-substring-search
 zsh/plugins/zsh-history-substring-search/**
 
-!ghostty/
-ghostty/**
-!ghostty/config
-
 !bin/
 !bin/*
 
@@ -115,4 +111,5 @@ zed/snippets/**
 
 !configs-single/
 configs-single/**
+!configs-single/ghostty.conf
 !configs-single/btop.conf
