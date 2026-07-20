@@ -116,10 +116,3 @@ zed/snippets/**
 !configs-single/
 configs-single/**
 !configs-single/btop.conf
-
-!os/
-os/**
-
-!os/pipewire/
-os/pipewire/**
-!os/pipewire/*.conf
