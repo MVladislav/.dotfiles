@@ -113,9 +113,9 @@ zed/snippets/**
 !zed/snippets/*.json
 !zed/codebook.toml
 
-!btop/
-btop/**
-!btop/*.conf
+!configs-single/
+configs-single/**
+!configs-single/btop.conf
 
 !os/
 os/**

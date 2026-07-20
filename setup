@@ -95,6 +95,8 @@ LN_LAZYGIT="${LN_LAZYGIT:-"$HOME/.config/lazygit/config.yml"}"
 LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
 LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
 
+LN_BTOP="${LN_BTOP:-"$HOME/.config/btop/btop.conf"}"
+
 # ******************************************************************************
 
 main() {
@@ -626,6 +628,15 @@ setup_code() {
   print_info2 "🚀 CODE :: All symlinks created."
 }
 
+# BTOP :: CREATE LINK AND SETUP -------------------------------------------
+setup_btop() {
+  print_info2 "\n🚀 BTOP :: Copying './configs-single/btop.conf' to '$LN_BTOP'"
+  mkdir -p "$(dirname "$LN_BTOP")"
+  rm -f "${LN_BTOP}"
+  cp -f "${PWD}/configs-single/btop.conf" "${LN_BTOP}"
+  print_info2 "🚀 BTOP :: All copings done."
+}
+
 # ******************************************************************************
 
 # CODE :: install ext ----------------------------------------------------------
@@ -791,6 +802,8 @@ install_btop() {
   install_dependencies_needs_rm
 
   print_info2 "🚀 BTOP :: btop installed!"
+
+  setup_btop
 }
 
 # ANDROID :: setup emulator
