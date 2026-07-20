@@ -68,30 +68,32 @@ VERSION_BTOP_G=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-7.2.4
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
 
-LN_TMUX_ORIG_BASE="${LN_TMUX_ORIG_BASE:-"$HOME/.tmux"}"
-LN_TMUX_ORIG_TMUX="${LN_TMUX_ORIG_TMUX:-"$HOME/.tmux.conf"}"
+LN_VM_BIN="${LN_VM_BIN:-"$USER_LOCAL_PREFIX_BIN/vm"}"
+
+LN_GHOSTTY_FOLDER="${LN_GHOSTTY_FOLDER:-"$HOME/.config/ghostty"}"
 
 LN_NVIM_ORIG_BASE="${LN_NVIM_ORIG_BASE:-"$HOME/.config/nvim"}"
 
 LN_ZSH="$HOME/.zsh"
 LN_ZSHRC="$HOME/.zshrc"
 
-LN_PROFILES_01="$HOME/.profile-append"
-LN_PROFILES_02="$HOME/.profile-sec"
+LN_TMUX_ORIG_BASE="${LN_TMUX_ORIG_BASE:-"$HOME/.tmux"}"
+LN_TMUX_ORIG_TMUX="${LN_TMUX_ORIG_TMUX:-"$HOME/.tmux.conf"}"
 
-LN_GHOSTTY_FOLDER="${LN_GHOSTTY_FOLDER:-"$HOME/.config/ghostty"}"
+LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
+# LN_ZED=$HOME/.config/zed
+LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
+LN_ZED_CODEBOOK="$HOME/.config/codebook"
 
 LN_VS_CODE="${LN_VS_CODE:-"$HOME/.config/Code/User"}"
 
-LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
-LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
-# LN_ZED=$HOME/.config/zed
-LN_ZED_CODEBOOK="$HOME/.config/codebook"
+LN_PROFILES_01="$HOME/.profile-append"
+LN_PROFILES_02="$HOME/.profile-sec"
 
-GIT_HOOK_FOLDER="$HOME/.git-hooks"
-LN_GIT_HOOK_COMMIT_MSG="$GIT_HOOK_FOLDER/commit-msg"
-LN_GIT_HOOK_PRE_COMMIT="$GIT_HOOK_FOLDER/pre-commit"
 LN_LAZYGIT="${LN_LAZYGIT:-"$HOME/.config/lazygit/config.yml"}"
+
+LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
+LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
 
 # ******************************************************************************
 
@@ -107,10 +109,10 @@ main() {
   [[ $RUN_INSTALL_DEPENDENCIES_DEV -eq 1 ]] && install_dependencies_dev
   [[ $RUN_INSTALL_EXTENDED_TOOLS -eq 1 ]] && install_extended_tools
 
-  [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
-  [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
-  [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
   [[ $RUN_INSTALL_DEPENDENCIES_GHOSTTY -eq 1 ]] && install_dependencies_ghostty
+  [[ $RUN_INSTALL_DEPENDENCIES_NVIM -eq 1 ]] && install_dependencies_nvim
+  [[ $RUN_INSTALL_DEPENDENCIES_ZSH -eq 1 ]] && install_dependencies_zsh
+  [[ $RUN_INSTALL_DEPENDENCIES_TMUX -eq 1 ]] && install_dependencies_tmux
 
   [[ $RUN_SETUP_BIN -eq 1 ]] && setup_bin
   [[ $RUN_SETUP_NVIM -eq 1 ]] && setup_nvim
@@ -118,8 +120,8 @@ main() {
   [[ $RUN_SETUP_PROFILES -eq 1 ]] && setup_profiles
   [[ $RUN_SETUP_GITCONFIG -eq 1 ]] && setup_gitconfig
 
-  [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_ZSH -eq 1 ]] && setup_zsh
+  [[ $RUN_SETUP_TMUX -eq 1 ]] && setup_tmux
   [[ $RUN_SETUP_CODE -eq 1 ]] && setup_code
 
   [[ $RUN_INSTALL_CODE_EXT -eq 1 ]] && install_code_ext
@@ -141,7 +143,7 @@ initialize_base() {
 
 # ******************************************************************************
 
-# DEPS :: install dependencies -------------------------------------------------
+# DEPS :: install dependencies additional --------------------------------------
 install_dependencies_additional() {
   print_info2 "\n🚀 DEPS :: installing additional base services"
   print_notes "   📥 installing [curl git git-delta pigz jq rsync fzf wl-clipboard]..."
@@ -157,7 +159,7 @@ install_dependencies_additional() {
   print_info2 "🚀 DEPS :: base services installed!"
 }
 
-# DEPS :: install dev dependencies -------------------------------------------------
+# DEPS :: install dependencies dev ---------------------------------------------
 install_dependencies_dev() {
   print_info2 "\n🚀 DEPS :: installing dev dependencies"
   print_notes "   📥 installing npm..."
@@ -195,6 +197,7 @@ install_dependencies_dev() {
   print_info2 "🚀 DEPS :: dev dependencies installed!"
 }
 
+# DEPS :: install dependencies tools -------------------------------------------
 install_extended_tools(){
   print_info2 "\n🚀 TOOLS :: installing extended tools"
 
@@ -205,6 +208,64 @@ install_extended_tools(){
 }
 
 # ******************************************************************************
+
+# SERVICE :: install ghostty ---------------------------------------------------
+install_dependencies_ghostty() {
+  print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+
+  # Define packages needed for build and install
+  local packages_tools=(libgtk4-layer-shell0)
+  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  local ZIG_COMMAND=zig
+  if ! command -v zig >/dev/null 2>&1; then
+    print_notes "   💡 Download binary zig..."
+    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_U"
+    mkdir -p "$DEPS_INSTALL_PATH/zig"
+    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
+    ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
+  fi
+
+  print_notes "   💡 Cloning ghostty..."
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
+    cd "$DEPS_INSTALL_PATH/ghostty"
+  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
+    cd "$DEPS_INSTALL_PATH/ghostty"
+    git checkout -q "$VERSION_GHOSTTY"
+  fi
+
+  print_notes "   💡 Build and install ghostty..."
+  sed -i 's|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz|g' ./build.zig.zon
+  sed -i 's|N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y|N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN|g' ./build.zig.zon
+  "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+  cd - 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+
+  print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
+  mkdir -p "${LN_GHOSTTY_FOLDER}"
+  ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
+
+  print_info2 "🚀 GHOSTTY :: Switch default keybind to open terminal ('<Ctrl><Alt>T')"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
+  gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
+
+  print_notes "   💡 For better 'xterm compatibility', use \`vm_xterm_cp_local\` (for sudo session) or \`vm_xterm_cp_ssh\` (for SSH sessions)."
+
+  # Remove build dependencies if any
+  install_dependencies_needs_rm
+
+  print_info2 "🚀 GHOSTTY :: ghostty installed!"
+}
 
 # SERVICE :: install nvim ------------------------------------------------------
 install_dependencies_nvim() {
@@ -241,44 +302,6 @@ install_dependencies_nvim() {
 
   print_notes "   💡 You should also install 'node', which is required by some tools like 'Mason plugins'."
   print_info2 "🚀 NVIM :: nvim installed!"
-}
-
-# SERVICE :: install tmux ------------------------------------------------------
-install_dependencies_tmux() {
-  print_info2 "\n🚀 TMUX :: install tmux..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=(libevent-dev)
-  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
-    cd "$DEPS_INSTALL_PATH/tmux"
-    bash ./autogen.sh 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    mkdir -p "$DEPS_INSTALL_PATH/tmux"
-    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
-    tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
-    rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
-    cd "$DEPS_INSTALL_PATH/tmux"
-  fi
-
-  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-  make 1>/dev/null
-  make install 1>/dev/null
-  cd - 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
-
-  setup_tmux
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_info2 "🚀 TMUX :: tmux installed!"
 }
 
 # SERVICE :: install zsh -------------------------------------------------------
@@ -338,146 +361,62 @@ install_dependencies_zsh() {
   print_info2 "🚀 ZSH :: zsh installed!"
 }
 
-# SERVICE :: install ghostty ---------------------------------------------------
-install_dependencies_ghostty() {
-  print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
-  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+# SERVICE :: install tmux ------------------------------------------------------
+install_dependencies_tmux() {
+  print_info2 "\n🚀 TMUX :: install tmux..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
 
   # Define packages needed for build and install
-  local packages_tools=(libgtk4-layer-shell0)
-  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
+  local packages_tools=(libevent-dev)
+  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  local ZIG_COMMAND=zig
-  if ! command -v zig >/dev/null 2>&1; then
-    print_notes "   💡 Download binary zig..."
-    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_U"
-    mkdir -p "$DEPS_INSTALL_PATH/zig"
-    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
-    ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
-  fi
-
-  print_notes "   💡 Cloning ghostty..."
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-    cd "$DEPS_INSTALL_PATH/ghostty"
+    git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
+    cd "$DEPS_INSTALL_PATH/tmux"
+    bash ./autogen.sh 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-    cd "$DEPS_INSTALL_PATH/ghostty"
-    git checkout -q "$VERSION_GHOSTTY"
+    mkdir -p "$DEPS_INSTALL_PATH/tmux"
+    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
+    tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
+    rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
+    cd "$DEPS_INSTALL_PATH/tmux"
   fi
 
-  print_notes "   💡 Build and install ghostty..."
-  sed -i 's|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz|g' ./build.zig.zon
-  sed -i 's|N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y|N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN|g' ./build.zig.zon
-  "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+  make 1>/dev/null
+  make install 1>/dev/null
   cd - 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
-  update-desktop-database "$HOME/.local/share/applications/" -q
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
 
-  print_info2 "🚀 GHOSTTY :: Create symlink from './ghostty/config' into '$LN_GHOSTTY_FOLDER'"
-  mkdir -p "${LN_GHOSTTY_FOLDER}"
-  ln -sf "${PWD}/ghostty/config" "${LN_GHOSTTY_FOLDER}/config"
-
-  print_info2 "🚀 GHOSTTY :: Switch default keybind to open terminal ('<Ctrl><Alt>T')"
-  gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
-  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
-  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
-  gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
-  gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
-
-  print_notes "   💡 For better 'xterm compatibility', use \`vm_xterm_cp_local\` (for sudo session) or \`vm_xterm_cp_ssh\` (for SSH sessions)."
+  setup_tmux
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
-  print_info2 "🚀 GHOSTTY :: ghostty installed!"
+  print_info2 "🚀 TMUX :: tmux installed!"
 }
 
 # ******************************************************************************
 
 # BIN :: CREATE LINKS ----------------------------------------------------------
 setup_bin() {
-  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' as '$USER_LOCAL_PREFIX_BIN/vm/*'"
-  mkdir -p "$USER_LOCAL_PREFIX_BIN"
-
-  rm -f "${USER_LOCAL_PREFIX_BIN}/vm"
-  ln -sf "$PWD/bin" "${USER_LOCAL_PREFIX_BIN}/vm"
-  # for script in "$PWD"/bin/*; do
-  #   ln -sf "$script" "${USER_LOCAL_PREFIX_BIN}/$(basename "$script")" || print_error "  ❌ Failed to link $script"
-  # done
+  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' as '$LN_VM_BIN/*'"
+  mkdir -p "$(dirname "$LN_VM_BIN")"
+  rm -f "$LN_VM_BIN"
+  ln -sf "$PWD/bin" "$LN_VM_BIN"
   print_info2 "🚀 BIN :: All symlinks created."
 }
 
 # NVIM :: CREATE LINKS ---------------------------------------------------------
 setup_nvim() {
   print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
+  mkdir -p "$(dirname "$LN_NVIM_ORIG_BASE")"
   rm -f "${LN_NVIM_ORIG_BASE}"
   ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
   print_info2 "🚀 NVIM :: All symlinks created."
-}
-
-# TMUX :: CREATE LINKS ---------------------------------------------------------
-setup_tmux() {
-  print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
-  rm -f "${LN_TMUX_ORIG_BASE}"
-  ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
-  print_info2 "🚀 TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
-  rm -f "${LN_TMUX_ORIG_TMUX}"
-  ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
-
-  print_info2 "🚀 TMUX :: Load git submodules"
-  git submodule update -q --init --remote tmux/tmux/plugins/tpm
-  if command -v tmux >/dev/null 2>&1; then
-    print_info2 "🚀 TMUX :: Run tpm to install plugins"
-    PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
-  fi
-
-  print_info2 "🚀 TMUX :: All symlinks created."
-}
-
-# ZSH :: CREATE LINKS ---------------------------------------------------------
-setup_zsh() {
-  print_info2 "\n🚀 ZSH :: Load git submodules"
-  git submodule update -q --init --remote \
-    zsh/themes/spaceship \
-    zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting \
-    zsh/plugins/zsh-history-substring-search
-
-  mkdir -p "$LN_ZSH/custom/"{themes,plugins}
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
-  rm -f "$LN_ZSH/custom/themes/spaceship.zsh-theme"
-  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
-  rm -f "$LN_ZSH/custom/plugins/zsh-autosuggestions"
-  rm -f "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
-  rm -f "$LN_ZSH/custom/plugins/zsh-history-substring-search"
-  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
-  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
-  ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
-
-  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
-  rm -f "${LN_ZSHRC}"
-  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-  print_info2 "🚀 ZSH :: All symlinks created."
-}
-
-# CODE :: CREATE LINKS ---------------------------------------------------------
-setup_code() {
-  mkdir -p "$LN_VS_CODE"
-  print_info2 "\n🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
-  rm -f "${LN_VS_CODE}/keybindings.json"
-  ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
-  print_info2 "🚀 CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'"
-  rm -f "${LN_VS_CODE}/settings.json"
-  ln -sf "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
-  print_info2 "🚀 CODE :: Create symlink from './code/snippets' into '$LN_VS_CODE'"
-  rm -f "${LN_VS_CODE}/snippets"
-  ln -sf "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
-  print_info2 "🚀 CODE :: All symlinks created."
 }
 
 # ZED :: CREATE LINKS ----------------------------------------------------------
@@ -540,16 +479,14 @@ setup_profiles() {
 
 # GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
 setup_gitconfig() {
+  setup_lazygit
+
   print_info2 "\n🚀 GIT :: setup git..."
-  mkdir -p "$GIT_HOOK_FOLDER"
+  mkdir -p "$(dirname "$LN_GIT_HOOK_COMMIT_MSG")"
+  mkdir -p "$(dirname "$LN_GIT_HOOK_PRE_COMMIT")"
 
   local -a ssh_keys
   local git_user_name git_user_email git_signing_key signing_key_path_expanded
-
-  print_info2 "🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
-  mkdir -p "$(dirname "$LN_LAZYGIT")"
-  rm -f "${LN_LAZYGIT}"
-  ln -sf "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
 
   print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
   rm -f "${LN_GIT_HOOK_COMMIT_MSG}"
@@ -618,6 +555,77 @@ setup_gitconfig() {
   print_info2 "🚀 GIT :: Setup complete!"
 }
 
+# LAZYGIT :: CREATE LINK AND SETUP -------------------------------------------
+setup_lazygit() {
+  print_info2 "\n🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
+  mkdir -p "$(dirname "$LN_LAZYGIT")"
+  rm -f "${LN_LAZYGIT}"
+  ln -sf "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
+
+  print_info2 "🚀 LAZYGIT :: All symlinks created."
+}
+
+# ZSH :: CREATE LINKS ---------------------------------------------------------
+setup_zsh() {
+  print_info2 "\n🚀 ZSH :: Load git submodules"
+  git submodule update -q --init --remote \
+    zsh/themes/spaceship \
+    zsh/plugins/zsh-autosuggestions \
+    zsh/plugins/zsh-syntax-highlighting \
+    zsh/plugins/zsh-history-substring-search
+
+  mkdir -p "$LN_ZSH/custom/"{themes,plugins}
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
+  rm -f "$LN_ZSH/custom/themes/spaceship.zsh-theme"
+  ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
+  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
+  rm -f "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  rm -f "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  rm -f "$LN_ZSH/custom/plugins/zsh-history-substring-search"
+  ln -sf "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
+
+  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
+  rm -f "${LN_ZSHRC}"
+  ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
+  print_info2 "🚀 ZSH :: All symlinks created."
+}
+
+# TMUX :: CREATE LINKS ---------------------------------------------------------
+setup_tmux() {
+  print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
+  rm -f "${LN_TMUX_ORIG_BASE}"
+  ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
+  print_info2 "🚀 TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
+  rm -f "${LN_TMUX_ORIG_TMUX}"
+  ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
+
+  print_info2 "🚀 TMUX :: Load git submodules"
+  git submodule update -q --init --remote tmux/tmux/plugins/tpm
+  if command -v tmux >/dev/null 2>&1; then
+    print_info2 "🚀 TMUX :: Run tpm to install plugins"
+    PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
+  fi
+
+  print_info2 "🚀 TMUX :: All symlinks created."
+}
+
+# CODE :: CREATE LINKS ---------------------------------------------------------
+setup_code() {
+  mkdir -p "$LN_VS_CODE"
+  print_info2 "\n🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
+  rm -f "${LN_VS_CODE}/keybindings.json"
+  ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
+  print_info2 "🚀 CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'"
+  rm -f "${LN_VS_CODE}/settings.json"
+  ln -sf "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
+  print_info2 "🚀 CODE :: Create symlink from './code/snippets' into '$LN_VS_CODE'"
+  rm -f "${LN_VS_CODE}/snippets"
+  ln -sf "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
+  print_info2 "🚀 CODE :: All symlinks created."
+}
+
 # ******************************************************************************
 
 # CODE :: install ext ----------------------------------------------------------
@@ -666,7 +674,7 @@ install_fonts() {
     "${VERSION_FONTS_RELEASE_G}/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
     "https://github.com/fonsecapeter/brass_mono/releases/download/v1.101/BrassMono.zip"
   )
-  local fonts_dir="${HOME}/.local/share/fonts"
+  local fonts_dir="$USER_LOCAL_PREFIX/share/fonts"
 
   for url in "${FONTS_URLS[@]}"; do
     file_name=$(basename "$url")
