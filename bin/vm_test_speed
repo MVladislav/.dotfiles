@@ -96,8 +96,10 @@ main() {
 
   clear
   if [[ "$use_docker" == "docker" ]]; then
+    echo "RUNNING: docker run -it --rm networkstatic/iperf3 -c '$server' -p '$port' -Ts1 -b0 -i3 -O1 -P1 '$*'"
     docker run -it --rm networkstatic/iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@" || exit 1
   else
+    echo "RUNNING: iperf3 -c '$server' -p '$port' -Ts1 -b0 -i3 -O1 -P1 '$*'"
     iperf3 -c "$server" -p "$port" -Ts1 -b0 -i3 -O1 -P1 "$@" || exit 1
   fi
 }
