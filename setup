@@ -53,21 +53,24 @@ RUN_INSTALL_HUNK=0
 RUN_INSTALL_GH=0
 
 # CONFS :: variables -----------------------------------------------------------
+VERSION_ZIG_V=0.15.2
+VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
+VERSION_GHOSTTY=v1.3.1
+VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
 VERSION_NVIM=v0.12.3
 VERSION_NVIM_G=https://github.com/neovim/neovim.git
 VERSION_ZSH=zsh-5.9.1
 VERSION_ZSH_G=https://github.com/zsh-users/zsh.git
-VERSION_ZIG_V=0.15.2
-# VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-linux-x86_64-${VERSION_ZIG_V}.tar.xz"
-VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
-VERSION_GHOSTTY=v1.3.1
-VERSION_GHOSTTY_G=https://github.com/ghostty-org/ghostty.git
-VERSION_FONTS_RELEASE=v3.4.0
-VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
+VERSION_TMUX=3.7b
+VERSION_TMUX_G=https://github.com/tmux/tmux.git
 VERSION_BTOP=v1.4.7
 VERSION_BTOP_G=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-7.2.4
 VERSION_RSMI_G=https://github.com/ROCm/rocm-systems.git
+VERSION_HUNK=v0.17.6
+VERSION_HUNK_G=https://github.com/modem-dev/hunk.git
+VERSION_FONTS_RELEASE=v3.4.0
+VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
 
 LN_VM_BIN="${LN_VM_BIN:-"$USER_LOCAL_PREFIX_BIN/vm"}"
 
@@ -235,20 +238,19 @@ install_dependencies_ghostty() {
   fi
 
   print_notes "   💡 Cloning ghostty..."
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-    cd "$DEPS_INSTALL_PATH/ghostty"
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-    cd "$DEPS_INSTALL_PATH/ghostty"
-    git checkout -q "$VERSION_GHOSTTY"
-  fi
+  git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
+  pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_GHOSTTY"
 
   print_notes "   💡 Build and install ghostty..."
-  sed -i 's|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz|https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz|g' ./build.zig.zon
-  sed -i 's|N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y|N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN|g' ./build.zig.zon
+  local GHOSTTY_ITERM_RO='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz'
+  local GHOSTTY_ITERM_ROH='N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y' # pragma: allowlist secret
+  local GHOSTTY_ITERM_RN='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz'
+  local GHOSTTY_ITERM_RNH='N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN' # pragma: allowlist secret
+  sed -i "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" ./build.zig.zon
+  sed -i "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
-  cd - 1>/dev/null
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
@@ -282,21 +284,15 @@ install_dependencies_nvim() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   print_notes "   💡 Cloning nvim..."
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-    cd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-    cd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-    git checkout -q "$VERSION_NVIM"
-    # git switch -q release-0.10
-  fi
+  git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
+  pushd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_NVIM"
 
   print_notes "   💡 Build and install nvim..."
   # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
   make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
-  cd - 1>/dev/null
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
 
@@ -323,7 +319,7 @@ install_dependencies_zsh() {
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     print_notes "   💡 Cloning zsh..."
     git clone -q "$VERSION_ZSH_G" "$DEPS_INSTALL_PATH/zsh"
-    cd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+    pushd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     git checkout -q "${VERSION_ZSH}"
 
     print_notes "   💡 Build and install zsh..."
@@ -331,7 +327,7 @@ install_dependencies_zsh() {
     ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
     make 1>/dev/null
     make install 1>/dev/null
-    cd - 1>/dev/null
+    popd 1>/dev/null
     rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     print_notes "   💡 Installing zsh..."
@@ -356,10 +352,8 @@ install_dependencies_zsh() {
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   fi
 
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # Remove build dependencies if any
-    install_dependencies_needs_rm
-  fi
+  # Remove build dependencies if any
+  [[ $INSTALL_SOURCE_FROM == 'source' ]] && install_dependencies_needs_rm
 
   print_info2 "🚀 ZSH :: zsh installed!"
 }
@@ -375,22 +369,15 @@ install_dependencies_tmux() {
   local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q https://github.com/tmux/tmux.git "$DEPS_INSTALL_PATH/tmux"
-    cd "$DEPS_INSTALL_PATH/tmux"
-    bash ./autogen.sh 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    mkdir -p "$DEPS_INSTALL_PATH/tmux"
-    curl -L -so "$DEPS_INSTALL_PATH/tmux.tar.gz" "$(curl -s 'https://api.github.com/repos/tmux/tmux/releases/latest' | jq -r '.assets[] | select(.name | test(".*tar.gz$")) | .browser_download_url')"
-    tar -zxf "$DEPS_INSTALL_PATH/tmux.tar.gz" -C "$DEPS_INSTALL_PATH/tmux" --strip-components=1
-    rm "$DEPS_INSTALL_PATH/tmux.tar.gz"
-    cd "$DEPS_INSTALL_PATH/tmux"
-  fi
+  git clone -q "$VERSION_TMUX_G" "$DEPS_INSTALL_PATH/tmux"
+  pushd "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_TMUX"
+  bash ./autogen.sh 1>/dev/null
 
   bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
   make 1>/dev/null
   make install 1>/dev/null
-  cd - 1>/dev/null
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
 
@@ -749,7 +736,7 @@ install_fonts() {
   print_info2 "🚀 FONTS :: All fonts are downloaded and extracted"
 }
 
-# BTOP :: install btop ---------------------------------------------------------
+# SERVICE :: install btop ---------------------------------------------------------
 install_btop() {
   print_info2 "\n🚀 BTOP :: install btop..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
@@ -763,14 +750,9 @@ install_btop() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   print_notes "   💡 Cloning btop..."
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
-    pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
-    pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-    git checkout -q "${VERSION_BTOP}"
-  fi
+  git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
+  pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_BTOP"
 
   # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
@@ -816,7 +798,7 @@ install_btop() {
   setup_btop
 }
 
-# ANDROID :: setup emulator ----------------------------------------------------
+# SERVICE :: install android emulator ----------------------------------------------------
 install_setup_android_emulator() {
   # sudo apt install openjdk-26-jre-headless
   # --- Paths ----------------------------------------------------------
@@ -851,6 +833,7 @@ install_setup_android_emulator() {
   yes | "$SDKMANAGER" --licenses >/dev/null || true
 
   # --- Update SDK tools ----------------------------------------------
+  # "$SDKMANAGER" --uninstall emulator
   "$SDKMANAGER" --update
 
   # --- Install build tools ----------------------
@@ -862,8 +845,6 @@ install_setup_android_emulator() {
   # --- Show available system images and devices ----------------------
   echo "📋 Available system images:"
   IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -ur)
-
-  # Use fzf if installed, otherwise prompt
   SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
 
   echo "📦 Installing: $SELECTED_IMAGE ..."
@@ -884,16 +865,11 @@ install_setup_android_emulator() {
   "$EMULATOR" -list-avds
 }
 
-# apt update
-# apt install git curl jq file vim
-# git clone https://github.com/mvladislav/.dotfiles && cd .dotfiles
-# bash setup -ds -ihunk
-
 # SERVICE :: install hunk ------------------------------------------------------
 install_hunk() {
   print_info2 "\n🚀 HUNK :: install hunk..."
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
-  download_github_binary 'https://github.com/modem-dev/hunk' 'hunkdiff-linux-x64\.tar\.gz'
+  download_github_binary "$VERSION_HUNK_G" 'hunkdiff-linux-x64\.tar\.gz'
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
   print_info2 "🚀 HUNK :: hunk installed!"
 
@@ -1069,12 +1045,14 @@ parse_args() {
       # RUN_SETUP_CODE=0
 
       echo
+      check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
       check_for_newer_tag "$VERSION_NVIM_G" "$VERSION_NVIM"
       check_for_newer_tag "$VERSION_ZSH_G" "$VERSION_ZSH" "-test"
-      check_for_newer_tag "$VERSION_GHOSTTY_G" "$VERSION_GHOSTTY"
-      check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
+      check_for_newer_tag "$VERSION_TMUX_G" "$VERSION_TMUX"
       check_for_newer_tag "$VERSION_BTOP_G" "$VERSION_BTOP"
       check_for_newer_tag "$VERSION_RSMI_G" "$VERSION_RSMI" "rocm"
+      check_for_newer_tag "$VERSION_HUNK_G" "$VERSION_HUNK"
+      check_for_newer_tag "$VERSION_FONTS_RELEASE_G" "$VERSION_FONTS_RELEASE"
       ;;
     *)
       print_error "❌ Unknown option: $key"
