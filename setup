@@ -153,68 +153,68 @@ initialize_base() {
 
 # ******************************************************************************
 
-# DEPS :: install dependencies additional --------------------------------------
+# DEPS :: additional -----------------------------------------------------------
 install_dependencies_additional() {
   print_info2 "\n🚀 DEPS :: installing additional base services"
-  print_notes "   📥 installing [curl git git-delta pigz jq rsync fzf wl-clipboard]..."
+  print_notes "   📦 installing [curl git git-delta pigz jq rsync fzf wl-clipboard]..."
   $RUN_WITH_SUDO apt-get install -y curl git git-delta pigz jq rsync fzf wl-clipboard 1>/dev/null
-  print_notes "   📥 installing [eza bat ripgrep fd-find]..."
+  print_notes "   📦 installing [eza bat ripgrep fd-find]..."
   $RUN_WITH_SUDO apt-get install -y eza bat ripgrep fd-find 1>/dev/null
 
-  print_notes "   ⚙️ disable rsync systemd service..."
+  print_notes "   ⚙️ disabling rsync systemd service..."
   $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
   $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_info2 "🚀 DEPS :: base services installed!"
+  print_info2 "✅ DEPS :: base services installed!"
 }
 
-# DEPS :: install dependencies dev ---------------------------------------------
+# DEPS :: dev ------------------------------------------------------------------
 install_dependencies_dev() {
   print_info2 "\n🚀 DEPS :: installing dev dependencies"
-  print_notes "   📥 installing npm..."
+  print_notes "   📦 installing npm..."
   $RUN_WITH_SUDO snap install node --classic 1>/dev/null
 
-  print_notes "   📥 installing rust..."
+  print_notes "   📦 installing rust..."
   $RUN_WITH_SUDO snap install rustup --classic 1>/dev/null
 
-  print_notes "   📥 installing go..."
+  print_notes "   📦 installing go..."
   $RUN_WITH_SUDO snap install go --classic 1>/dev/null
 
-  print_notes "   📥 installing shellcheck..."
+  print_notes "   📦 installing shellcheck..."
   $RUN_WITH_SUDO snap install shellcheck 1>/dev/null
 
-  print_notes "   📥 installing httpie..."
+  print_notes "   📦 installing httpie..."
   $RUN_WITH_SUDO snap install httpie 1>/dev/null
 
-  print_notes "   📥 installing python3 pip, venv and dev..."
+  print_notes "   📦 installing python3 pip, venv and dev..."
   $RUN_WITH_SUDO apt install -y python3-pip python3-venv python3-dev 1>/dev/null
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
 
-  print_notes "   📥 setup rustup..."
+  print_notes "   ⚙️ setting up rustup..."
   rustup default stable 1>/dev/null
 
-  print_notes "   📥 installing lazygit..."
+  print_notes "   📦 installing lazygit..."
   go install github.com/jesseduffield/lazygit@latest 1>/dev/null
 
-  print_notes "   📥 installing uv and prek..."
+  print_notes "   📦 installing uv and prek..."
   python3 -m venv "$HOME/.venv"
   # shellcheck disable=SC1091
   source "$HOME/.venv/bin/activate"
   python3 -m pip install uv prek 1>/dev/null
 
-  print_info2 "🚀 DEPS :: dev dependencies installed!"
+  print_info2 "✅ DEPS :: dev dependencies installed!"
 }
 
-# DEPS :: install dependencies tools -------------------------------------------
+# TOOLS :: extended ------------------------------------------------------------
 install_extended_tools() {
   print_info2 "\n🚀 TOOLS :: installing extended tools"
 
-  # cargo install impala # https://github.com/pythops/impala
-  # cargo install wiremix # https://github.com/tsowell/wiremix
+  # cargo install impala    # https://github.com/pythops/impala
+  # cargo install wiremix   # https://github.com/tsowell/wiremix
 
-  print_info2 "🚀 TOOLS :: extended tools installed!"
+  print_info2 "✅ TOOLS :: extended tools installed!"
 }
 
 # ******************************************************************************
@@ -232,19 +232,19 @@ install_ghostty() {
 
   local ZIG_COMMAND=zig
   if ! command -v zig >/dev/null 2>&1; then
-    print_notes "   💡 Download binary zig..."
+    print_notes "   📦 downloading zig binary..."
     curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_U"
     mkdir -p "$DEPS_INSTALL_PATH/zig"
     tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
     ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
   fi
 
-  print_notes "   💡 Cloning ghostty..."
+  print_notes "   📦 cloning ghostty..."
   git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-  pushd "$DEPS_INSTALL_PATH/ghostty"
+  pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_GHOSTTY"
 
-  print_notes "   💡 Build and install ghostty..."
+  print_notes "   🔧 building and installing ghostty..."
   local GHOSTTY_ITERM_RO='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz'
   local GHOSTTY_ITERM_ROH='N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y' # pragma: allowlist secret
   local GHOSTTY_ITERM_RN='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz'
@@ -252,24 +252,24 @@ install_ghostty() {
   sed -i "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" ./build.zig.zon
   sed -i "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
-  popd
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
 
-  print_info2 "🚀 GHOSTTY :: Switch default keybind to open terminal ('<Ctrl><Alt>T')"
+  print_notes "   ⚙️ switching default keybind to open terminal ('<Ctrl><Alt>T')"
   gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
   gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
 
-  print_notes "   💡 For better 'xterm compatibility', use \`vm_xterm_cp_local\` (for sudo session) or \`vm_xterm_cp_ssh\` (for SSH sessions)."
+  print_notes "   💡 for 'xterm compatibility', use vm_xterm_cp_local (sudo) or vm_xterm_cp_ssh (SSH)"
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
-  print_info2 "🚀 GHOSTTY :: ghostty installed!"
+  print_info2 "✅ GHOSTTY :: ghostty installed!"
 
   setup_ghostty
 }
@@ -285,24 +285,24 @@ install_nvim() {
   local packages_build=(git curl ninja-build gettext cmake build-essential)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  print_notes "   💡 Cloning nvim..."
+  print_notes "   📦 cloning nvim..."
   git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-  pushd "$DEPS_INSTALL_PATH/nvim"
+  pushd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_NVIM"
 
-  print_notes "   💡 Build and install nvim..."
+  print_notes "   🔧 building and installing nvim..."
   # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
   make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
-  popd
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
-  print_notes "   💡 You should also install 'node', which is required by some tools like 'Mason plugins'."
-  print_info2 "🚀 NVIM :: nvim installed!"
+  print_notes "   💡 install 'node' for Mason plugin support"
+  print_info2 "✅ NVIM :: nvim installed!"
 }
 
 # SERVICE :: install zsh -------------------------------------------------------
@@ -319,20 +319,20 @@ install_zsh() {
   fi
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    print_notes "   💡 Cloning zsh..."
+    print_notes "   📦 cloning zsh..."
     git clone -q "$VERSION_ZSH_G" "$DEPS_INSTALL_PATH/zsh"
-    pushd "$DEPS_INSTALL_PATH/zsh"
+    pushd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
     git checkout -q "${VERSION_ZSH}"
 
-    print_notes "   💡 Build and install zsh..."
+    print_notes "   🔧 building and installing zsh..."
     ./Util/preconfig 1>/dev/null
     ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
     make 1>/dev/null
     make install 1>/dev/null
-    popd
+    popd 1>/dev/null
     rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    print_notes "   💡 Installing zsh..."
+    print_notes "   📦 installing zsh..."
     $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
   fi
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
@@ -346,10 +346,10 @@ install_zsh() {
   setup_zsh
 
   if [[ "$(basename "$SHELL")" != "zsh" ]]; then
-    print_info2 "🚀 ZSH :: Set 'zsh' as new shell für user '$USER'"
+    print_info2 "🚀 ZSH :: setting zsh as default shell for user '$USER'"
     # sudo chsh -s "$(which zsh)" "$USER"
     $RUN_WITH_SUDO chsh -s "$zsh_install_bin_path" "$USER" || {
-      print_error "  ❌ Failed to change default shell to ZSH. Please run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
+      print_error "  ❌ failed to change default shell to ZSH. Run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
     }
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   fi
@@ -357,7 +357,7 @@ install_zsh() {
   # Remove build dependencies if any
   [[ $INSTALL_SOURCE_FROM == 'source' ]] && install_dependencies_needs_rm
 
-  print_info2 "🚀 ZSH :: zsh installed!"
+  print_info2 "✅ ZSH :: zsh installed!"
 }
 
 # SERVICE :: install tmux ------------------------------------------------------
@@ -371,15 +371,17 @@ install_tmux() {
   local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
+  print_notes "   📦 cloning tmux..."
   git clone -q "$VERSION_TMUX_G" "$DEPS_INSTALL_PATH/tmux"
-  pushd "$DEPS_INSTALL_PATH/tmux"
+  pushd "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_TMUX"
   bash ./autogen.sh 1>/dev/null
 
+  print_notes "   🔧 building and installing tmux..."
   bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
   make 1>/dev/null
   make install 1>/dev/null
-  popd
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
 
@@ -388,7 +390,7 @@ install_tmux() {
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
-  print_info2 "🚀 TMUX :: tmux installed!"
+  print_info2 "✅ TMUX :: tmux installed!"
 }
 
 # ******************************************************************************
@@ -400,23 +402,20 @@ install_btop() {
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
 
   # Define packages needed for build and install
-  # shellcheck disable=SC2034
   local packages_tools=()
-  # shellcheck disable=SC2034
   local packages_build=(git build-essential cmake libdrm-dev pkg-config)
   install_dependencies_needs packages_tools[@] packages_build[@]
 
-  print_notes "   💡 Cloning btop..."
+  print_notes "   📦 cloning btop..."
   git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
-  pushd "$DEPS_INSTALL_PATH/btop"
+  pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_BTOP"
 
-  # Handle ROCm SMI if needed
   local RSMI_STATIC='false'
   local ROCM_DIR='lib/rocm_smi_lib'
   local ROCM_PROJECT='rocm-smi-lib' # amdsmi
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    print_notes "   💡 Cloning & building rocm..."
+    print_notes "   📦 cloning and building rocm..."
     rm -rf $ROCM_DIR /tmp/rocm-systems 1>/dev/null
     mkdir -p lib
     git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" /tmp/rocm-systems
@@ -425,24 +424,24 @@ install_btop() {
     pushd "${ROCM_DIR}/build" 1>/dev/null
     cmake .. 1>/dev/null           # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
     make -j "$(nproc)" 1>/dev/null # amd_smi
-    popd
+    popd 1>/dev/null
     RSMI_STATIC='true'
   fi
 
-  print_notes "   💡 Build and install btop..."
+  print_notes "   🔧 building and installing btop..."
   make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ROCM_DIR="$ROCM_DIR" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
-  popd
+  popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
 
   if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
-    print_notes "   💡 configure btop with 'setcap' for 'GPU' and 'CPU watts' access without 'sudo'"
+    print_notes "   ⚙️ configuring btop with setcap for GPU and CPU watts access without sudo"
     $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   else
-    print_notes "   💡 configure btop with 'setcap' for 'CPU watts' access without 'sudo'"
+    print_notes "   ⚙️ configuring btop with setcap for CPU watts access without sudo"
     $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   fi
@@ -450,7 +449,7 @@ install_btop() {
   # Remove build dependencies if any
   install_dependencies_needs_rm
 
-  print_info2 "🚀 BTOP :: btop installed!"
+  print_info2 "✅ BTOP :: btop installed!"
 
   setup_btop
 }
@@ -461,16 +460,16 @@ install_hunk() {
   print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
   download_github_binary "$VERSION_HUNK_G" 'hunkdiff-linux-x64\.tar\.gz'
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
-  print_info2 "🚀 HUNK :: hunk installed!"
+  print_info2 "✅ HUNK :: hunk installed!"
 
-  print_info2 "\n🚀 HUNK :: Set hunk for git as pager"
+  print_info2 "\n🔧 HUNK :: setting hunk as git pager"
   git config --global core.pager "hunk pager"
 
-  print_info2 "🚀 HUNK :: Create symlink from './configs-single/hunk.toml' as '$LN_HUNK'"
+  print_info2 "🔗 HUNK :: linking configs-single/hunk.toml -> $LN_HUNK"
   mkdir -p "$(dirname "${LN_HUNK}")"
   rm -f "${LN_HUNK}"
   ln -sf "${PWD}/configs-single/hunk.toml" "${LN_HUNK}"
-  print_info2 "🚀 HUNK :: All symlinks created."
+  print_info2 "✅ HUNK :: all symlinks created."
 }
 
 # SERVICE :: install android emulator ------------------------------------------
@@ -483,13 +482,12 @@ install_setup_android_emulator() {
   mkdir -p "$ANDROID_HOME"
 
   command -v fzf >/dev/null 2>&1 || {
-    echo "fzf not installed"
+    print_error "❌ fzf not installed"
     exit 1
   }
 
-  # --- Download & unpack cmdline-tools if missing ---------------------
   if [[ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]]; then
-    echo "📦 Downloading Android command-line tools..."
+    print_info2 "📦 downloading Android command-line tools..."
     # https://developer.android.com/studio#command-line-tools-only
     # - https://dl.google.com/android/repository/commandlinetools-<os>-<version>_latest.zip
     curl -sLo "$ANDROID_HOME/cmdline-tools.zip" \
@@ -512,17 +510,17 @@ install_setup_android_emulator() {
   "$SDKMANAGER" --update
 
   # --- Install build tools ----------------------
-  echo "📋 Available build-tools:"
+  print_info2 "📋 available build-tools:"
   BUILD_TOOLS=$("$SDKMANAGER" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort -ur)
   SELECTED_BUILD_TOOL=$(echo "$BUILD_TOOLS" | fzf --prompt="Select build-tools version: ")
   "$SDKMANAGER" "$SELECTED_BUILD_TOOL"
 
   # --- Show available system images and devices ----------------------
-  echo "📋 Available system images:"
+  print_info2 "📋 available system images:"
   IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -ur)
   SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
 
-  echo "📦 Installing: $SELECTED_IMAGE ..."
+  print_info2 "📦 installing: $SELECTED_IMAGE ..."
   "$SDKMANAGER" "platform-tools" "emulator" "$SELECTED_IMAGE"
 
   # --- Choose device profile -----------------------------------------
@@ -532,11 +530,11 @@ install_setup_android_emulator() {
   # --- Create AVD ----------------------------------------------------
   SELECTED_IMAGE_NAME=$(basename "$SELECTED_IMAGE" | tr ';:' '_' | tr -d '[:punct:]')
   AVD_NAME=${SELECTED_IMAGE_NAME}_$(basename "$SELECTED_DEVICE")_"$(date +%s)"
-  echo "🧩 Creating AVD: $AVD_NAME ..."
+  print_info2 "📱 creating AVD: $AVD_NAME ..."
   "$AVDMANAGER" create avd -n "$AVD_NAME" -k "$SELECTED_IMAGE" -d "$SELECTED_DEVICE" --force
 
   # --- Verify --------------------------------------------------------
-  echo "✅ Available AVDs:"
+  print_info2 "✅ available AVDs:"
   "$EMULATOR" -list-avds
 }
 
@@ -544,64 +542,64 @@ install_setup_android_emulator() {
 
 # SETUP :: bin -----------------------------------------------------------------
 setup_bin() {
-  print_info2 "\n🚀 BIN :: Create symlink from './bin/*' as '$LN_VM_BIN/*'"
+  print_info2 "\n🔗 BIN :: linking ./bin/* -> $LN_VM_BIN"
   mkdir -p "$(dirname "$LN_VM_BIN")"
   rm -f "$LN_VM_BIN"
   ln -sf "$PWD/bin" "$LN_VM_BIN"
-  print_info2 "🚀 BIN :: All symlinks created."
+  print_info2 "✅ BIN :: symlinks created."
 }
 
 # SETUP :: ghostty -------------------------------------------------------------
 # NOTE: runs inside 'install_ghostty'
 setup_ghostty() {
-  print_info2 "\n🚀 GHOSTTY :: Create symlink from './configs-single/ghostty.conf' as '$LN_GHOSTTY_FOLDER/config'"
+  print_info2 "\n🔗 GHOSTTY :: linking configs-single/ghostty.conf -> $LN_GHOSTTY_FOLDER/config"
   mkdir -p "${LN_GHOSTTY_FOLDER}"
   rm -f "${LN_GHOSTTY_FOLDER}/config"
   ln -sf "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY_FOLDER}/config"
-  print_info2 "🚀 GHOSTTY :: All symlinks created."
+  print_info2 "✅ GHOSTTY :: symlinks created."
 }
 
 # SETUP :: nvim ----------------------------------------------------------------
 setup_nvim() {
-  print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
+  print_info2 "\n🔗 NVIM :: linking ./nvim -> $LN_NVIM_ORIG_BASE"
   mkdir -p "$(dirname "$LN_NVIM_ORIG_BASE")"
   rm -f "${LN_NVIM_ORIG_BASE}"
   ln -sf "${PWD}/nvim" "${LN_NVIM_ORIG_BASE}"
-  print_info2 "🚀 NVIM :: All symlinks created."
+  print_info2 "✅ NVIM :: symlinks created."
 }
 
 # SETUP :: zed -----------------------------------------------------------------
 setup_zed() {
   mkdir -p "$LN_ZED"
-  print_info2 "\n🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
+  print_info2 "\n🔗 ZED :: linking zed/settings.json -> $LN_ZED/settings.json"
   rm -f "${LN_ZED}/settings.json"
   ln -sf "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
-  print_info2 "🚀 ZED :: Create symlink from './zed/keymap.json' into '$LN_ZED'"
+  print_info2 "🔗 ZED :: linking zed/keymap.json -> $LN_ZED/keymap.json"
   rm -f "${LN_ZED}/keymap.json"
   ln -sf "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
-  print_info2 "🚀 ZED :: Create symlink from './zed/snippets' into '$LN_ZED'"
+  print_info2 "🔗 ZED :: linking zed/snippets -> $LN_ZED/snippets"
   rm -f "${LN_ZED}/snippets"
   ln -sf "${PWD}/zed/snippets" "${LN_ZED}/snippets"
 
-  print_info2 "🚀 ZED :: Create symlink from './zed/codebook.toml' into '$LN_ZED_CODEBOOK/codebook.toml'"
+  print_info2 "🔗 ZED :: linking zed/codebook.toml -> $LN_ZED_CODEBOOK/codebook.toml"
   mkdir -p "$LN_ZED_CODEBOOK"
   rm -f "${LN_ZED_CODEBOOK}/codebook.toml"
   ln -sf "${PWD}/zed/codebook.toml" "${LN_ZED_CODEBOOK}/codebook.toml"
 
-  print_info2 "🚀 ZED :: All symlinks created."
+  print_info2 "✅ ZED :: symlinks created."
 }
 
 # SETUP :: profiles ------------------------------------------------------------
 setup_profiles() {
-  print_info2 "\n🚀 PROFILES :: Create symlink for './profiles/profile-append' as '$LN_PROFILES_01'"
+  print_info2 "\n🔗 PROFILES :: linking profiles/profile-append -> $LN_PROFILES_01"
   rm -f "${LN_PROFILES_01}"
   ln -sf "${PWD}/profiles/profile-append" "${LN_PROFILES_01}"
-  print_info2 "🚀 PROFILES :: Create symlink for './profiles/profile-sec' as '$LN_PROFILES_02'"
+  print_info2 "🔗 PROFILES :: linking profiles/profile-sec -> $LN_PROFILES_02"
   rm -f "${LN_PROFILES_02}"
   ln -sf "${PWD}/profiles/profile-sec" "${LN_PROFILES_02}"
 
   local PROFILE_SECRETS="${HOME}/.profile-secrets"
-  print_info2 "🚀 PROFILES :: Create secrets file as '$PROFILE_SECRETS'"
+  print_info2 "🔧 PROFILES :: creating secrets file at $PROFILE_SECRETS"
   touch "$PROFILE_SECRETS"
 
   local profile_files=(
@@ -616,7 +614,7 @@ setup_profiles() {
   )
 
   for profile_file in "${profile_files[@]}"; do
-    print_info2 "🚀 PROFILES :: Create '${profile_file}'"
+    print_info2 "⚙️ PROFILES :: updating ${profile_file}"
     touch "${profile_file}" 1>/dev/null
     for line in "${lines_to_add[@]}"; do
       if ! grep -Fxq "$line" "${profile_file}"; then
@@ -625,51 +623,51 @@ setup_profiles() {
     done
   done
 
-  print_info2 "🚀 PROFILES :: All symlinks created."
+  print_info2 "✅ PROFILES :: symlinks created."
 }
 
 # SETUP :: gitconfig -----------------------------------------------------------
 setup_gitconfig() {
   setup_lazygit
 
-  print_info2 "\n🚀 GIT :: setup git..."
+  print_info2 "\n🚀 GIT :: setting up git..."
   mkdir -p "$(dirname "$LN_GIT_HOOK_COMMIT_MSG")"
   mkdir -p "$(dirname "$LN_GIT_HOOK_PRE_COMMIT")"
 
   local -a ssh_keys
   local git_user_name git_user_email git_signing_key signing_key_path_expanded
 
-  print_info2 "🚀 GITHOOKS :: Create symlink for './git/commit-msg' as '$LN_GIT_HOOK_COMMIT_MSG'"
+  print_info2 "🔗 GITHOOKS :: linking git/commit-msg -> $LN_GIT_HOOK_COMMIT_MSG"
   rm -f "${LN_GIT_HOOK_COMMIT_MSG}"
   ln -sf "${PWD}/git/commit-msg" "${LN_GIT_HOOK_COMMIT_MSG}"
-  print_info2 "🚀 GITHOOKS :: Create symlink for './git/pre-commit' as '$LN_GIT_HOOK_PRE_COMMIT'"
+  print_info2 "🔗 GITHOOKS :: linking git/pre-commit -> $LN_GIT_HOOK_PRE_COMMIT"
   rm -f "${LN_GIT_HOOK_PRE_COMMIT}"
   ln -sf "${PWD}/git/pre-commit" "${LN_GIT_HOOK_PRE_COMMIT}"
 
-  print_info2 "🚀 GITCONFIG :: Starting global Git configuration..."
+  print_info2 "⚙️ GITCONFIG :: starting global Git configuration..."
 
-  print_read "  ✏️ Enter your Git user.name: "
+  print_read "  ✏️ enter your Git user.name: "
   read -r git_user_name
 
-  print_read "  ✏️ Enter your Git user.email: "
+  print_read "  ✏️ enter your Git user.email: "
   read -r git_user_email
   if [[ ! $git_user_email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-    print_error "  ❌ That doesn't look like a valid email. Please try again."
+    print_error "  ❌ that doesn't look like a valid email. Please try again."
     git_user_email=
   fi
 
   if [ -z "$git_user_name" ] || [ -z "$git_user_email" ]; then
-    print_info2 "🚀 GIT :: You not provide a git user or email, setup will be skipped"
+    print_info2 "⚠️ GIT :: no user/email provided, skipping setup"
     return 0
   fi
-  print_info2 "  🔍 Scanning '$HOME/.ssh' for available public keys"
+  print_info2 "  🔍 scanning $HOME/.ssh for available public keys"
   mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub")
 
   if [ ${#ssh_keys[@]} -gt 0 ]; then
     git_signing_key="$(printf '%s\n' "${ssh_keys[@]}" | fzf --prompt='Select signing key: ')"
   else
-    print_info2 "  ⚠️ No SSH public keys found in '$HOME/.ssh'."
-    print_read "  ✏️ Enter path to your Git signing key manually (or leave empty to skip): "
+    print_info2 "  ⚠️ no SSH public keys found in $HOME/.ssh."
+    print_read "  ✏️ enter path to Git signing key manually (or empty to skip): "
     read -e -r git_signing_key
   fi
 
@@ -677,43 +675,43 @@ setup_gitconfig() {
     git_signing_key="$(echo "$git_signing_key" | xargs)"
     signing_key_path_expanded="${git_signing_key/#\~/$HOME}"
     if [ ! -f "$signing_key_path_expanded" ]; then
-      print_error "  ⚠️ File '$git_signing_key' does not exist"
+      print_error "  ❌ file '$git_signing_key' does not exist"
       return 1
     fi
   fi
 
-  print_info2 "  ⚙️ GITCONFIG :: Copying './git/.gitconfig' to '${HOME}/.gitconfig'"
+  print_info2 "  📋 copying git/.gitconfig to ${HOME}/.gitconfig"
   if [ -f "${HOME}/.gitconfig" ]; then
     cp "${HOME}/.gitconfig" "${HOME}/.gitconfig-$(date '+%Y%m%d-%H%M%S')"
   fi
   rm -f "${HOME}/.gitconfig"
   cp "${PWD}/git/.gitconfig" "${HOME}/.gitconfig"
 
-  print_info2 "  ⚙️ GITCONFIG :: Apply git configuration"
+  print_info2 "  ⚙️ applying git configuration"
   git config --global user.name "$git_user_name"
   git config --global user.email "$git_user_email"
 
   if [ -n "$git_signing_key" ]; then
     git config --global user.signingkey "$git_signing_key"
     git config --global commit.gpgsign true
-    print_info2 "  ⚙️ GITCONFIG :: GPG signing enabled using key: '$git_signing_key'"
+    print_info2 "  ✅ GPG signing enabled using key: '$git_signing_key'"
   else
     git config --global --unset user.signingkey 2>/dev/null || true
     git config --global commit.gpgsign false
-    print_info2 "  ⚙️ GITCONFIG :: GPG signing disabled"
+    print_info2 "  💡 GPG signing disabled"
   fi
 
-  print_info2 "🚀 GIT :: Setup complete!"
+  print_info2 "✅ GIT :: setup complete!"
 }
 
 # SETUP :: lazygit -------------------------------------------------------------
 setup_lazygit() {
-  print_info2 "\n🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
+  print_info2 "\n🔗 LAZYGIT :: linking git/lazygit.yml -> $LN_LAZYGIT"
   mkdir -p "$(dirname "$LN_LAZYGIT")"
   rm -f "${LN_LAZYGIT}"
   ln -sf "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
 
-  print_info2 "🚀 LAZYGIT :: All symlinks created."
+  print_info2 "✅ LAZYGIT :: symlinks created."
 }
 
 # ******************************************************************************
@@ -721,7 +719,7 @@ setup_lazygit() {
 # SETUP :: zsh -----------------------------------------------------------------
 # NOTE: runs inside 'install_zsh'
 setup_zsh() {
-  print_info2 "\n🚀 ZSH :: Load git submodules"
+  print_info2 "\n📦 ZSH :: loading git submodules"
   git submodule update -q --init --remote \
     zsh/themes/spaceship \
     zsh/plugins/zsh-autosuggestions \
@@ -729,10 +727,10 @@ setup_zsh() {
     zsh/plugins/zsh-history-substring-search
 
   mkdir -p "$LN_ZSH/custom/"{themes,plugins}
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/themes/*' into '$LN_ZSH/custom/themes/*'"
+  print_info2 "🔗 ZSH :: linking zsh/themes/* -> $LN_ZSH/custom/themes/*"
   rm -f "$LN_ZSH/custom/themes/spaceship.zsh-theme"
   ln -sf "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
-  print_info2 "🚀 ZSH :: Create symlink from './zsh/plugins/*' into '$LN_ZSH/custom/plugins/*'"
+  print_info2 "🔗 ZSH :: linking zsh/plugins/* -> $LN_ZSH/custom/plugins/*"
   rm -f "$LN_ZSH/custom/plugins/zsh-autosuggestions"
   rm -f "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
   rm -f "$LN_ZSH/custom/plugins/zsh-history-substring-search"
@@ -740,55 +738,55 @@ setup_zsh() {
   ln -sf "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
   ln -sf "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
 
-  print_info2 "🚀 ZSH :: Create symlink for './zsh/zshrc' as '$LN_ZSHRC'"
+  print_info2 "🔗 ZSH :: linking zsh/zshrc -> $LN_ZSHRC"
   rm -f "${LN_ZSHRC}"
   ln -sf "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-  print_info2 "🚀 ZSH :: All symlinks created."
+  print_info2 "✅ ZSH :: symlinks created."
 }
 
 # SETUP :: tmux ----------------------------------------------------------------
 # NOTE: runs inside 'install_tmux'
 setup_tmux() {
-  print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
+  print_info2 "\n🔗 TMUX :: linking tmux/tmux -> $LN_TMUX_ORIG_BASE"
   rm -f "${LN_TMUX_ORIG_BASE}"
   ln -sf "${PWD}/tmux/tmux" "${LN_TMUX_ORIG_BASE}"
-  print_info2 "🚀 TMUX :: Create symlink from './tmux/tmux.conf' as '$LN_TMUX_ORIG_TMUX'"
+  print_info2 "🔗 TMUX :: linking tmux/tmux.conf -> $LN_TMUX_ORIG_TMUX"
   rm -f "${LN_TMUX_ORIG_TMUX}"
   ln -sf "${PWD}/tmux/tmux.conf" "${LN_TMUX_ORIG_TMUX}"
 
-  print_info2 "🚀 TMUX :: Load git submodules"
+  print_info2 "📦 TMUX :: loading git submodules"
   git submodule update -q --init --remote tmux/tmux/plugins/tpm
   if command -v tmux >/dev/null 2>&1; then
-    print_info2 "🚀 TMUX :: Run tpm to install plugins"
+    print_info2 "🔧 TMUX :: running tpm to install plugins"
     PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX_ORIG_BASE}/plugins/tpm/bin/install_plugins" 1>/dev/null
   fi
 
-  print_info2 "🚀 TMUX :: All symlinks created."
+  print_info2 "✅ TMUX :: symlinks created."
 }
 
 # SETUP :: btop ----------------------------------------------------------------
 # NOTE: runs inside 'install_btop'
 setup_btop() {
-  print_info2 "\n🚀 BTOP :: Copying './configs-single/btop.conf' to '$LN_BTOP'"
+  print_info2 "\n🔧 BTOP :: copying configs-single/btop.conf -> $LN_BTOP"
   mkdir -p "$(dirname "$LN_BTOP")"
   rm -f "${LN_BTOP}"
   cp -f "${PWD}/configs-single/btop.conf" "${LN_BTOP}"
-  print_info2 "🚀 BTOP :: All copings done."
+  print_info2 "✅ BTOP :: config copied."
 }
 
 # SETUP :: code ----------------------------------------------------------------
 setup_code() {
   mkdir -p "$LN_VS_CODE"
-  print_info2 "\n🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
+  print_info2 "\n🔗 CODE :: linking code/keybindings.json -> $LN_VS_CODE/keybindings.json"
   rm -f "${LN_VS_CODE}/keybindings.json"
   ln -sf "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
-  print_info2 "🚀 CODE :: Create symlink from './code/settings.json' into '$LN_VS_CODE'"
+  print_info2 "🔗 CODE :: linking code/settings.json -> $LN_VS_CODE/settings.json"
   rm -f "${LN_VS_CODE}/settings.json"
   ln -sf "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
-  print_info2 "🚀 CODE :: Create symlink from './code/snippets' into '$LN_VS_CODE'"
+  print_info2 "🔗 CODE :: linking code/snippets -> $LN_VS_CODE/snippets"
   rm -f "${LN_VS_CODE}/snippets"
   ln -sf "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
-  print_info2 "🚀 CODE :: All symlinks created."
+  print_info2 "✅ CODE :: symlinks created."
 }
 
 # ******************************************************************************
@@ -796,7 +794,7 @@ setup_code() {
 # CODE :: install extensions ---------------------------------------------------
 install_code_ext() {
   if command -v code >/dev/null 2>&1; then
-    print_info2 "\n🚀 CODE :: installing code extensions"
+    print_info2 "\n📦 CODE :: installing VS Code extensions"
 
     # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
     # "github.copilot" "github.copilot-chat"
@@ -813,17 +811,17 @@ install_code_ext() {
     )
 
     for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
-      print_info2 "  📌 install extionsion '$vs_code_ext'"
+      print_info2 "  📌 installing extension '$vs_code_ext'"
       code --force --install-extension "$vs_code_ext" 1>/dev/null || true
     done
   else
-    print_error "👎CODE :: code is not installed, extension install will skipped!"
+    print_error "❌ CODE :: code not found, extension install skipped!"
   fi
 }
 
-# FONTS :: add fonts -----------------------------------------------------------
+# FONTS :: install -------------------------------------------------------------
 install_fonts() {
-  print_info2 "\n🚀 FONTS :: Downloading some fonts"
+  print_info2 "\n📦 FONTS :: downloading fonts"
 
   # Define packages needed for build and install
   # shellcheck disable=SC2034
@@ -848,42 +846,39 @@ install_fonts() {
     file_name=$(basename "$url")
     temp_file="/tmp/$file_name"
 
-    print_info2 "  - ⬇️ Downloading $file_name... ($url)"
+    print_info2 "  ⬇️ downloading $file_name..."
     curl -sL -o "$temp_file" "$url" || {
-      print_error "Failed to download $file_name"
+      print_error "  ❌ failed to download $file_name"
       return 1
     }
 
-    # Extract the GitHub repo name from the URL (if it's from GitHub)
     if [[ "$url" =~ github.com/([^/]+)/([^/]+) ]]; then
-      repo_name="${BASH_REMATCH[2]}" # This grabs the repo name after the user/organization
+      repo_name="${BASH_REMATCH[2]}"
     else
-      # Default fallback if it's not from GitHub
       repo_name="custom-font"
     fi
 
     local repo_dir="$fonts_dir/$repo_name"
     mkdir -p "$repo_dir"
 
-    # Determine the file type (archive type)
     archive_type=$(file --mime-type -b "$temp_file")
 
-    print_info2 "  - 📦 Extracting $file_name..."
+    print_info2 "  📦 extracting $file_name..."
     case "$archive_type" in
     application/x-xz) # .tar.xz
       tar -xf "$temp_file" -C "$repo_dir" || {
-        print_error "Failed to extract $file_name"
+        print_error "  ❌ failed to extract $file_name"
         return 1
       }
       ;;
     application/zip) # .zip
       unzip -qo "$temp_file" -d "$repo_dir" || {
-        print_error "Failed to extract $file_name"
+        print_error "  ❌ failed to extract $file_name"
         return 1
       }
       ;;
     *)
-      print_error "Unsupported archive type: $archive_type for $file_name"
+      print_error "  ❌ unsupported archive type: $archive_type for $file_name"
       return 1
       ;;
     esac
@@ -893,53 +888,60 @@ install_fonts() {
 
   install_dependencies_needs_rm
 
-  print_info2 "🚀 FONTS :: All fonts are downloaded and extracted"
+  print_info2 "✅ FONTS :: all fonts downloaded and extracted"
 }
 
 # ******************************************************************************
 
 # CLI :: usage -----------------------------------------------------------------
 usage() {
-  print_info "\n📑 Usage: $0 [options]"
-  print_info "   Examples:"
-  print_info "     $0                                             Run only config setups without installations"
-  print_info "     $0 -itools -ifont                              Run config setups without small additional installs"
-  print_info "     $0 -ifont                                      Run config setups with fonts install"
-  print_info "     $0 -ds -itools                                 Install only additional tools"
-  print_info "     $0 -ds -idev                                   Install only additional dev"
-  print_info "     $0 -ds -invim                                  Install only nvim"
-  print_info "     $0 -ds -izsh                                   Install only zsh"
-  print_info "     $0 -ds -ighost                                 Install only ghostty"
-  print_info "     $0 -ds -ibtop                                  Install only btop"
-  print_info "     $0 -it -invim -izsh -itmux                     Install nvim, zsh and tmux with additional tools + config setup"
-  print_info "     $0 -it -invim -ighost                          Install nvim and ghostty with additional tools + config setup"
-  print_info "   Options:"
-  print_info "     -h,            --help                             Show this help message and exit"
-  print_info "     -itools,       --install-additional-tools         Install additional tools [curl git pigz jq rsync fzf wl-clipboard eza bat ripgrep fd-find ...]"
-  print_info "     -idev,         --install-additional-dev           Install additional dev [node rustup go shellcheck ...]"
-  print_info "     -invim,        --install-dependencies-nvim        Install/update service nvim"
-  print_info "     -itmux,        --install-dependencies-tmux        Install/update service tmux"
-  print_info "     -izsh,         --install-dependencies-zsh         Install/update service zsh"
-  print_info "     -ighost,       --install-dependencies-ghostty     Install/update service ghostty"
-  print_info "     -nsb,          --not-setup-bin                    Skip setup_bin"
-  print_info "     -nsv,          --not-setup-nvim                   Skip setup_nvim"
-  print_info "     -nsz,          --not-setup-zed                    Skip setup_zed"
-  print_info "     -nsp,          --not-setup-profiles               Skip setup_profiles"
-  print_info "     -nsg,          --not-setup-gitconfig              Skip setup_gitconfig"
-  print_info "     -ds,           --disable-setups                   Skip all setup"
-  print_info "     -stx,          --setup-tmux                       Run setup_tmux (when install tmux, with '-itmux', this will run auto)"
-  print_info "     -szh,          --setup-zsh                        Run setup_zsh (when install zsh, with '-izsh', this will run auto)"
-  print_info "     -scd,          --setup-code                       Run setup_code"
-  print_info "     -ice,          --install-code-ext                 Run install install_code_ext"
-  print_info "     -ifont,        --install-fonts                    Run install install_fonts"
-  print_info "     -ibtop,        --install-btop                     Run install install_btop"
-  print_info "     -ibtop-amd,    --install-btop-amd                 Run install install_btop with AMD GPU support"
-  print_info "     -ibtop-intel,  --install-btop-intel               Run install install_btop with intel GPU support"
-  print_info "     -iemu,         --install-android-emulator         Run install install_setup_android_emulator"
-  print_info "     -ihunk,        --install-hunk                     Run install install_hunk"
-  print_info "     -igh,          --install-github-cli               Run install gh-cli-binary from github releases"
-  print_info "     -upc,          --update-check                     Check if new version for builds exists"
-  print_info "     -s                                                Use 'source' instead 'release' used for install services"
+  print_info "\n📖 Usage: $0 [options]"
+  print_info "   Symlink dotfiles and optionally install/update tools"
+  print_info ""
+  print_info "   🎯 Examples:"
+  print_info "     $0                                           Only run config symlinks, no installations"
+  print_info "     $0 -ifont                                     Run config symlinks + install fonts"
+  print_info "     $0 -ds -invim                                 Install nvim only (no symlinks)"
+  print_info "     $0 -itools -idev                              Install CLI tools + dev deps + symlinks"
+  print_info "     $0 -it -invim -izsh -ighost                   Install nvim, zsh, ghostty + tools + symlinks"
+  print_info "     $0 -upc                                       Check for newer versions of all tools"
+  print_info ""
+  print_info "   ⚙️ Install flags (enable tool installations):"
+  print_info "     -itools    --install-additional-tools         CLI tools: curl, git, git-delta, jq, fzf, eza, bat, ripgrep, fd-find, ..."
+  print_info "     -idev      --install-additional-dev           Dev tools: node, rust, go, shellcheck, lazygit, uv, prek"
+  print_info "     -invim     --install-dependencies-nvim        Build and install neovim from source"
+  print_info "     -itmux     --install-dependencies-tmux        Build and install tmux from source"
+  print_info "     -izsh      --install-dependencies-zsh         Install zsh (source build with -s, else apt)"
+  print_info "     -ighost    --install-dependencies-ghostty     Build and install ghostty terminal"
+  print_info "     -ibtop     --install-btop                     Build and install btop system monitor"
+  print_info "     -ibtop-amd --install-btop-amd                 btop with AMD GPU support (ROCm)"
+  print_info "     -ibtop-intel --install-btop-intel             btop + Intel GPU support"
+  print_info "     -ihunk     --install-hunk                     Install hunk git diff pager"
+  print_info "     -iemu      --install-android-emulator         Interactive Android emulator setup"
+  print_info "     -igh       --install-github-cli               Install GitHub CLI from releases"
+  print_info "     -ice       --install-code-ext                 Install VS Code extensions"
+  print_info "     -ifont     --install-fonts                    Download and install Nerd Fonts"
+  print_info ""
+  print_info "   🔗 Setup flags (symlink configs, enabled by default):"
+  print_info "     -nsb       --not-setup-bin                    Skip linking ~/bin scripts"
+  print_info "     -nsv       --not-setup-nvim                   Skip linking nvim config"
+  print_info "     -nsz       --not-setup-zed                    Skip linking zed config"
+  print_info "     -nsp       --not-setup-profiles               Skip linking shell profiles"
+  print_info "     -nsg       --not-setup-gitconfig              Skip git config setup"
+  print_info "     -ds        --disable-setups                   Skip all symlink setups"
+  print_info "     -stx       --setup-tmux                       Force tmux symlink setup"
+  print_info "     -szh       --setup-zsh                        Force zsh symlink setup"
+  print_info "     -scd       --setup-code                       Link VS Code config"
+  print_info ""
+  print_info "   🛠️ Meta flags:"
+  print_info "     -h         --help                             Show this help"
+  print_info "     -s                                             Build services from source (instead of release)"
+  print_info "     -d         --debug                            Enable bash debug mode (set -x)"
+  print_info "     -upc       --update-check                     Check all tools for newer versions"
+  print_info ""
+  print_info "   💡 Quick combos:"
+  print_info "     -ioall     --install-dependencies-old-all     Install tmux + nvim + zsh + tools"
+  print_info "     -inall     --install-dependencies-new-all     Install ghostty + nvim + tools"
 }
 
 # CLI :: parse args ------------------------------------------------------------
@@ -1085,7 +1087,6 @@ parse_args() {
 
 print_info2 "▶️ Starting script $0 ..."
 
-# Parse command-line arguments
 parse_args "$@"
 
 main
