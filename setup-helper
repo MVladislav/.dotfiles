@@ -285,3 +285,32 @@ check_for_newer_tag() {
     print_info2 "✅ You already have the latest version for '$REPO_NAME': $CURRENT_TAG"
   fi
 }
+
+# ******************************************************************************
+
+# HELPERS :: create symlink ----------------------------------------------------
+create_symlink() {
+  local target="$1" link_name="$2"
+  mkdir -p "$(dirname "$link_name")"
+  rm -f "$link_name"
+  ln -sf "$target" "$link_name"
+}
+
+# HELPERS :: copy config -------------------------------------------------------
+copy_config() {
+  local src="$1" dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  rm -f "$dest"
+  cp -f "$src" "$dest"
+}
+
+# HELPERS :: run if flag set ---------------------------------------------------
+run_if() {
+  local flag=$1
+  [[ $flag -eq 1 ]]
+}
+
+# HELPERS :: sudo drop ---------------------------------------------------------
+sudo_drop() {
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+}
