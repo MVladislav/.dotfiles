@@ -82,37 +82,27 @@ fi
 ##
 ######################################################################
 # sudo snap install go --classic
-if is_snap_installed go; then
-  export GOPATH="$HOME/.go"
-  #add_to_path '/usr/local/go/bin'
-  add_to_path "$GOPATH/bin"
-fi
+export GOPATH="$HOME/.go"
+#add_to_path '/usr/local/go/bin'
+add_to_path "$GOPATH/bin"
 
 # sudo snap install node --classic
-if is_snap_installed node; then
-  NPM_PACKAGES="${HOME}/.npm-packages"
-  if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
-    export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
-  fi
-  add_to_path_front '/snap/node/current/bin'
-  add_to_path "$NPM_PACKAGES/bin"
+NPM_PACKAGES="${HOME}/.npm-packages"
+if [[ ":$PATH:" != *":$NPM_PACKAGES/share/man:"* ]]; then
+  export MANPATH="${MANPATH-$(manpath)}:$NPM_PACKAGES/share/man"
 fi
+add_to_path_front '/snap/node/current/bin'
+add_to_path "$NPM_PACKAGES/bin"
 
 # sudo snap install ruby --classic
-if is_snap_installed ruby; then
-  export GEM_HOME="$HOME/.gems"
-  add_to_path "$GEM_HOME/bin"
-fi
+export GEM_HOME="$HOME/.gems"
+add_to_path "$GEM_HOME/bin"
 
 # sudo snap install rustup --classic
-if is_snap_installed rustup; then
-  export RUSTUP_HOME="$HOME/.rustup"
-  # add_to_path "$RUSTUP_HOME/bin"
-  add_to_path "$HOME/.cargo/bin"
-fi
+export RUSTUP_HOME="$HOME/.rustup"
+# add_to_path "$RUSTUP_HOME/bin"
+add_to_path "$HOME/.cargo/bin"
 
 # sudo snap install openjdk
-if is_snap_installed openjdk; then
-  export JAVA_HOME="/snap/openjdk/current/jdk"
-  add_to_path "$JAVA_HOME/bin"
-fi
+export JAVA_HOME="/snap/openjdk/current/jdk"
+add_to_path "$JAVA_HOME/bin"
