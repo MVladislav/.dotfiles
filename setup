@@ -13,16 +13,13 @@ cat <<'EOF'
 
 EOF
 
-[[ -f "./setup-helper" ]] || {
-  echo 'Not found "./setup-helper" script'
-  exit 1
-}
+[[ -f "./setup-helper" ]] || { echo 'ERROR: "./setup-helper" not found.'; exit 1; }
 # shellcheck disable=SC1091
 source "./setup-helper"
 
 # ******************************************************************************
 
-# CONFS :: variables -----------------------------------------------------------
+# CONFIG :: toggle flags -------------------------------------------------------
 RUN_INSTALL_DEPENDENCIES_ADDITIONAL=0
 RUN_INSTALL_DEPENDENCIES_DEV=0
 RUN_INSTALL_EXTENDED_TOOLS=0
@@ -53,7 +50,7 @@ RUN_INSTALL_HUNK=0
 
 RUN_INSTALL_GH=0
 
-# CONFS :: variables -----------------------------------------------------------
+# CONFIG :: version pins -------------------------------------------------------
 VERSION_ZIG_V=0.15.2
 VERSION_ZIG_U="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
 VERSION_GHOSTTY=v1.3.1
@@ -73,6 +70,7 @@ VERSION_HUNK_G=https://github.com/modem-dev/hunk.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_RELEASE_G=https://github.com/ryanoasis/nerd-fonts
 
+# CONFIG :: paths --------------------------------------------------------------
 LN_VM_BIN="${LN_VM_BIN:-"$USER_LOCAL_PREFIX_BIN/vm"}"
 
 LN_GHOSTTY_FOLDER="${LN_GHOSTTY_FOLDER:-"$HOME/.config/ghostty"}"
@@ -105,6 +103,7 @@ LN_HUNK="${LN_HUNK:-"$HOME/.config/hunk/config.toml"}"
 
 # ******************************************************************************
 
+# MAIN :: entry point ----------------------------------------------------------
 main() {
   if [[ $INSTALL_SOURCE_FROM != "source" && $INSTALL_SOURCE_FROM != "release" ]]; then
     print_error "❌ Invalid value for INSTALL_SOURCE_FROM: $INSTALL_SOURCE_FROM"
@@ -147,9 +146,9 @@ main() {
 
 # ******************************************************************************
 
-# BASE :: some general needed prepares -----------------------------------------
+# BASE :: initialize -----------------------------------------------------------
 initialize_base() {
-  mkdir -p "$HOME/.config" 1>/dev/null
+  mkdir -p "$HOME/.config"
 }
 
 # ******************************************************************************
@@ -209,7 +208,7 @@ install_dependencies_dev() {
 }
 
 # DEPS :: install dependencies tools -------------------------------------------
-install_extended_tools(){
+install_extended_tools() {
   print_info2 "\n🚀 TOOLS :: installing extended tools"
 
   # cargo install impala # https://github.com/pythops/impala
@@ -242,7 +241,7 @@ install_ghostty() {
 
   print_notes "   💡 Cloning ghostty..."
   git clone -q "$VERSION_GHOSTTY_G" "$DEPS_INSTALL_PATH/ghostty"
-  pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  pushd "$DEPS_INSTALL_PATH/ghostty"
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_GHOSTTY"
 
   print_notes "   💡 Build and install ghostty..."
@@ -253,7 +252,7 @@ install_ghostty() {
   sed -i "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" ./build.zig.zon
   sed -i "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
   "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
-  popd 1>/dev/null
+  popd
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
@@ -288,14 +287,14 @@ install_nvim() {
 
   print_notes "   💡 Cloning nvim..."
   git clone -q "$VERSION_NVIM_G" "$DEPS_INSTALL_PATH/nvim"
-  pushd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+  pushd "$DEPS_INSTALL_PATH/nvim"
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_NVIM"
 
   print_notes "   💡 Build and install nvim..."
   # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
   make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
   make install 1>/dev/null
-  popd 1>/dev/null
+  popd
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
 
@@ -322,7 +321,7 @@ install_zsh() {
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
     print_notes "   💡 Cloning zsh..."
     git clone -q "$VERSION_ZSH_G" "$DEPS_INSTALL_PATH/zsh"
-    pushd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+    pushd "$DEPS_INSTALL_PATH/zsh"
     git checkout -q "${VERSION_ZSH}"
 
     print_notes "   💡 Build and install zsh..."
@@ -330,7 +329,7 @@ install_zsh() {
     ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
     make 1>/dev/null
     make install 1>/dev/null
-    popd 1>/dev/null
+    popd
     rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
   elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
     print_notes "   💡 Installing zsh..."
@@ -373,14 +372,14 @@ install_tmux() {
   install_dependencies_needs packages_tools[@] packages_build[@]
 
   git clone -q "$VERSION_TMUX_G" "$DEPS_INSTALL_PATH/tmux"
-  pushd "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+  pushd "$DEPS_INSTALL_PATH/tmux"
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_TMUX"
   bash ./autogen.sh 1>/dev/null
 
   bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
   make 1>/dev/null
   make install 1>/dev/null
-  popd 1>/dev/null
+  popd
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
 
@@ -409,7 +408,7 @@ install_btop() {
 
   print_notes "   💡 Cloning btop..."
   git clone -q "$VERSION_BTOP_G" "$DEPS_INSTALL_PATH/btop"
-  pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+  pushd "$DEPS_INSTALL_PATH/btop"
   [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_BTOP"
 
   # Handle ROCm SMI if needed
@@ -419,14 +418,14 @@ install_btop() {
   if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
     print_notes "   💡 Cloning & building rocm..."
     rm -rf $ROCM_DIR /tmp/rocm-systems 1>/dev/null
-    mkdir -p lib 1>/dev/null
+    mkdir -p lib
     git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_G" /tmp/rocm-systems
     mv "/tmp/rocm-systems/projects/$ROCM_PROJECT" "$ROCM_DIR"
-    mkdir -p "${ROCM_DIR}/build" 1>/dev/null
+    mkdir -p "${ROCM_DIR}/build"
     pushd "${ROCM_DIR}/build" 1>/dev/null
     cmake .. 1>/dev/null           # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
     make -j "$(nproc)" 1>/dev/null # amd_smi
-    popd 1>/dev/null
+    popd
     RSMI_STATIC='true'
   fi
 
@@ -434,7 +433,7 @@ install_btop() {
   make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ROCM_DIR="$ROCM_DIR" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
   make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
 
-  popd 1>/dev/null
+  popd
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
 
@@ -543,7 +542,7 @@ install_setup_android_emulator() {
 
 # ******************************************************************************
 
-# BIN :: CREATE LINKS ----------------------------------------------------------
+# SETUP :: bin -----------------------------------------------------------------
 setup_bin() {
   print_info2 "\n🚀 BIN :: Create symlink from './bin/*' as '$LN_VM_BIN/*'"
   mkdir -p "$(dirname "$LN_VM_BIN")"
@@ -552,7 +551,7 @@ setup_bin() {
   print_info2 "🚀 BIN :: All symlinks created."
 }
 
-# GHOSTTY :: CREATE LINK -------------------------------------------------------
+# SETUP :: ghostty -------------------------------------------------------------
 # NOTE: runs inside 'install_ghostty'
 setup_ghostty() {
   print_info2 "\n🚀 GHOSTTY :: Create symlink from './configs-single/ghostty.conf' as '$LN_GHOSTTY_FOLDER/config'"
@@ -562,7 +561,7 @@ setup_ghostty() {
   print_info2 "🚀 GHOSTTY :: All symlinks created."
 }
 
-# NVIM :: CREATE LINKS ---------------------------------------------------------
+# SETUP :: nvim ----------------------------------------------------------------
 setup_nvim() {
   print_info2 "\n🚀 NVIM :: Create symlink from './nvim' as '$LN_NVIM_ORIG_BASE'"
   mkdir -p "$(dirname "$LN_NVIM_ORIG_BASE")"
@@ -571,7 +570,7 @@ setup_nvim() {
   print_info2 "🚀 NVIM :: All symlinks created."
 }
 
-# ZED :: CREATE LINKS ----------------------------------------------------------
+# SETUP :: zed -----------------------------------------------------------------
 setup_zed() {
   mkdir -p "$LN_ZED"
   print_info2 "\n🚀 ZED :: Create symlink from './zed/settings.json' into '$LN_ZED'"
@@ -592,7 +591,7 @@ setup_zed() {
   print_info2 "🚀 ZED :: All symlinks created."
 }
 
-# PROFILES :: CREATE LINKS -----------------------------------------------------
+# SETUP :: profiles ------------------------------------------------------------
 setup_profiles() {
   print_info2 "\n🚀 PROFILES :: Create symlink for './profiles/profile-append' as '$LN_PROFILES_01'"
   rm -f "${LN_PROFILES_01}"
@@ -629,7 +628,7 @@ setup_profiles() {
   print_info2 "🚀 PROFILES :: All symlinks created."
 }
 
-# GITCONFIG :: CREATE LINK AND SETUP -------------------------------------------
+# SETUP :: gitconfig -----------------------------------------------------------
 setup_gitconfig() {
   setup_lazygit
 
@@ -707,7 +706,7 @@ setup_gitconfig() {
   print_info2 "🚀 GIT :: Setup complete!"
 }
 
-# LAZYGIT :: CREATE LINK AND SETUP ---------------------------------------------
+# SETUP :: lazygit -------------------------------------------------------------
 setup_lazygit() {
   print_info2 "\n🚀 LAZYGIT :: Create symlink for './git/lazygit.yml' as '$LN_LAZYGIT'"
   mkdir -p "$(dirname "$LN_LAZYGIT")"
@@ -719,7 +718,7 @@ setup_lazygit() {
 
 # ******************************************************************************
 
-# ZSH :: CREATE LINKS ----------------------------------------------------------
+# SETUP :: zsh -----------------------------------------------------------------
 # NOTE: runs inside 'install_zsh'
 setup_zsh() {
   print_info2 "\n🚀 ZSH :: Load git submodules"
@@ -747,7 +746,7 @@ setup_zsh() {
   print_info2 "🚀 ZSH :: All symlinks created."
 }
 
-# TMUX :: CREATE LINKS ---------------------------------------------------------
+# SETUP :: tmux ----------------------------------------------------------------
 # NOTE: runs inside 'install_tmux'
 setup_tmux() {
   print_info2 "\n🚀 TMUX :: Create symlink from './tmux/tmux' as '$LN_TMUX_ORIG_BASE'"
@@ -767,7 +766,7 @@ setup_tmux() {
   print_info2 "🚀 TMUX :: All symlinks created."
 }
 
-# BTOP :: CREATE LINK AND SETUP ------------------------------------------------
+# SETUP :: btop ----------------------------------------------------------------
 # NOTE: runs inside 'install_btop'
 setup_btop() {
   print_info2 "\n🚀 BTOP :: Copying './configs-single/btop.conf' to '$LN_BTOP'"
@@ -777,7 +776,7 @@ setup_btop() {
   print_info2 "🚀 BTOP :: All copings done."
 }
 
-# CODE :: CREATE LINKS ---------------------------------------------------------
+# SETUP :: code ----------------------------------------------------------------
 setup_code() {
   mkdir -p "$LN_VS_CODE"
   print_info2 "\n🚀 CODE :: Create symlink from './code/keybindings.json' into '$LN_VS_CODE'"
@@ -794,7 +793,7 @@ setup_code() {
 
 # ******************************************************************************
 
-# CODE :: install ext ----------------------------------------------------------
+# CODE :: install extensions ---------------------------------------------------
 install_code_ext() {
   if command -v code >/dev/null 2>&1; then
     print_info2 "\n🚀 CODE :: installing code extensions"
@@ -899,7 +898,7 @@ install_fonts() {
 
 # ******************************************************************************
 
-# Function to show usage information
+# CLI :: usage -----------------------------------------------------------------
 usage() {
   print_info "\n📑 Usage: $0 [options]"
   print_info "   Examples:"
@@ -943,7 +942,7 @@ usage() {
   print_info "     -s                                                Use 'source' instead 'release' used for install services"
 }
 
-# Function to parse command-line arguments
+# CLI :: parse args ------------------------------------------------------------
 parse_args() {
   while [[ $# -gt 0 ]]; do
     key="$1"
@@ -1050,7 +1049,7 @@ parse_args() {
       INSTALL_SOURCE_FROM=source
       ;;
     -d | --debug)
-      set -x # Enable debug mode
+      set -x
       ;;
     -upc | --update-check)
       RUN_SETUP_BIN=0
