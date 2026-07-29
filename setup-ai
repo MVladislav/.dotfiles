@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin"
+set -euo pipefail
+
+cat <<'EOF'
+   .--.
+  |o_o |
+  |:_/ |
+ //   \ \
+( |   | )
+ \ \_ _/
+  \___)
+
+  /\
+ {  }
+  \/
+   AI Tux: Activating dotfiles...
+   Neural networks: ONLINE
+   Linux core: STABLE
+
+EOF
+
+[[ -f "./setup-helper" ]] || { echo 'ERROR: "./setup-helper" not found.'; exit 1; }
+# shellcheck disable=SC1091
+source "./setup-helper"
+
+# ******************************************************************************
+
+# CONFIG :: toggle flags -------------------------------------------------------
+RUN_INSTALL_OPENCODE=0
+
+RUN_SETUP_OPENCODE=0
+
+# CONFIG :: version pins -------------------------------------------------------
+VERSION_OPENCODE=v1.18.9
+VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
+
+# CONFIG :: paths --------------------------------------------------------------
+LN_OPENCODE="${LN_OPENCODE:-"$HOME/.config/opencode"}"
+
+# ******************************************************************************
+
+# MAIN :: entry point ----------------------------------------------------------
+main() {
+  sudo_drop
+
+  run_if $RUN_INSTALL_OPENCODE && install_opencode
+
+  # TODO: add more installs here
+  # - https://herdr.dev/docs/install/
+
+  run_if $RUN_SETUP_OPENCODE && setup_opencode
+
+  print_info2 "\n✅ All finished!"
+}
+
+# ******************************************************************************
+
+# SERVICE :: install opencode --------------------------------------------------
+install_opencode() {
+  print_info2 "\n🚀 OPENCODE :: install opencode..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/opencode" --version 2>/dev/null)'"
+  download_github_binary "$VERSION_OPENCODE_REPO" 'opencode-linux-x64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/opencode" --version 2>/dev/null)'"
+  print_info2 "✅ OPENCODE :: opencode installed!"
+
+  setup_opencode
+}
+
+# SETUP :: opencode ------------------------------------------------------------
+# NOTE: runs inside 'install_opencode'
+setup_opencode() {
+  print_info2 "\n🔗 OPENCODE :: creating config directory at $LN_OPENCODE"
+  mkdir -p "$LN_OPENCODE"
+  print_info2 "✅ OPENCODE :: config directory ready."
+}
+
+# ******************************************************************************
+
+# CLI :: usage -----------------------------------------------------------------
+usage() {
+  print_info "\n📖 Usage: $0 [options]"
+  print_info "   Symlink AI dotfiles and optionally install AI tools"
+  print_info ""
+  print_info "   🎯 Examples:"
+  print_info "     $0 -ioc                                     Install opencode + config dir"
+  print_info "     $0 -soc                                     Only create config dir, skip install"
+  print_info "     $0 -ds                                      Skip config dir setup"
+  print_info "     $0 -upc                                     Check for newer versions"
+  print_info ""
+  print_info "   ⚙️ Install flags:"
+  print_info "     -ioc       --install-opencode               Install opencode"
+  print_info ""
+  print_info "   🔗 Setup flags (disabled by default):"
+  print_info "     -soc       --setup-opencode                 Create opencode config dir"
+  print_info "     -ds        --disable-setups                 Skip all symlink setups"
+  print_info ""
+  print_info "   🛠️ Meta flags:"
+  print_info "     -h         --help                           Show this help"
+  print_info "     -d         --debug                          Enable bash debug mode (set -x)"
+  print_info "     -upc       --update-check                   Check opencode for newer version"
+}
+
+# CLI :: parse args ------------------------------------------------------------
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    key="$1"
+    case $key in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -ioc | --install-opencode)
+      RUN_INSTALL_OPENCODE=1
+      ;;
+    -soc | --setup-opencode)
+      RUN_SETUP_OPENCODE=1
+      ;;
+    -ds | --disable-setups)
+      echo "Nothing to disable so far ;)"
+      ;;
+    -d | --debug)
+      set -x
+      ;;
+    -upc | --update-check)
+      echo
+      check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE"
+      ;;
+    *)
+      print_error "❌ Unknown option: $key"
+      usage
+      exit 1
+      ;;
+    esac
+    shift
+  done
+}
+
+# ******************************************************************************
+
+print_info2 "▶️ Starting script $0 ..."
+
+parse_args "$@"
+
+main
+exit 0
