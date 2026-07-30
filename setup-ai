@@ -28,15 +28,20 @@ source "./setup-helper"
 
 # CONFIG :: toggle flags -------------------------------------------------------
 RUN_INSTALL_OPENCODE=0
+RUN_INSTALL_HERDR=0
 
 RUN_SETUP_OPENCODE=0
+RUN_SETUP_HERDR=0
 
 # CONFIG :: version pins -------------------------------------------------------
 VERSION_OPENCODE=v1.18.9
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
+VERSION_HERDR=v0.7.5
+VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
 
 # CONFIG :: paths --------------------------------------------------------------
 LN_OPENCODE="${LN_OPENCODE:-"$HOME/.config/opencode"}"
+LN_HERDR="${LN_HERDR:-"$HOME/.config/herdr/config.toml"}"
 
 # ******************************************************************************
 
@@ -45,11 +50,10 @@ main() {
   sudo_drop
 
   run_if $RUN_INSTALL_OPENCODE && install_opencode
-
-  # TODO: add more installs here
-  # - https://herdr.dev/docs/install/
+  run_if $RUN_INSTALL_HERDR && install_herdr
 
   run_if $RUN_SETUP_OPENCODE && setup_opencode
+  run_if $RUN_SETUP_HERDR && setup_herdr
 
   print_info2 "\n✅ All finished!"
 }
@@ -67,13 +71,177 @@ install_opencode() {
   setup_opencode
 }
 
+# SERVICE :: install herdr --------------------------------------------------
+install_herdr() {
+  print_info2 "\n🚀 HERDR :: install herdr..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/herdr" --version 2>/dev/null)'"
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  curl -fsSLo "$USER_LOCAL_PREFIX_BIN/herdr" "$VERSION_HERDR_REPO/releases/download/$VERSION_HERDR/herdr-linux-x86_64"
+  chmod +x "$USER_LOCAL_PREFIX_BIN/herdr"
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/herdr" --version 2>/dev/null)'"
+  print_info2 "✅ HERDR :: herdr installed!"
+
+  setup_herdr
+}
+
+# ******************************************************************************
+
 # SETUP :: opencode ------------------------------------------------------------
 # NOTE: runs inside 'install_opencode'
 setup_opencode() {
   print_info2 "\n🔗 OPENCODE :: creating config directory at $LN_OPENCODE"
   mkdir -p "$LN_OPENCODE"
-  print_info2 "✅ OPENCODE :: config directory ready."
+
+  command -v jq >/dev/null 2>&1 || { print_notes "   ⚠️  jq not found, cannot configure MCPs"; return; }
+  select_mcp_configs || { print_info2 "✅ OPENCODE :: config directory ready."; return; }
+
+  local config_file="$LN_OPENCODE/opencode.jsonc"
+
+  local opencode_config
+  opencode_config=$(
+    echo "$OPENCODE_CONFIG_MCP_COMBINED" |
+      jq --arg schema "https://opencode.ai/config.json" '{"$schema": $schema, "mcp": .}'
+  )
+
+  if [[ -f "$config_file" ]]; then
+    local backup_file
+    backup_file="${config_file}.$(date '+%Y%m%d-%H%M%S').bak"
+    cp "$config_file" "$backup_file"
+    print_notes "   💾 backed up existing config to $(basename "$backup_file")"
+    print_notes "   🔧 merging selected MCP configs into existing $config_file"
+    jq -s '.[0] * .[1]' <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
+      && mv "${config_file}.tmp" "$config_file" \
+      || print_notes "   ⚠️  Merge failed, config unchanged"
+  else
+    print_notes "   📝 writing config to $config_file"
+    echo "$opencode_config" > "$config_file"
+  fi
+
+  local env_vars
+  env_vars=$(echo "$opencode_config" | jq -r '.. | objects | .[]? | select(type == "string") | capture("{env:(?<v>[^}]+)}") | .v' 2>/dev/null | sort -u || true)
+  if [[ -n "$env_vars" ]]; then
+    print_info2 "  ⚠️  Ensure these environment variables are set:"
+    while IFS= read -r var; do
+      print_info2 "       $var"
+    done <<< "$env_vars"
+  fi
+
+  print_info2 "✅ OPENCODE :: config ready."
 }
+
+# SERVICE :: select MCP configs ------------------------------------------------
+select_mcp_configs() {
+  if [[ ${#OPENCODE_CONFIG_MCP_NAMES[@]} -eq 0 ]]; then
+    print_notes "   ⏭️  No MCP configs available, skipping"
+    OPENCODE_CONFIG_MCP_COMBINED=""
+    return 1
+  fi
+
+  command -v fzf >/dev/null 2>&1 || { print_notes "   ⚠️  fzf not found, cannot configure MCPs"; return 1; }
+
+  local preview_dir
+  preview_dir=$(mktemp -d)
+  for name in "${OPENCODE_CONFIG_MCP_NAMES[@]}"; do
+    local varname
+    varname="OPENCODE_CONFIG_MCP_$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+    echo "${!varname}" > "$preview_dir/$name.json"
+  done
+
+  local selections
+  selections=$(
+    printf "%s\n" "${OPENCODE_CONFIG_MCP_NAMES[@]}" |
+      fzf --multi \
+        --header 'TAB: toggle, ENTER: confirm' \
+        --prompt="Select MCP configs to include: " \
+        --preview 'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json'
+  )
+  rm -rf "$preview_dir"
+
+  [[ -z "$selections" ]] && {
+    print_notes "   ⏭️  No MCP configs selected"
+    OPENCODE_CONFIG_MCP_COMBINED=""
+    return 1
+  }
+
+  OPENCODE_CONFIG_MCP_COMBINED=$(jq -n '{}')
+  while IFS= read -r name; do
+    local varname
+    varname="OPENCODE_CONFIG_MCP_$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+    local snippet="${!varname}"
+    [[ -z "$snippet" ]] && {
+      print_notes "   ⚠️  No config found for '$name' (expected \$$varname), skipping"
+      continue
+    }
+    OPENCODE_CONFIG_MCP_COMBINED=$(
+      jq -c -n --argjson a "$OPENCODE_CONFIG_MCP_COMBINED" --argjson b "$snippet" '$a * $b'
+    )
+  done <<< "$selections"
+
+  return 0
+}
+
+# SETUP :: herdr ---------------------------------------------------------------
+# NOTE: runs inside 'install_herdr'
+setup_herdr() {
+  print_info2 "\n🔗 HERDR :: creating config directory at $(dirname "$LN_HERDR")"
+  mkdir -p "$(dirname "$LN_HERDR")"
+  print_info2 "✅ HERDR :: config directory ready."
+}
+
+
+# ******************************************************************************
+
+# CONFIG :: opencode MCPs -------------------------------------------------------
+# Names used for fzf selection (maps to OPENCODE_CONFIG_MCP_<UPPERNAME>)
+OPENCODE_CONFIG_MCP_NAMES=("github" "context7")
+
+# SOURCE: https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-opencode.md
+# shellcheck disable=SC2034
+OPENCODE_CONFIG_MCP_GITHUB='
+{
+  "github": {
+    "type": "remote",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "enabled": true,
+    "oauth": false,
+    "headers": {
+      "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+    }
+  }
+}
+'
+
+# SOURCE: https://context7.com/docs/resources/all-clients#opencode
+# shellcheck disable=SC2034
+OPENCODE_CONFIG_MCP_CONTEXT7='
+{
+  "context7": {
+    "type": "remote",
+    "url": "https://mcp.context7.com/mcp",
+    "headers": {
+      "Authorization": "Bearer {env:CONTEXT7_PERSONAL_ACCESS_TOKEN}"
+    },
+    "enabled": true
+  }
+}
+'
+# Alternative local npx-based approach:
+# OPENCODE_CONFIG_MCP_CONTEXT7='
+# {
+#   "mcp": {
+#     "context7": {
+#       "type": "local",
+#       "command": ["npx", "-y", "@upstash/context7-mcp", "--api-key", "{env:CONTEXT7_PERSONAL_ACCESS_TOKEN}"],
+#       "enabled": true
+#     }
+#   }
+# }
+# '
+
+# TODO: Extend with
+# - https://context7.com/docs/resources/all-clients#opencode for @upstash/context7-mcp
+# - https://github.com/GethosTheWalrus/proxmox-mcp
+# - https://github.com/jgravelle/jcodemunch-mcp
 
 # ******************************************************************************
 
@@ -83,22 +251,25 @@ usage() {
   print_info "   Symlink AI dotfiles and optionally install AI tools"
   print_info ""
   print_info "   🎯 Examples:"
-  print_info "     $0 -ioc                                     Install opencode + config dir"
-  print_info "     $0 -soc                                     Only create config dir, skip install"
-  print_info "     $0 -ds                                      Skip config dir setup"
-  print_info "     $0 -upc                                     Check for newer versions"
+  print_info "     $0 -ioc                               Install opencode + config dir"
+  print_info "     $0 -soc                               Only create config dir, skip install"
+  print_info "     $0 -ihrd                              Install herdr + config dir"
+  print_info "     $0 -ds                                Skip config dir setup"
+  print_info "     $0 -upc                               Check for newer versions"
   print_info ""
   print_info "   ⚙️ Install flags:"
   print_info "     -ioc       --install-opencode               Install opencode"
+  print_info "     -ihrd      --install-herdr                  Install herdr"
   print_info ""
   print_info "   🔗 Setup flags (disabled by default):"
   print_info "     -soc       --setup-opencode                 Create opencode config dir"
+  print_info "     -shrd      --setup-herdr                    Create herdr config dir"
   print_info "     -ds        --disable-setups                 Skip all symlink setups"
   print_info ""
   print_info "   🛠️ Meta flags:"
   print_info "     -h         --help                           Show this help"
   print_info "     -d         --debug                          Enable bash debug mode (set -x)"
-  print_info "     -upc       --update-check                   Check opencode for newer version"
+  print_info "     -upc       --update-check                   Check tools for newer versions"
 }
 
 # CLI :: parse args ------------------------------------------------------------
@@ -113,18 +284,31 @@ parse_args() {
     -ioc | --install-opencode)
       RUN_INSTALL_OPENCODE=1
       ;;
+    -ihrd | --install-herdr)
+      RUN_INSTALL_HERDR=1
+      ;;
     -soc | --setup-opencode)
       RUN_SETUP_OPENCODE=1
       ;;
+    -shrd | --setup-herdr)
+      RUN_SETUP_HERDR=1
+      ;;
     -ds | --disable-setups)
-      echo "Nothing to disable so far ;)"
+      RUN_SETUP_OPENCODE=0
+      RUN_SETUP_HERDR=0
       ;;
     -d | --debug)
       set -x
       ;;
     -upc | --update-check)
+      RUN_INSTALL_OPENCODE=0
+      RUN_INSTALL_HERDR=0
+      RUN_SETUP_OPENCODE=0
+      RUN_SETUP_HERDR=0
       echo
       check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE"
+      check_for_newer_tag "$VERSION_HERDR_REPO" "$VERSION_HERDR"
+      exit 0
       ;;
     *)
       print_error "❌ Unknown option: $key"
