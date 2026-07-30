@@ -115,3 +115,7 @@ configs-single/**
 !configs-single/ghostty.conf
 !configs-single/btop.conf
 !configs-single/hunk.toml
+
+!ai/
+ai/**
+!ai/SKILL-git-release.md

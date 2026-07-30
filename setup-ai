@@ -91,28 +91,48 @@ install_herdr() {
 setup_opencode() {
   print_info2 "\n🔗 OPENCODE :: creating config directory at $LN_OPENCODE"
   mkdir -p "$LN_OPENCODE"
+  command -v jq >/dev/null 2>&1 || { print_notes "   ⚠️  jq not found, cannot configure opencode"; return; }
 
-  command -v jq >/dev/null 2>&1 || { print_notes "   ⚠️  jq not found, cannot configure MCPs"; return; }
-  select_mcp_configs || { print_info2 "✅ OPENCODE :: config directory ready."; return; }
+  select_opencode_section "MCP" "MCP configs"
+  select_opencode_section "AGENTS" "agents"
+  setup_opencode_skills
 
   local config_file="$LN_OPENCODE/opencode.jsonc"
 
   local opencode_config
-  opencode_config=$(
-    echo "$OPENCODE_CONFIG_MCP_COMBINED" |
-      jq --arg schema "https://opencode.ai/config.json" '{"$schema": $schema, "mcp": .}'
-  )
+  opencode_config=$(jq -n --arg schema "https://opencode.ai/config.json" '{"$schema": $schema}')
+
+  if [[ -n "$OPENCODE_CONFIG_MCP_COMBINED" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]]; then
+    opencode_config=$(echo "$opencode_config" | jq --argjson m "$OPENCODE_CONFIG_MCP_COMBINED" '.mcp = $m')
+  fi
+  if [[ -n "$OPENCODE_CONFIG_AGENTS_COMBINED" && "$OPENCODE_CONFIG_AGENTS_COMBINED" != "CLEANUP" ]]; then
+    opencode_config=$(echo "$opencode_config" | jq --argjson a "$OPENCODE_CONFIG_AGENTS_COMBINED" '.agent = $a')
+  fi
 
   if [[ -f "$config_file" ]]; then
     local backup_file
     backup_file="${config_file}.$(date '+%Y%m%d-%H%M%S').bak"
     cp "$config_file" "$backup_file"
     print_notes "   💾 backed up existing config to $(basename "$backup_file")"
-    print_notes "   🔧 merging selected MCP configs into existing $config_file"
+
+    [[ "$OPENCODE_CONFIG_MCP_COMBINED" == "CLEANUP" ]] &&
+      jq 'del(.mcp)' "$config_file" > "${config_file}.tmp" &&
+      mv "${config_file}.tmp" "$config_file" &&
+      print_notes "   🧹 Removed all MCP configs"
+    [[ "$OPENCODE_CONFIG_AGENTS_COMBINED" == "CLEANUP" ]] &&
+      jq 'del(.agent)' "$config_file" > "${config_file}.tmp" &&
+      mv "${config_file}.tmp" "$config_file" &&
+      print_notes "   🧹 Removed all agent configs"
+
+    print_notes "   🔧 merging selected configs into existing $config_file"
     jq -s '.[0] * .[1]' <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
       && mv "${config_file}.tmp" "$config_file" \
       || print_notes "   ⚠️  Merge failed, config unchanged"
   else
+    [[ "$OPENCODE_CONFIG_MCP_COMBINED" == "CLEANUP" ]] &&
+      print_notes "   ⏭️  No config file found, nothing to clean for MCPs"
+    [[ "$OPENCODE_CONFIG_AGENTS_COMBINED" == "CLEANUP" ]] &&
+      print_notes "   ⏭️  No config file found, nothing to clean for agents"
     print_notes "   📝 writing config to $config_file"
     echo "$opencode_config" > "$config_file"
   fi
@@ -129,55 +149,84 @@ setup_opencode() {
   print_info2 "✅ OPENCODE :: config ready."
 }
 
-# SERVICE :: select MCP configs ------------------------------------------------
-select_mcp_configs() {
-  if [[ ${#OPENCODE_CONFIG_MCP_NAMES[@]} -eq 0 ]]; then
-    print_notes "   ⏭️  No MCP configs available, skipping"
-    OPENCODE_CONFIG_MCP_COMBINED=""
-    return 1
+# SERVICE :: generic section selector (MCPs / agents) --------------------------
+select_opencode_section() {
+  local prefix="$1"
+  local label="$2"
+
+  local -n names_ref="OPENCODE_CONFIG_${prefix}_NAMES"
+  local -n combined_ref="OPENCODE_CONFIG_${prefix}_COMBINED"
+
+  if [[ ${#names_ref[@]} -eq 0 ]]; then
+    print_notes "   ⏭️  No ${label} available, skipping"
+    combined_ref=""
+    return 0
   fi
 
-  command -v fzf >/dev/null 2>&1 || { print_notes "   ⚠️  fzf not found, cannot configure MCPs"; return 1; }
+  command -v fzf >/dev/null 2>&1 || { print_notes "   ⚠️  fzf not found, cannot configure ${label}"; return 0; }
 
   local preview_dir
   preview_dir=$(mktemp -d)
-  for name in "${OPENCODE_CONFIG_MCP_NAMES[@]}"; do
+  for name in "${names_ref[@]}"; do
     local varname
-    varname="OPENCODE_CONFIG_MCP_$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+    varname="OPENCODE_CONFIG_${prefix}_$(echo "$name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
     echo "${!varname}" > "$preview_dir/$name.json"
+  done
+
+  local fzf_list="none"
+  for name in "${names_ref[@]}"; do
+    fzf_list+=$'\n'"$name"
   done
 
   local selections
   selections=$(
-    printf "%s\n" "${OPENCODE_CONFIG_MCP_NAMES[@]}" |
+    echo "$fzf_list" |
       fzf --multi \
         --header 'TAB: toggle, ENTER: confirm' \
-        --prompt="Select MCP configs to include: " \
+        --prompt="Select ${label} (none = cleanup): " \
         --preview 'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json'
   )
   rm -rf "$preview_dir"
 
   [[ -z "$selections" ]] && {
-    print_notes "   ⏭️  No MCP configs selected"
-    OPENCODE_CONFIG_MCP_COMBINED=""
-    return 1
+    print_notes "   ⏭️  No ${label} selected"
+    combined_ref=""
+    return 0
   }
 
-  OPENCODE_CONFIG_MCP_COMBINED=$(jq -n '{}')
+  if echo "$selections" | grep -qx 'none'; then
+    print_notes "   🧹 Cleanup mode: will remove all ${label}"
+    combined_ref="CLEANUP"
+    return 0
+  fi
+
+  selections=$(echo "$selections" | grep -v '^none$')
+
+  combined_ref=$(jq -n '{}')
   while IFS= read -r name; do
     local varname
-    varname="OPENCODE_CONFIG_MCP_$(echo "$name" | tr '[:lower:]' '[:upper:]')"
+    varname="OPENCODE_CONFIG_${prefix}_$(echo "$name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
     local snippet="${!varname}"
     [[ -z "$snippet" ]] && {
       print_notes "   ⚠️  No config found for '$name' (expected \$$varname), skipping"
       continue
     }
-    OPENCODE_CONFIG_MCP_COMBINED=$(
-      jq -c -n --argjson a "$OPENCODE_CONFIG_MCP_COMBINED" --argjson b "$snippet" '$a * $b'
+    combined_ref=$(
+      jq -c -n --argjson a "$combined_ref" --argjson b "$snippet" '$a * $b'
     )
   done <<< "$selections"
 
   return 0
+}
+
+# SETUP :: opencode skills ----------------------------------------------------
+setup_opencode_skills() {
+  local skills_dir="$LN_OPENCODE/skills"
+
+  print_info2 "\n🔗 SKILLS :: linking ai/SKILL-git-release.md -> $skills_dir/git-release/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-git-release.md" "$skills_dir/git-release/SKILL.md"
+
+  print_info2 "✅ SKILLS :: symlinks created."
 }
 
 # SETUP :: herdr ---------------------------------------------------------------
@@ -193,6 +242,7 @@ setup_herdr() {
 
 # CONFIG :: opencode MCPs -------------------------------------------------------
 # Names used for fzf selection (maps to OPENCODE_CONFIG_MCP_<UPPERNAME>)
+# shellcheck disable=SC2034
 OPENCODE_CONFIG_MCP_NAMES=("github" "context7")
 
 # SOURCE: https://github.com/github/github-mcp-server/blob/main/docs/installation-guides/install-opencode.md
@@ -238,10 +288,125 @@ OPENCODE_CONFIG_MCP_CONTEXT7='
 # }
 # '
 
-# TODO: Extend with
-# - https://context7.com/docs/resources/all-clients#opencode for @upstash/context7-mcp
-# - https://github.com/GethosTheWalrus/proxmox-mcp
-# - https://github.com/jgravelle/jcodemunch-mcp
+# ------------------------------------------------------------------------------
+# Additional MCP servers — uncomment the snippet and add its name to
+# OPENCODE_CONFIG_MCP_NAMES to activate in fzf selection.
+#
+# shellcheck disable=SC2034
+# OPENCODE_CONFIG_MCP_FILESYSTEM='
+# {
+#   "filesystem": {
+#     "type": "local",
+#     "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
+#     "enabled": true
+#   }
+# }
+# '
+# shellcheck disable=SC2034
+# OPENCODE_CONFIG_MCP_PUPPETEER='
+# {
+#   "puppeteer": {
+#     "type": "local",
+#     "command": ["npx", "-y", "@modelcontextprotocol/server-puppeteer"],
+#     "enabled": true
+#   }
+# }
+# '
+# shellcheck disable=SC2034
+# OPENCODE_CONFIG_MCP_SEQUENTIAL_THINKING='
+# {
+#   "sequential-thinking": {
+#     "type": "local",
+#     "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+#     "enabled": true
+#   }
+# }
+# '
+# shellcheck disable=SC2034
+# OPENCODE_CONFIG_MCP_MEMORY='
+# {
+#   "memory": {
+#     "type": "local",
+#     "command": ["npx", "-y", "@modelcontextprotocol/server-memory"],
+#     "enabled": true
+#   }
+# }
+# '
+
+# CONFIG :: opencode agents ----------------------------------------------------
+# Names used for fzf selection (maps to OPENCODE_CONFIG_AGENTS_<UPPERNAME>)
+# shellcheck disable=SC2034
+OPENCODE_CONFIG_AGENTS_NAMES=("code-review" "test-writer" "git-release")
+
+# shellcheck disable=SC2034
+OPENCODE_CONFIG_AGENTS_CODE_REVIEW='
+{
+  "code-reviewer": {
+    "description": "Reviews code for best practices, suggest improvements and potential issues",
+    "prompt": "You are a senior code reviewer. Focus on correctness, security, performance, and maintainability.",
+    "mode": "subagent",
+    "permission": {
+      "edit": "deny"
+    },
+    "enabled": true
+  }
+}
+'
+
+# shellcheck disable=SC2034
+OPENCODE_CONFIG_AGENTS_TEST_WRITER='
+{
+  "test-writer": {
+    "description": "Generate tests for the selected code",
+    "prompt": "You are a testing expert. Write thorough unit and integration tests.",
+    "mode": "subagent",
+    "enabled": true
+  }
+}
+'
+
+# shellcheck disable=SC2034
+# shellcheck disable=SC2016
+OPENCODE_CONFIG_AGENTS_GIT_RELEASE='
+{
+  "git-release": {
+    "description": "Generate conventional changelog and release notes, propose version bumps, and create tagged releases",
+    "prompt": "You are an expert release manager. When asked to prepare a release:\n\n1. First check `git log --oneline -20` to understand recent history\n2. Use the `git-release` skill to generate structured release notes from conventional commits\n3. Parse commits by type (feat, fix, docs, refactor, perf, test, chore, etc.) and group into labeled sections\n4. Include full commit hashes, PR references, and author attribution\n5. Append a compare URL, release notes, and release process checklist\n6. Propose a semver version bump based on the commit types present\n7. Provide copy-pasteable commands for tagging and creating the release PR",
+    "mode": "subagent",
+    "enabled": true
+  }
+}
+'
+
+# FUTURE IDEAS — uncomment sections below and add toggle flags + install/setup
+# functions when ready to add these tools.
+#
+# # CONFIG :: version pins -------------------------------------------------------
+# VERSION_AIDER=v0.xx.x
+# VERSION_OLLAMA=v0.x.x
+# VERSION_FABRIC=v0.x.x
+#
+# # SERVICE :: install aider -----------------------------------------------------
+# install_aider() {
+#   print_info2 "\n🚀 AIDER :: install aider..."
+#   pip install aider-chat
+#   print_info2 "✅ AIDER :: aider installed!"
+# }
+#
+# # SERVICE :: install ollama ----------------------------------------------------
+# install_ollama() {
+#   print_info2 "\n🚀 OLLAMA :: install ollama..."
+#   curl -fsSL https://ollama.com/install.sh | sh
+#   print_info2 "✅ OLLAMA :: ollama installed!"
+# }
+#
+# # SERVICE :: install fabric ----------------------------------------------------
+# install_fabric() {
+#   print_info2 "\n🚀 FABRIC :: install fabric..."
+#   # Download latest fabric binary from GitHub releases
+#   print_info2 "✅ FABRIC :: fabric installed!"
+# }
+#
 
 # ******************************************************************************
 
