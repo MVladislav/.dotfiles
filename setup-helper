@@ -46,6 +46,37 @@ print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
 # ******************************************************************************
 
+# HELPERS :: require commands --------------------------------------------------
+require_cmds() {
+  local missing=()
+  for cmd in "$@"; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing+=("$cmd")
+    fi
+  done
+  [[ ${#missing[@]} -eq 0 ]] && return 0
+  print_error "❌ Required commands not found: ${missing[*]}"
+  return 1
+}
+
+# HELPERS :: package installed? ------------------------------------------------
+is_package_installed() {
+  dpkg -l "$1" 2>/dev/null | grep -q "^ii  $1 "
+}
+
+# HELPERS :: github api --------------------------------------------------------
+# Adds an Authorization header when GITHUB_TOKEN is set (raises rate limit to 5000/h)
+github_api() {
+  local url="$1"
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$url"
+  else
+    curl -s "$url"
+  fi
+}
+
+# ******************************************************************************
+
 install_dependencies_needs() {
   print_notes "   📥 Installing build dependencies..."
   DEPS_PACKAGES_TO_REMOVE=()
@@ -59,30 +90,21 @@ install_dependencies_needs() {
 
   # Check packages_tools: install if missing, but never mark for removal.
   for pkg in "${packages_tools[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+    if ! is_package_installed "$pkg"; then
       packages_to_install+=("$pkg")
     fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    # fi
   done
 
   # Check packages_build: install if missing and add to removal list.
   for pkg in "${packages_build[@]}"; do
-    if ! apt list -qq "$pkg" 2>/dev/null | grep -q 'installed'; then
+    if ! is_package_installed "$pkg"; then
       packages_to_install+=("$pkg")
       DEPS_PACKAGES_TO_REMOVE+=("$pkg")
     fi
-    # # TODO: possible speedup
-    # if ! dpkg -l | grep -q "^ii  $pkg "; then
-    #   packages_to_install+=("$pkg")
-    #   DEPS_PACKAGES_TO_REMOVE+=("$pkg")
-    # fi
   done
 
-  print_notes "   📥 Packages to install: [$(echo "${packages_to_install[*]}" | tr '\n' ' ')]"
-  print_notes "   📥 Packages to remove afterward: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+  print_notes "   📥 Packages to install: [${packages_to_install[*]}]"
+  print_notes "   📥 Packages to remove afterward: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
 
   # Only run sudo update and install if any package is missing.
   if [[ ${#packages_to_install[@]} -gt 0 ]]; then
@@ -107,7 +129,7 @@ install_dependencies_needs_rm() {
     return 0
   fi
 
-  print_notes "   📥 Removing build dependencies: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]..."
+  print_notes "   📥 Removing build dependencies: [${DEPS_PACKAGES_TO_REMOVE[*]}]..."
   $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
     print_error "❌ Failed to remove packages"
     return 1
@@ -116,7 +138,7 @@ install_dependencies_needs_rm() {
   $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-  print_notes "   📥 Packages removed: [$(echo "${DEPS_PACKAGES_TO_REMOVE[*]}" | tr '\n' ' ')]"
+  print_notes "   📥 Packages removed: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
 }
 
 download_github_binary() {
@@ -130,37 +152,42 @@ download_github_binary() {
     return 1
   fi
 
-  # Check for required tools
-  for cmd in file curl jq; do
-    if ! command -v "$cmd" >/dev/null 2>&1; then
-      print_error "❌ Required command '$cmd' not found."
-      return 1
-    fi
-  done
+  require_cmds file curl jq || return 1
 
   # Extract owner/repo from URL
   local repo_path
-  if [[ "$repo_url" =~ ^https://github\.com/([^/]+)/([^/]+)(\.git)?/?$ ]]; then
+  if [[ "$repo_url" =~ ^https://github\.com/([^/]+)/([^/]+)$ ]]; then
     local owner="${BASH_REMATCH[1]}"
     local repo="${BASH_REMATCH[2]}"
+    repo="${repo%.git}"
     repo_path="${owner}/${repo}"
   else
     print_error "❌ Could not parse GitHub repository path from URL."
     return 1
   fi
 
-  print_info2 "\n🚀 BINARY :: Fetching latest release for '$repo_path'..."
+  print_info2 "🚀 BINARY :: Fetching latest release for '$repo_path'..."
 
   # Get the asset URL matching regex
   local api_url="https://api.github.com/repos/$repo_path/releases/latest"
-  echo "$api_url"
-  local asset_url
-  asset_url=$(curl -s "$api_url" | jq -r --arg regex "$binary_regex" '
-    .assets[] | select(.name | test($regex)) | .browser_download_url
-  ' 2>/dev/null | head -n 1) || {
-    print_error "   ❌ Failed to jq GitHub-api '$api_url' for asset."
+  local release_json
+  release_json=$(github_api "$api_url") || {
+    print_error "   ❌ Failed to fetch GitHub-api '$api_url'."
     return 1
   }
+
+  # Validate response is a JSON object with assets (GitHub returns an error object instead)
+  if ! echo "$release_json" | jq -e 'type == "object" and has("assets")' >/dev/null 2>&1; then
+    local api_error
+    api_error=$(echo "$release_json" | jq -r '.message // "unknown error"' 2>/dev/null)
+    print_error "   ❌ GitHub API error for '$repo_path': $api_error"
+    return 1
+  fi
+
+  local asset_url
+  asset_url=$(echo "$release_json" | jq -r --arg regex "$binary_regex" '
+    .assets[] | select(.name | test($regex)) | .browser_download_url
+  ' 2>/dev/null | head -n 1)
 
   if [[ -z "$asset_url" || "$asset_url" == "null" ]]; then
     print_error "   ❌ No asset matching regex '$binary_regex' found in latest release."
@@ -206,7 +233,7 @@ download_github_binary() {
 
   print_info2 "   📌 Installing '$bin_name' to '$out_dir'..."
   mv "$bin_path" "$out_dir/$bin_name"
-  chmod 744 "$out_dir/$bin_name"
+  chmod 755 "$out_dir/$bin_name"
 
   # Cleanup
   rm -rf "$tmp_dir"
@@ -216,73 +243,90 @@ download_github_binary() {
 
 # ******************************************************************************
 
-# BASE :: check if new version available ---------------------------------------
+# SERVICE :: check if new version available ------------------------------------
 check_for_newer_tag() {
-  local REPO_URL="$1"
-  local CURRENT_TAG="$2"
-  local TAG_FILTER="${3:-}"
+  local repo_url="$1"
+  local current_tag="$2"
+  local tag_filter="${3:-}"
 
-  # Derive owner/repo from URL
-  local REPO_NAME
-  REPO_NAME=$(echo "$REPO_URL" | sed -E 's|https://github\.com/||; s|\.git$||')
+  require_cmds curl jq || return 1
+
+  # Derive owner/repo from URL (https://github.com/owner/repo[.git])
+  local repo_name
+  if [[ "$repo_url" =~ ^https://github\.com/([^/]+)/([^/]+)$ ]]; then
+    repo_name="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    repo_name="${repo_name%.git}"
+  else
+    print_error "❌ Could not parse GitHub repository path from URL: $repo_url"
+    return 1
+  fi
 
   # Fetch all tags via GitHub API
-  local TAGS_JSON
-  TAGS_JSON=$(curl -sL "https://api.github.com/repos/$REPO_NAME/tags")
+  local tags_json
+  tags_json=$(github_api "https://api.github.com/repos/$repo_name/tags")
 
-  if [[ -z $TAGS_JSON || $TAGS_JSON == *"API rate limit exceeded"* ]]; then
-    print_error "⚠️ GitHub API rate limit exceeded or no response for $REPO_NAME."
+  if [[ -z $tags_json ]]; then
+    print_error "⚠️ No response from GitHub API for $repo_name."
+    return 0
+  fi
+
+  # Validate response is a JSON array (GitHub returns an error object instead)
+  if ! echo "$tags_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+    local api_error
+    api_error=$(echo "$tags_json" | jq -r '.message // "unknown error"' 2>/dev/null)
+    print_error "⚠️ GitHub API error for $repo_name: $api_error"
     return 0
   fi
 
   # Extract tag names
-  local TAGS
-  TAGS=$(echo "$TAGS_JSON" | jq -r '.[].name')
+  local tags
+  tags=$(echo "$tags_json" | jq -r '.[].name')
 
   # Handle tag filtering
-  if [[ -n $TAG_FILTER ]]; then
-    if [[ $TAG_FILTER == -* ]]; then
+  if [[ -n $tag_filter ]]; then
+    if [[ $tag_filter == -* ]]; then
       # Exclude tags matching the pattern
-      local EXCLUDE_FILTER="${TAG_FILTER:1}"
-      TAGS=$(echo "$TAGS" | grep -Ev -- "$EXCLUDE_FILTER" || true)
+      local exclude_filter="${tag_filter:1}"
+      tags=$(echo "$tags" | grep -Ev -- "$exclude_filter" || true)
     else
       # Include only matching tags
-      TAGS=$(echo "$TAGS" | grep -E -- "$TAG_FILTER" || true)
+      tags=$(echo "$tags" | grep -E -- "$tag_filter" || true)
     fi
   fi
 
   # Determine the latest tag by version-sort
-  local LATEST_TAG
-  LATEST_TAG=$(echo "$TAGS" | sort -V | tail -n1)
+  local latest_tag
+  latest_tag=$(echo "$tags" | sort -V | tail -n1)
 
   # Fallback: no matching tags → try latest release
-  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
-    LATEST_TAG=$(curl -sL "https://api.github.com/repos/$REPO_NAME/releases/latest" |
-      jq -r '.tag_name')
+  if [[ -z $latest_tag || $latest_tag == "null" ]]; then
+    local release_json
+    release_json=$(github_api "https://api.github.com/repos/$repo_name/releases/latest")
+    latest_tag=$(echo "$release_json" | jq -r '.tag_name' 2>/dev/null)
     # Ensure the release tag matches the filter (if it's an inclusion filter)
-    if [[ -n $TAG_FILTER && $TAG_FILTER != -* && ! $LATEST_TAG =~ $TAG_FILTER ]]; then
-      print_info2 "⚠️ No releases matching filter '$TAG_FILTER' for $REPO_NAME."
+    if [[ -n $tag_filter && $tag_filter != -* && ! $latest_tag =~ $tag_filter ]]; then
+      print_info2 "⚠️ No releases matching filter '$tag_filter' for $repo_name."
       return 0
     fi
     # If exclusion filter, skip if it matches the exclusion
-    if [[ -n $TAG_FILTER && $TAG_FILTER == -* && $LATEST_TAG =~ ${TAG_FILTER:1} ]]; then
-      print_info2 "⚠️ Latest release '$LATEST_TAG' excluded by filter '${TAG_FILTER}'."
+    if [[ -n $tag_filter && $tag_filter == -* && $latest_tag =~ ${tag_filter:1} ]]; then
+      print_info2 "⚠️ Latest release '$latest_tag' excluded by filter '$tag_filter'."
       return 0
     fi
   fi
 
   # Final validation
-  if [[ -z $LATEST_TAG || $LATEST_TAG == "null" ]]; then
-    print_error "⚠️ No tags or releases found for $REPO_NAME."
+  if [[ -z $latest_tag || $latest_tag == "null" ]]; then
+    print_error "⚠️ No tags or releases found for $repo_name."
     return 0
   fi
 
   # Compare and report
-  if [[ $CURRENT_TAG != "$LATEST_TAG" ]]; then
-    print_info2 "⬆️ A newer version for '$REPO_NAME' is available: $LATEST_TAG (current: $CURRENT_TAG)"
-    print_info2 "    https://github.com/$REPO_NAME/releases/tag/$LATEST_TAG"
+  if [[ $current_tag != "$latest_tag" ]]; then
+    print_info2 "⬆️ A newer version for '$repo_name' is available: $latest_tag (current: $current_tag)"
+    print_info2 "    https://github.com/$repo_name/releases/tag/$latest_tag"
   else
-    print_info2 "✅ You already have the latest version for '$REPO_NAME': $CURRENT_TAG"
+    print_info2 "✅ You already have the latest version for '$repo_name': $current_tag"
   fi
 }
 
