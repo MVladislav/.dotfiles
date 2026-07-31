@@ -34,7 +34,7 @@ RUN_SETUP_OPENCODE=0
 RUN_SETUP_HERDR=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_OPENCODE=v1.18.9
+VERSION_OPENCODE=v1.18.10
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
 VERSION_HERDR=v0.7.5
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
@@ -68,7 +68,7 @@ install_opencode() {
   print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/opencode" --version 2>/dev/null)'"
   print_info2 "✅ OPENCODE :: opencode installed!"
 
-  setup_opencode
+  # setup_opencode
 }
 
 # SERVICE :: install herdr --------------------------------------------------
@@ -87,7 +87,7 @@ install_herdr() {
 # ******************************************************************************
 
 # SETUP :: opencode ------------------------------------------------------------
-# NOTE: runs inside 'install_opencode'
+# NOTE: ~~runs inside 'install_opencode'~~
 setup_opencode() {
   print_info2 "\n🔗 OPENCODE :: creating config directory at $LN_OPENCODE"
   mkdir -p "$LN_OPENCODE"
@@ -471,7 +471,7 @@ parse_args() {
       RUN_SETUP_OPENCODE=0
       RUN_SETUP_HERDR=0
       echo
-      check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE"
+      check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE" "^v[0-9]"
       check_for_newer_tag "$VERSION_HERDR_REPO" "$VERSION_HERDR"
       exit 0
       ;;
