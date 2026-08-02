@@ -142,4 +142,31 @@ if check_command_q git; then
       echo "🛠️ Total outdated projects: $outdated_found"
     fi
   }
+
+  vm_git_pr() {
+    # Usage: vm_git_pr [PR_NUMBER]
+    #   without an argument: fzf pick from the latest 10 PR refs (needs fzf)
+    check_command git || return 1
+
+    local pr_number=""
+    if [[ $# -ge 1 ]]; then
+      pr_number="$1"
+    elif check_command_q fzf; then
+      pr_number=$(git ls-remote origin 'refs/pull/*/head' 2>/dev/null |
+        sed -n 's#.*refs/pull/\([0-9]*\)/head#\1#p' |
+        sort -rn |
+        head -10 |
+        fzf --reverse --header "Select a PR (enter to checkout)")
+      [[ -n "$pr_number" ]] || return 1
+    fi
+
+    if [[ -z "$pr_number" ]]; then
+      echo "Usage: vm_git_pr <PR number>   (or install fzf to pick from a list)"
+      return 1
+    fi
+
+    local branch="pr-$pr_number"
+    git fetch origin "refs/pull/$pr_number/head:$branch" &&
+      git checkout "$branch"
+  }
 fi
