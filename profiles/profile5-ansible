@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+vm_ansible_play() {
+  # Inside the ansible project root?
+  local d
+  for d in inventory playbooks roles; do
+    [[ -d "$d" ]] ||
+      { echo "[ERROR] not in an ansible project root: missing ./$d (call me from the project dir)" >&2; return 1; }
+  done
+
+  # fzf on top: without it there is nothing to pick, so skip all prep work.
+  check_command fzf || return 1
+
+  # venv state: requirements only refresh when a venv is actually active.
+  if [[ -n "$VIRTUAL_ENV" ]]; then
+    if [[ -f requirements.txt ]]; then
+      echo "▶ python -m pip install -r requirements.txt"
+      python -m pip install -r requirements.txt 1>/dev/null
+    fi
+    if [[ -f requirements.yml ]] && command -v ansible-galaxy >/dev/null 2>&1; then
+      echo "▶ ansible-galaxy collection install --upgrade -r requirements.yml"
+      ansible-galaxy collection install --upgrade -r requirements.yml 1>/dev/null
+    fi
+  else
+    if [[ -d "$PWD/.venv" ]]; then
+      echo "[NOTE] .venv exists but is not active: source .venv/bin/activate" >&2
+    else
+      echo "[INFO] not inside a venv, using system ansible-playbook" >&2
+    fi
+  fi
+
+  check_command ansible-playbook || return 1
+
+  local host_list pb_list host playbook
+
+  host_list=$(find inventory -maxdepth 1 -type f -name '*.yml' \
+    ! -name 'inventory-default.yml' \
+    ! -name 'inventory-example-*' \
+    -printf '%f\n' 2>/dev/null | sed 's/\.yml$//' | sort)
+  [[ -n "$host_list" ]] ||
+    { echo "[ERROR] no per-device inventories found in ./inventory" >&2; return 1; }
+
+  host=$(printf '%s\n' "$host_list" |
+    fzf --multi \
+      --reverse \
+      --header 'Select host(s) (TAB: toggle, ENTER: apply as --limit)' \
+      --prompt 'host > ' \
+      --preview "cat inventory/{}.yml")
+  [[ -n "$host" ]] || { echo "⏭️  aborted"; return 1; }
+
+  host=$(paste -sd, <<< "$host")
+
+  pb_list=$(find playbooks -maxdepth 1 -type f -name 'playbook-*.yml' \
+    ! -name 'playbook-s-*.yml' \
+    -printf '%f\n' 2>/dev/null | sort)
+  [[ -n "$pb_list" ]] ||
+    { echo "[ERROR] no playbooks found in ./playbooks" >&2; return 1; }
+
+  playbook=$(printf '%s\n' "$pb_list" |
+    fzf --reverse \
+      --header 'Select playbook to run' \
+      --prompt 'playbook > ' \
+      --preview "sed -n '1,60p' playbooks/{}")
+  [[ -n "$playbook" ]] || { echo "⏭️  aborted"; return 1; }
+
+  # auth flags: multi-select -k / --ask-become-pass, or none at all
+  local auth_sel
+  auth_sel=$(printf '%s\n' \
+      '--ask-become-pass     prompt for sudo password' \
+      '-k                    prompt for SSH password' |
+    fzf --multi \
+      --reverse \
+      --header 'Auth flags (TAB: toggle, ENTER: confirm, none is fine)' \
+      --prompt 'auth > ')
+
+  local -a cmd=("ansible-playbook" "playbooks/$playbook" "--limit" "$host")
+  if [[ -n "$auth_sel" ]]; then
+    while IFS= read -r line; do
+      if [[ "$line" == --ask-become-pass* ]]; then
+        cmd+=(--ask-become-pass)
+      elif [[ "$line" == -k* ]]; then
+        cmd+=(-k)
+      fi
+    done <<< "$auth_sel"
+  else
+    echo "ℹ️  no auth flags selected, using existing credentials"
+  fi
+  cmd+=("$@")
+  echo
+  echo "▶ RUNNING: ${cmd[*]}"
+  echo
+  "${cmd[@]}"
+}
