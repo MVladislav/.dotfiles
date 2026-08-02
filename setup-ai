@@ -29,12 +29,13 @@ source "./setup-helper"
 # CONFIG :: toggle flags -------------------------------------------------------
 RUN_INSTALL_OPENCODE=0
 RUN_INSTALL_HERDR=0
+RUN_INSTALL_GH=0
 
 RUN_SETUP_OPENCODE=0
 RUN_SETUP_HERDR=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_OPENCODE=v1.18.10
+VERSION_OPENCODE=v1.18.11
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
 VERSION_HERDR=v0.7.5
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
@@ -51,6 +52,7 @@ main() {
 
   run_if $RUN_INSTALL_OPENCODE && install_opencode
   run_if $RUN_INSTALL_HERDR && install_herdr
+  run_if $RUN_INSTALL_GH && install_gh
 
   run_if $RUN_SETUP_OPENCODE && setup_opencode
   run_if $RUN_SETUP_HERDR && setup_herdr
@@ -84,6 +86,16 @@ install_herdr() {
   setup_herdr
 }
 
+# SERVICE :: install gh (GitHub CLI) -------------------------------------------
+install_gh() {
+  print_info2 "\n🚀 GH :: install GitHub CLI..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/gh" --version 2>/dev/null | head -1)'"
+  download_github_binary 'https://github.com/cli/cli' 'gh_.*_linux_amd64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/gh" --version 2>/dev/null | head -1)'"
+  print_notes "   💡 authenticate: gh auth login (or reuse GITHUB_TOKEN, see ai/GITHUB.md)"
+  print_info2 "✅ GH :: GitHub CLI installed!"
+}
+
 # ******************************************************************************
 
 # SETUP :: opencode ------------------------------------------------------------
@@ -95,6 +107,7 @@ setup_opencode() {
 
   select_opencode_section "MCP" "MCP configs"
   select_opencode_section "AGENTS" "agents"
+  select_opencode_lsp
   setup_opencode_skills
 
   local config_file="$LN_OPENCODE/opencode.jsonc"
@@ -107,6 +120,9 @@ setup_opencode() {
   fi
   if [[ -n "$OPENCODE_CONFIG_AGENTS_COMBINED" && "$OPENCODE_CONFIG_AGENTS_COMBINED" != "CLEANUP" ]]; then
     opencode_config=$(echo "$opencode_config" | jq --argjson a "$OPENCODE_CONFIG_AGENTS_COMBINED" '.agent = $a')
+  fi
+  if [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]]; then
+    opencode_config=$(echo "$opencode_config" | jq --argjson l "$OPENCODE_CONFIG_LSP_COMBINED" '.lsp = $l')
   fi
 
   if [[ -f "$config_file" ]]; then
@@ -124,8 +140,11 @@ setup_opencode() {
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all agent configs"
 
+    local merge_filter='.[0] * .[1]'
+    [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_filter='.[0] * (.[1] | del(.lsp))'
+
     print_notes "   🔧 merging selected configs into existing $config_file"
-    jq -s '.[0] * .[1]' <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
+    jq -s "$merge_filter" <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
       && mv "${config_file}.tmp" "$config_file" \
       || print_notes "   ⚠️  Merge failed, config unchanged"
   else
@@ -219,12 +238,62 @@ select_opencode_section() {
   return 0
 }
 
+# SERVICE :: opencode LSP selector ---------------------------------------------
+# Built-in LSP servers start lazily (only when a matching file is opened), but
+# excluding unwanted ones avoids needless installs/memory. "ALL" = lsp:true.
+select_opencode_lsp() {
+  if [[ ${#OPENCODE_CONFIG_LSP_NAMES[@]} -eq 0 ]]; then
+    print_notes "   ⏭️  No LSP servers available, skipping"
+    OPENCODE_CONFIG_LSP_COMBINED=""
+    return 0
+  fi
+
+  command -v fzf >/dev/null 2>&1 || { print_notes "   ⚠️  fzf not found, skipped LSP selection (LSP stays off)"; OPENCODE_CONFIG_LSP_COMBINED=""; return 0; }
+
+  local fzf_list="ALL (enable all built-in LSP servers)"
+  local name
+  for name in "${OPENCODE_CONFIG_LSP_NAMES[@]}"; do
+    fzf_list+=$'\n'"$name"
+  done
+
+  print_info2 "\n🔧 LSP :: enable built-in LSP servers (unnamed ones get disabled)"
+  local selections
+  selections=$(echo "$fzf_list" |
+    fzf --multi \
+      --header 'TAB: toggle, ENTER: confirm — unselected servers are disabled' \
+      --prompt 'Select LSP servers (ALL = everything): ')
+  [[ -z "$selections" ]] && {
+    print_notes "   ⏭️  No LSP selected, LSP stays off"
+    OPENCODE_CONFIG_LSP_COMBINED=""
+    return 0
+  }
+
+  if grep -qx 'ALL (enable all built-in LSP servers)' <<< "$selections"; then
+    print_notes "   📦 LSP enabled: all built-in servers"
+    OPENCODE_CONFIG_LSP_COMBINED='true'
+    return 0
+  fi
+
+  local all_json sel_json
+  all_json=$(printf '%s\n' "${OPENCODE_CONFIG_LSP_NAMES[@]}" | jq -R -s 'split("\n") | map(select(length > 0))')
+  sel_json=$(printf '%s\n' "$selections" | jq -R -s 'split("\n") | map(select(length > 0))')
+  OPENCODE_CONFIG_LSP_COMBINED=$(jq -nc --argjson a "$all_json" --argjson s "$sel_json" \
+    '$a - $s | map({ key: ., value: { disabled: true } }) | from_entries')
+
+  print_notes "   📦 LSP enabled: $(printf '%s' "$selections" | tr '\n' ' ') | disabled: $(echo "$OPENCODE_CONFIG_LSP_COMBINED" | jq -rc 'keys | join(", ")')"
+  return 0
+}
+
 # SETUP :: opencode skills ----------------------------------------------------
 setup_opencode_skills() {
   local skills_dir="$LN_OPENCODE/skills"
 
   print_info2 "\n🔗 SKILLS :: linking ai/SKILL-git-release.md -> $skills_dir/git-release/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-git-release.md" "$skills_dir/git-release/SKILL.md"
+  print_info2 "🔗 SKILLS :: linking ai/SKILL-github.md -> $skills_dir/github/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github.md" "$skills_dir/github/SKILL.md"
+  print_info2 "🔗 SKILLS :: linking ai/GITHUB.md -> $skills_dir/github/GITHUB.md"
+  create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/github/GITHUB.md"
 
   print_info2 "✅ SKILLS :: symlinks created."
 }
@@ -255,7 +324,7 @@ OPENCODE_CONFIG_MCP_GITHUB='
     "enabled": true,
     "oauth": false,
     "headers": {
-      "Authorization": "Bearer {env:GITHUB_PERSONAL_ACCESS_TOKEN}"
+      "Authorization": "Bearer {env:GITHUB_TOKEN}"
     }
   }
 }
@@ -336,7 +405,7 @@ OPENCODE_CONFIG_MCP_CONTEXT7='
 # CONFIG :: opencode agents ----------------------------------------------------
 # Names used for fzf selection (maps to OPENCODE_CONFIG_AGENTS_<UPPERNAME>)
 # shellcheck disable=SC2034
-OPENCODE_CONFIG_AGENTS_NAMES=("code-review" "test-writer" "git-release")
+OPENCODE_CONFIG_AGENTS_NAMES=("code-review" "test-writer" "git-release" "github")
 
 # shellcheck disable=SC2034
 OPENCODE_CONFIG_AGENTS_CODE_REVIEW='
@@ -371,12 +440,33 @@ OPENCODE_CONFIG_AGENTS_GIT_RELEASE='
 {
   "git-release": {
     "description": "Generate conventional changelog and release notes, propose version bumps, and create tagged releases",
-    "prompt": "You are an expert release manager. When asked to prepare a release:\n\n1. First check `git log --oneline -20` to understand recent history\n2. Use the `git-release` skill to generate structured release notes from conventional commits\n3. Parse commits by type (feat, fix, docs, refactor, perf, test, chore, etc.) and group into labeled sections\n4. Include full commit hashes, PR references, and author attribution\n5. Append a compare URL, release notes, and release process checklist\n6. Propose a semver version bump based on the commit types present\n7. Provide copy-pasteable commands for tagging and creating the release PR",
+    "prompt": "You are an expert release manager. When asked to prepare a release:\n\n1. First check `git log --oneline -20` to understand recent history\n2. Use the `git-release` skill to generate structured release notes from conventional commits\n3. Enrich entries with GitHub PR data when possible (via `gh pr view` or the GitHub API), preferring PR titles and numbers over raw commit subjects\n4. Parse commits by type (feat, fix, docs, refactor, perf, test, chore, etc.) and group into labeled sections\n5. Include full commit hashes, PR references, and author attribution\n6. Add breaking/migration/deprecation notices, new contributors, and a short Highlights summary\n7. Append a compare URL, release process checklist, and a proposed semver version bump\n8. Always write the release notes to a `release-vX.Y.Z.md` file\n9. Provide copy-pasteable commands for tagging and creating the release PR",
     "mode": "subagent",
     "enabled": true
   }
 }
 '
+
+# shellcheck disable=SC2034
+# shellcheck disable=SC2016
+OPENCODE_CONFIG_AGENTS_GITHUB='
+{
+  "github": {
+    "description": "Browse GitHub issues and PRs, review pull requests with AI, comment on or create PRs",
+    "prompt": "You are an expert GitHub workflow engineer. Use the `github` skill and the GitHub MCP server tools to work with issues and pull requests:\n\n1. Identify the repository (owner/repo) via `gh repo view --json nameWithOwner -q .nameWithOwner`\n2. Browse items with MCP tools (list_repository_issues, list_repository_pull_requests) or `gh issue list` / `gh pr list`, using `--search` to filter\n3. Read details with get_issue / get_pull_request, including author login and profile info\n4. Fetch a PR locally with `gh pr checkout <number>`, then review the change (`gh pr diff`, `gh pr view`, reading the changed files)\n5. Post comments (`gh pr comment` / `gh issue comment`) or formal reviews (`gh pr review`)\n6. For new work: branch, implement, commit, `git push -u origin <branch>`, then `gh pr create` and report the PR URL\n7. Always work on feature branches, never push to main directly\n8. If gh is missing or unauthenticated, tell the user to run `gh auth login` (see GITHUB.md in this skill folder)",
+    "mode": "subagent",
+    "enabled": true
+  }
+}
+'
+
+# CONFIG :: opencode LSP servers ------------------------------------------------
+# Built-in LSP servers opencode knows about. fzf selection in select_opencode_lsp()
+# keeps the picked ones enabled and disables the rest ("ALL" = enable everything).
+# Special value of OPENCODE_CONFIG_LSP_COMBINED: "true" (all), "" (off), or a
+# JSON object mapping disabled servers. See https://opencode.ai/docs/lsp/
+OPENCODE_CONFIG_LSP_NAMES=(astro bash clojure-lsp csharp clangd dart deno elixir-ls eslint fsharp gleam gopls hls jdtls julials kotlin-ls lua-ls nixd ocaml-lsp oxlint php prisma pyright ruby-lsp rust sourcekit-lsp svelte terraform tinymist typescript vue yaml-ls zls)
+OPENCODE_CONFIG_LSP_COMBINED=""
 
 # FUTURE IDEAS — uncomment sections below and add toggle flags + install/setup
 # functions when ready to add these tools.
@@ -425,6 +515,7 @@ usage() {
   print_info "   ⚙️ Install flags:"
   print_info "     -ioc       --install-opencode               Install opencode"
   print_info "     -ihrd      --install-herdr                  Install herdr"
+  print_info "     -igh       --install-github-cli             Install GitHub CLI from releases"
   print_info ""
   print_info "   🔗 Setup flags (disabled by default):"
   print_info "     -soc       --setup-opencode                 Create opencode config dir"
@@ -451,6 +542,9 @@ parse_args() {
       ;;
     -ihrd | --install-herdr)
       RUN_INSTALL_HERDR=1
+      ;;
+    -igh | --install-github-cli)
+      RUN_INSTALL_GH=1
       ;;
     -soc | --setup-opencode)
       RUN_SETUP_OPENCODE=1

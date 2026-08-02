@@ -119,3 +119,5 @@ configs-single/**
 !ai/
 ai/**
 !ai/SKILL-git-release.md
+!ai/GITHUB.md
+!ai/SKILL-github.md
