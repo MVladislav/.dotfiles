@@ -44,6 +44,36 @@ print_read() { printf "%b%s%b" "${BYELLOW}" "$1" "${NC}"; }
 print_notes() { echo -e "${BCYAN}$1${NC}"; }
 print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
+# HELPERS :: print section divider ---------------------------------------------
+print_section() {
+  echo -e "\n${BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  print_info2 "  $1"
+  echo -e "${BCYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo ""
+}
+
+# HELPERS :: print section divider ---------------------------------------------
+print_section_end() {
+  echo ""
+  print_info2 "$1"
+  echo -e "${BCYAN}################################################################${NC}"
+}
+
+# HELPERS :: fzf preselect bind -------------------------------------------------
+# Build a --bind "start:..." string that pre-toggles the given defaults.
+# List lines are matched exactly, so the default names can appear anywhere.
+fzf_preselect_bind() {
+  local list="$1" defaults="$2"
+  local bind="start:"
+  local def line
+  for def in $defaults; do
+    line=$(echo "$list" | grep -nx "$def" | cut -d: -f1)
+    [[ -n "$line" ]] && bind+="pos($line)+toggle+"
+  done
+  [[ "$bind" == "start:" ]] && return 0
+  echo "${bind}pos(1)"
+}
+
 # ******************************************************************************
 
 # HELPERS :: require commands --------------------------------------------------
