@@ -1,166 +1,382 @@
 #!/usr/bin/env bash
+# vm-pve-backup — backup/restore Proxmox VE (PVE) & Proxmox Backup Server (PBS)
+# configuration files over SSH.
+#
+# Pattern syntax:
+#   '?/path'  → optional: skipped (with a note) when it doesn't exist remotely
+#   '{NODE}'  → replaced with the PVE cluster node name (pvecm/corosync based,
+#               falls back to the remote hostname) — may differ from hostname
+#   '*.glob'  → expanded by the remote shell; rsync transfers exactly the matches
+#
+# Extend the lists with a config file (see -c / $VM_PVE_BACKUP_CONF):
+#   PVE_EXTRA_PATTERNS=( "?/etc/custom.conf" )
+#   PBS_EXTRA_PATTERNS=( "/etc/other/*" )
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
 trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
-
-# Trap SIGINT and SIGTERM to exit the script gracefully
-trap "echo 'Backup interrupted. Exiting...'; exit 1" SIGINT SIGTERM
+trap 'echo "Interrupted. Exiting..."; exit 1' SIGINT SIGTERM
 
 # ******************************************************************************
 
-# Constants
+# CONFIG :: optional user config file ------------------------------------------
+CONF_FILE="${VM_PVE_BACKUP_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/vm-pve-backup.conf}"
+
+# CONFIG :: file lists ---------------------------------------------------------
+# NOTE: '-' prefix handled at runtime ('?' = optional, '{NODE}' = PVE cluster
+# node name, auto-detected from the remote host — may differ from its hostname).
 # shellcheck disable=SC2034
-readonly FILES_TO_BACKUP_PVE=(
+readonly FILES_COMMON=(
   "/etc/hosts"
-  "/etc/passwd"
+  "/etc/hostname"
   "/etc/resolv.conf"
+  # "/etc/passwd"
+  # "/etc/shadow"
+  # "/etc/fstab"
   "/etc/default/grub"
-  # "/etc/kernel/cmdline"
-  "/etc/lvm/lvm.conf"
-  "/etc/systemd/network/*.link"
-  "/etc/systemd/system/mnt-*.mount"
-  "/etc/network/interfaces.d/sdn"
-  "/etc/network/interfaces.new"
+  "?/etc/kernel/cmdline"
+  # "/etc/apt/sources.list"
+  # "/etc/apt/sources.list.d/*"
+  # "/etc/crontab"
+  # "/etc/cron.d/*"
+  # "?/var/spool/cron/crontabs/*"
+  "?/etc/sysctl.conf"
+  "/etc/sysctl.d/*"
+  "/etc/modules"
+  "/etc/modprobe.d/*"
+  # "?/etc/rc.local"
+  # "/etc/ssh/ssh_host_*"
+  "/etc/ssh/sshd_config"
+  "?/etc/ssh/sshd_config.d/*"
+  "?/etc/systemd/network/*.link"
+  "?/etc/systemd/system/mnt-*.mount"
   "/etc/network/interfaces"
-  "/etc/pve/datacenter.cfg"
-  "/etc/pve/jobs.cfg"
-  "/etc/pve/notifications.cfg"
-  "/etc/pve/storage.cfg"
-  "/etc/pve/mapping/pci.cfg"
-  "/etc/pve/mapping/usb.cfg"
-  "/etc/pve/nodes/pve/config"
-  "/etc/pve/nodes/pve/qemu-server/*.conf"
-  "/etc/pve/priv/acme/*"
-  "/etc/pve/sdn/pve-ipam-state.json"
-  "/etc/pve/sdn/subnets.cfg"
-  "/etc/pve/sdn/vnets.cfg"
-  "/etc/pve/sdn/zones.cfg"
+  "?/etc/network/interfaces.new"
+  "?/etc/network/interfaces.d/*"
+  "/etc/lvm/lvm.conf"
 )
 # shellcheck disable=SC2034
-readonly FILES_TO_BACKUP_PBS=(
-  "/etc/default/grub"
-  "/etc/fstab"
-  "/etc/kernel/cmdline"
+readonly FILES_PVE=(
+  "?/etc/pve/corosync.conf"
+  "/etc/pve/datacenter.cfg"
+  "?/etc/pve/domains.cfg"
+  "/etc/pve/user.cfg"
+  "/etc/pve/storage.cfg"
+  "/etc/pve/jobs.cfg"
+  "/etc/pve/notifications.cfg"
+  "?/etc/pve/authkey.json"
+  "?/etc/pve/resources.cfg"
+  "?/etc/pve/status.cfg"
+  "?/etc/pve/tfa.cfg"
+  "?/etc/pve/ceph.conf"
+  "/etc/pve/mapping/pci.cfg"
+  "/etc/pve/mapping/usb.cfg"
+  "?/etc/pve/firewall/*.fw"
+  "?/etc/pve/ha/*"
+  "/etc/pve/priv/*"
+  "/etc/pve/sdn/*"
+  "/etc/pve/nodes/{NODE}/config"
+  "/etc/pve/nodes/{NODE}/pve-ssl.pem"
+  "/etc/pve/nodes/{NODE}/pve-ssl.key"
+  "/etc/pve/nodes/{NODE}/pveproxy-ssl.pem"
+  "/etc/pve/nodes/{NODE}/pveproxy-ssl.key"
+  "/etc/pve/nodes/{NODE}/qemu-server/*.conf"
+  "/etc/pve/nodes/{NODE}/lxc/*.conf"
+  # "?/etc/pve/qemu-server/*.conf"
+  # "?/etc/pve/lxc/*.conf"
+)
+# shellcheck disable=SC2034
+readonly FILES_PBS=(
   "/etc/proxmox-backup/acme/*"
   "/etc/proxmox-backup/datastore.cfg"
+  "/etc/proxmox-backup/domains.cfg"
+  "/etc/proxmox-backup/user.cfg"
   "/etc/proxmox-backup/node.cfg"
   "/etc/proxmox-backup/notifications.cfg"
   "/etc/proxmox-backup/prune.cfg"
+  "?/etc/proxmox-backup/remote.cfg"
+  "?/etc/proxmox-backup/tape.cfg"
   "/etc/proxmox-backup/verification.cfg"
+  "?/etc/proxmox-backup/limits.cfg"
 )
 
-# Variables
+# CONFIG :: user extensions (populated from $CONF_FILE) ------------------------
+PVE_EXTRA_PATTERNS=()
+PBS_EXTRA_PATTERNS=()
+if [[ -f "$CONF_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$CONF_FILE"
+fi
+
+# CONFIG :: effective lists (built at startup) ---------------------------------
+FILES_TO_BACKUP_PVE=()
+FILES_TO_BACKUP_PBS=()
+# Per-run pattern state (filled by prepare_patterns)
+CHECK_PATTERNS=()
+CHECK_OPTIONAL=()
+
+# CONFIG :: variables ----------------------------------------------------------
 REMOTE_HOST=""
 BACKUP_DIR=""
+NODE_NAME=""
+TOTAL_ERRORS=0
 DRY_RUN=false
 BACKUP_PVE=false
 BACKUP_PBS=false
 RESTORE_MODE=false
+LIST_MODE=false
+SUDO_REMOTE=false
+ASSUME_YES=false
+NO_ZFS=false
+ZFS_REMOTE=false
+
+# CONFIG :: ssh ----------------------------------------------------------------
+SSH_CTL_DIR="${XDG_RUNTIME_DIR:-/tmp}/vm-pve-backup"
+SSH_CTL_PATH="$SSH_CTL_DIR/ssh-%C"
+readonly SSH_CTL_OPTS=(-o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CTL_PATH")
 
 # ******************************************************************************
 
-# Backup mode: Pull files from remote host to local backup directory
+# Pre-process a pattern list: strip '?', substitute '{NODE}', sort by path so
+# the per-directory section headers stay contiguous. Results land in the global
+# CHECK_PATTERNS / CHECK_OPTIONAL arrays (same index order).
+prepare_patterns() {
+  local -n files_list="$1"
+  CHECK_PATTERNS=()
+  CHECK_OPTIONAL=()
+  local FILE_PATTERN p opt
+  for FILE_PATTERN in "${files_list[@]}"; do
+    [[ -n $FILE_PATTERN ]] || continue
+    opt=false
+    p="${FILE_PATTERN#\?}"
+    [[ $FILE_PATTERN == \?* ]] && opt=true
+    p="${p//\{NODE\}/$NODE_NAME}"
+    CHECK_PATTERNS+=("$p")
+    CHECK_OPTIONAL+=("$opt")
+  done
+
+  local -a pairs=()
+  local i
+  for i in "${!CHECK_PATTERNS[@]}"; do
+    pairs+=("$(section_of "${CHECK_PATTERNS[$i]}")"$'\t'"${CHECK_PATTERNS[$i]}"$'\t'"${CHECK_OPTIONAL[$i]}")
+  done
+  mapfile -t pairs < <(printf '%s\n' "${pairs[@]}" | sort)
+  CHECK_PATTERNS=()
+  CHECK_OPTIONAL=()
+  for i in "${!pairs[@]}"; do
+    local rest="${pairs[$i]#*$'\t'}"
+    CHECK_PATTERNS+=("${rest%%$'\t'*}")
+    CHECK_OPTIONAL+=("${rest#*$'\t'}")
+  done
+}
+
+# Backup mode: pull files from remote host to local backup directory -----------
 main_backup() {
-  # Set default backup directory if not provided (includes a timestamp)
-  BACKUP_DIR="${BACKUP_DIR:-/tmp/backup-pve-${REMOTE_HOST}-$(date +%Y%m%d%H%M%S)}"
-  mkdir -p "$BACKUP_DIR" || {
-    print_error1 "Error: Unable to create backup directory '$BACKUP_DIR'"
-    exit 1
-  }
-
-  print_info1 "💡 Backup started at $(date)\n"
-
-  # Sync files based on chosen backup options
-  [[ $BACKUP_PVE == true ]] && sync_files FILES_TO_BACKUP_PVE[@] "pve"
-  [[ $BACKUP_PBS == true ]] && sync_files FILES_TO_BACKUP_PBS[@] "pbs"
-
   if [[ $BACKUP_PVE == false && $BACKUP_PBS == false ]]; then
-    print_error2 "Nothing to backup. Please choose '-pve' or '-pbs'."
+    print_error1 "Nothing to backup. Please choose '-pve' and/or '-pbs'."
     usage
     exit 1
   fi
 
-  print_info1 "💡 Backup completed. Files saved to $BACKUP_DIR."
+  # Set default backup directory if not provided (includes a timestamp)
+  BACKUP_DIR="${BACKUP_DIR:-/tmp/backup-pve-${REMOTE_HOST}-$(date +%Y%m%d%H%M%S)}"
+  if [[ $DRY_RUN == false ]]; then
+    mkdir -p "$BACKUP_DIR" || {
+      print_error1 "Error: Unable to create backup directory '$BACKUP_DIR'"
+      exit 1
+    }
+  fi
+
+  print_info1 "💡 Backup started at $(date +'%Y-%m-%d %H:%M:%S %Z')\n"
+
+  if [[ $BACKUP_PVE == true ]]; then
+    prepare_patterns FILES_TO_BACKUP_PVE
+    sync_files "pve"
+  fi
+  if [[ $BACKUP_PBS == true ]]; then
+    prepare_patterns FILES_TO_BACKUP_PBS
+    sync_files "pbs"
+  fi
+
+  write_manifest "backup"
+
+  print_info1 "\n💡 Backup completed. Files saved to $BACKUP_DIR."
 }
 
-# Restore mode: Push files from local backup directory to remote host
+# Restore mode: push files from local backup directory to remote host ----------
 main_restore() {
+  if [[ $BACKUP_PVE == false && $BACKUP_PBS == false ]]; then
+    print_error1 "Nothing to restore. Please choose '-pve' and/or '-pbs'."
+    usage
+    exit 1
+  fi
+
   # In restore mode the backup directory must exist
   if [[ ! -d $BACKUP_DIR ]]; then
     print_error1 "Error: Backup directory '$BACKUP_DIR' does not exist."
     exit 1
   fi
 
-  print_info1 "💡 Restore started at $(date)\n"
-
-  [[ $BACKUP_PVE == true ]] && restore_files FILES_TO_BACKUP_PVE[@] "pve"
-  [[ $BACKUP_PBS == true ]] && restore_files FILES_TO_BACKUP_PBS[@] "pbs"
-
-  if [[ $BACKUP_PVE == false && $BACKUP_PBS == false ]]; then
-    print_error2 "Nothing to restore. Please choose '-pve' or '-pbs'."
-    usage
-    exit 1
+  if [[ $ASSUME_YES == false && $DRY_RUN == false ]]; then
+    print_error2 "You are about to RESTORE system configs to '$REMOTE_HOST' from '$BACKUP_DIR'."
+    printf "🔭 Continue? [y/N] "
+    read -r answer
+    [[ $answer == y || $answer == Y ]] || { print_info1 "Aborted."; exit 1; }
   fi
 
-  print_info1 "💡 Restore completed. Files from $BACKUP_DIR restored to $REMOTE_HOST."
+  print_info1 "💡 Restore started at $(date +'%Y-%m-%d %H:%M:%S %Z')\n"
+
+  if [[ $BACKUP_PVE == true ]]; then
+    prepare_patterns FILES_TO_BACKUP_PVE
+    restore_files "pve"
+  fi
+  if [[ $BACKUP_PBS == true ]]; then
+    prepare_patterns FILES_TO_BACKUP_PBS
+    restore_files "pbs"
+  fi
+
+  write_manifest "restore"
+
+  print_info1 "\n💡 Restore completed. Files from $BACKUP_DIR restored to $REMOTE_HOST."
 }
 
 # ******************************************************************************
 
-# Function to sync files using rsync (Backup direction: Remote -> Local)
+# Check which patterns exist on the remote host (one ssh round trip) -----------
+# Prints one line per pattern: number of matches (0 = missing).
+remote_pattern_counts() {
+  local quoted=""
+  local p
+  for p in "$@"; do
+    quoted+="$(printf '%q ' "$p")"
+  done
+  # shellcheck disable=SC2029
+  ssh_run "$REMOTE_HOST" "for p in ${quoted}; do ls -d \$p 2>/dev/null | wc -l; done"
+}
+
+# Logical section for a pattern (used for output section headers)
+section_of() {
+  case "$1" in
+    /etc/pve/* | /etc/pve) echo "/etc/pve" ;;
+    /etc/proxmox-backup/* | /etc/proxmox-backup) echo "/etc/proxmox-backup" ;;
+    /etc/systemd/*) echo "/etc/systemd" ;;
+    /var/*) echo "/var" ;;
+    /etc/* | /etc) echo "/etc" ;;
+    *) echo "/" ;;
+  esac
+}
+
+# Sync files (Backup direction: Remote -> Local) --------------------------------
 sync_files() {
-  local files_list=("${!1}")
-  local type="$2"
+  local type="$1"
   local total_files=0 total_errors=0 total_size=0
   local start_time end_time elapsed_time
+  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}")
 
   start_time=$(date +%s)
 
-  for FILE_PATTERN in "${files_list[@]}"; do
-    if [[ -z $FILE_PATTERN ]]; then
-      print_error2 "Empty file pattern encountered. Skipping..."
-      continue
+  # Remote existence check for all patterns in a single ssh call
+  local -a counts
+  mapfile -t counts < <(remote_pattern_counts "${check[@]}")
+
+  local i
+  local current_group="" first_group=true
+  for i in "${!check[@]}"; do
+    local p="${check[$i]}"
+    local count="${counts[$i]:-0}"
+
+    # Section header per logical config area
+    local group
+    group="$(section_of "$p")"
+    if [[ $group != "$current_group" ]]; then
+      current_group="$group"
+      [[ $first_group == false ]] && print_info1 ""
+      first_group=false
+      print_info1 "=== $group ==="
     fi
 
     # Construct local target directory
     local local_dir
-    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
+    local_dir="$BACKUP_DIR/$type$(dirname "$p")"
 
-    if [[ $DRY_RUN == true ]]; then
-      print_info1 "🧁 [Dry Run] Would back up: '$FILE_PATTERN' into '$local_dir'"
+    if ((count == 0)); then
+      if [[ ${optional[$i]} == true ]]; then
+        print_info1 "⏭️ Skipping (optional, not present): $p"
+      else
+        print_error2 "Missing on remote (required): $p"
+        total_errors=$((total_errors + 1))
+      fi
       continue
     fi
 
-    print_info1 "💡 Backing up: $FILE_PATTERN"
+    if [[ $DRY_RUN == true ]]; then
+      print_info1 "🧁 [Dry Run] Would back up: '$p' into '$local_dir'"
+      total_files=$((total_files + 1))
+      continue
+    fi
+
+    print_info1 "💡 Backing up: $p"
     mkdir -p "$local_dir" || {
       print_error2 "Unable to create directory $local_dir"
+      total_errors=$((total_errors + 1))
       continue
     }
 
-    # Sync files with rsync from remote host to local backup directory
-    if ! rsync --info=progress2 -auz -e "ssh -T -o Compression=no -x" \
-      --include="$(basename "$FILE_PATTERN")" --exclude="*" \
-      "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/" "$local_dir/"; then
-      print_error2 "Error backing up $FILE_PATTERN"
+    # Sync matching files with rsync from remote host to local backup directory.
+    # The pattern path is passed straight to rsync: the remote shell expands
+    # globs, so exactly the matching items are transferred (no include/exclude
+    # filter tricks that would over-match same-named files deeper in /etc).
+    local out bytes
+    if ! out=$(rsync --info=progress2 --stats --timeout=30 -auz \
+      -e "ssh ${SSH_CTL_OPTS[*]} -T -o Compression=no -x -o ConnectTimeout=10" \
+      "$REMOTE_HOST:$p" "$local_dir/" 2>&1); then
+      print_error2 "Error backing up $p"
       total_errors=$((total_errors + 1))
       continue
     fi
 
     total_files=$((total_files + 1))
-    local size
-    size=$(du -sb "$local_dir" | cut -f1)
-    total_size=$((total_size + size))
+    bytes=$(printf '%s\n' "$out" | awk '/Total transferred file size:/{print $(NF-1)}' | tail -n1)
+    total_size=$((total_size + ${bytes:-0}))
   done
 
-  backup_zfs_info "$type"
+  capture_versions "$type"
+  if [[ $NO_ZFS == false && $ZFS_REMOTE == true ]]; then
+    backup_zfs_info "$type"
+  fi
 
   end_time=$(date +%s)
   elapsed_time=$((end_time - start_time))
 
-  print_info2 "Total files backed up: $total_files"
-  print_info2 "Total size transferred: $((total_size / 1024)) KB"
-  print_info2 "Total errors encountered: $total_errors"
-  print_info2 "Elapsed time: ${elapsed_time}s\n"
+  print_info2 "Backup summary:"
+  print_info2 "  patterns:  $total_files"
+  print_info2 "  size:      $(human_bytes "$total_size")"
+  print_info2 "  errors:    $total_errors"
+  print_info2 "  elapsed:   ${elapsed_time}s"
+  TOTAL_ERRORS=$((TOTAL_ERRORS + total_errors))
+}
+
+capture_versions() {
+  local type="$1"
+  local vdir="$BACKUP_DIR/$type"
+  local cmd
+
+  if [[ $DRY_RUN == true ]]; then
+    print_info1 "🧁 [Dry Run] Would capture version info to '$vdir/versions.txt'"
+    return
+  fi
+
+  if [[ $type == "pve" ]]; then
+    cmd="pveversion -v"
+  else
+    cmd="proxmox-backup-manager versions"
+  fi
+
+  mkdir -p "$vdir"
+  print_info1 "💡 Capturing versions ($cmd)..."
+  # shellcheck disable=SC2029
+  if ! ssh_run "$REMOTE_HOST" "$cmd" >"$vdir/versions.txt" 2>&1; then
+    print_error2 "Failed to capture versions ('$cmd')"
+  fi
 }
 
 backup_zfs_info() {
@@ -175,65 +391,144 @@ backup_zfs_info() {
   print_info1 "💡 Backing up ZFS configuration..."
   mkdir -p "$zfs_dir"
 
-  ssh "$REMOTE_HOST" "zfs list -r -o name,used,avail,refer,mountpoint" >"$zfs_dir/zfs_list.txt" || print_error2 "Failed to fetch 'zfs list'"
-  ssh "$REMOTE_HOST" "zfs get all -r" >"$zfs_dir/zfs_get_all.txt" || print_error2 "Failed to fetch 'zfs get all'"
-  ssh "$REMOTE_HOST" "zpool status" >"$zfs_dir/zpool_status.txt" || print_error2 "Failed to fetch 'zpool status'"
-  ssh "$REMOTE_HOST" "zpool get all" >"$zfs_dir/zpool_get_all.txt" || print_error2 "Failed to fetch 'zpool get all'"
-  ssh "$REMOTE_HOST" "zpool list" >"$zfs_dir/zpool_list.txt" || print_error2 "Failed to fetch 'zpool list'"
+  ssh_run "$REMOTE_HOST" "zfs list -r -o name,used,avail,refer,mountpoint" >"$zfs_dir/zfs_list.txt" || print_error2 "Failed to fetch 'zfs list'"
+  ssh_run "$REMOTE_HOST" "zfs get all -r" >"$zfs_dir/zfs_get_all.txt" || print_error2 "Failed to fetch 'zfs get all'"
+  ssh_run "$REMOTE_HOST" "zpool status" >"$zfs_dir/zpool_status.txt" || print_error2 "Failed to fetch 'zpool status'"
+  ssh_run "$REMOTE_HOST" "zpool get all" >"$zfs_dir/zpool_get_all.txt" || print_error2 "Failed to fetch 'zpool get all'"
+  ssh_run "$REMOTE_HOST" "zpool list" >"$zfs_dir/zpool_list.txt" || print_error2 "Failed to fetch 'zpool list'"
 
   print_info2 "ZFS configuration saved under $zfs_dir"
 }
 
-# Function to restore files using rsync (Restore direction: Local -> Remote)
+write_manifest() {
+  local mode="$1"
+  local types=""
+  [[ $BACKUP_PVE == true ]] && types+="pve "
+  [[ $BACKUP_PBS == true ]] && types+="pbs"
+
+  if [[ $DRY_RUN == true ]]; then
+    print_info1 "🧁 [Dry Run] Would write manifest to '$BACKUP_DIR/manifest.txt'"
+    return
+  fi
+
+  {
+    echo "# vm-pve-backup manifest"
+    echo "created: $(date -Iseconds)"
+    echo "mode: $mode"
+    echo "host: $REMOTE_HOST"
+    echo "node: $NODE_NAME"
+    echo "types: ${types% }"
+    echo "backup_dir: $BACKUP_DIR"
+    echo ""
+    echo "# patterns:"
+    local FILE_PATTERN
+    if [[ $BACKUP_PVE == true ]]; then
+      echo "# [pve]"
+      for FILE_PATTERN in "${FILES_TO_BACKUP_PVE[@]}"; do
+        echo "  $FILE_PATTERN"
+      done
+    fi
+    if [[ $BACKUP_PBS == true ]]; then
+      echo "# [pbs]"
+      for FILE_PATTERN in "${FILES_TO_BACKUP_PBS[@]}"; do
+        echo "  $FILE_PATTERN"
+      done
+    fi
+  } >"$BACKUP_DIR/manifest.txt"
+}
+
+# Restore files (Restore direction: Local -> Remote) ---------------------------
 restore_files() {
-  local files_list=("${!1}")
-  local type="$2"
+  local type="$1"
   local total_files=0 total_errors=0 total_size=0
   local start_time end_time elapsed_time
+  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}")
 
   start_time=$(date +%s)
 
-  for FILE_PATTERN in "${files_list[@]}"; do
-    if [[ -z $FILE_PATTERN ]]; then
-      print_error2 "Empty file pattern encountered. Skipping..."
-      continue
+  local ssh_e_args="-o ControlMaster=auto -o ControlPersist=600 -o ControlPath=$SSH_CTL_PATH -T -o Compression=no -x -o ConnectTimeout=10"
+  local rsync_path=()
+  local rsync_flags="-rlpDz"
+  if [[ $SUDO_REMOTE == true ]]; then
+    ssh_e_args="-o ControlMaster=auto -o ControlPersist=600 -o ControlPath=$SSH_CTL_PATH -tt -o Compression=no -x -o ConnectTimeout=10"
+    rsync_path=(--rsync-path="sudo -n rsync")
+    rsync_flags="-rlptDz"
+  fi
+
+  local i
+  local current_group="" first_group=true
+  for i in "${!check[@]}"; do
+    local p="${check[$i]}"
+    local base
+    base="$(basename "$p")"
+
+    # Section header per logical config area
+    local group
+    group="$(section_of "$p")"
+    if [[ $group != "$current_group" ]]; then
+      current_group="$group"
+      [[ $first_group == false ]] && print_info1 ""
+      first_group=false
+      print_info1 "=== $group ==="
     fi
 
     # Local directory holding the backup
     local local_dir
-    local_dir="$BACKUP_DIR/$type$(dirname "$FILE_PATTERN")"
+    local_dir="$BACKUP_DIR/$type$(dirname "$p")"
 
-    if [[ $DRY_RUN == true ]]; then
-      print_info1 "🧁 [Dry Run] Would restore: '$local_dir/$(basename "$FILE_PATTERN")' to '$REMOTE_HOST:$(dirname "$FILE_PATTERN")/'"
+    # Glob the matching files in the backup (compgen handles the glob)
+    local -a matches=()
+    if [[ -d $local_dir ]]; then
+      while IFS= read -r f; do
+        matches+=("$f")
+      done < <(compgen -G "$local_dir/$base")
+    fi
+
+    if [[ ${#matches[@]} -eq 0 ]]; then
+      if [[ ${optional[$i]} == true ]]; then
+        print_info1 "⏭️ Skipping (optional, not in backup): $p"
+      else
+        print_error2 "Missing in backup (required): $local_dir/$base"
+        total_errors=$((total_errors + 1))
+      fi
       continue
     fi
 
-    print_info1 "💡 Restoring: $local_dir/$(basename "$FILE_PATTERN") to $REMOTE_HOST:$(dirname "$FILE_PATTERN")/"
-    # Upload files from local backup directory to remote host # --rsync-path="sudo -S rsync" \
-    if ! rsync --info=progress2 -rlD --no-o --no-g --no-t -z -e "ssh -tt -T -o Compression=no -x" \
-      --include="$(basename "$FILE_PATTERN")" --exclude="*" \
-      "$local_dir/" "$REMOTE_HOST:$(dirname "$FILE_PATTERN")/"; then
-      print_error2 "Error restoring $FILE_PATTERN"
+    if [[ $DRY_RUN == true ]]; then
+      print_info1 "🧁 [Dry Run] Would restore: '$local_dir/$base' to '$REMOTE_HOST:$(dirname "$p")/'"
+      total_files=$((total_files + 1))
+      continue
+    fi
+
+    print_info1 "💡 Restoring: $local_dir/$base to $REMOTE_HOST:$(dirname "$p")/"
+    local out bytes
+    if ! out=$(rsync --info=progress2 --stats --timeout=30 $rsync_flags \
+      -e "ssh $ssh_e_args" "${rsync_path[@]}" \
+      "${matches[@]}" "$REMOTE_HOST:$(dirname "$p")/" 2>&1); then
+      print_error2 "Error restoring $p"
       total_errors=$((total_errors + 1))
       continue
     fi
 
     total_files=$((total_files + 1))
-    local size
-    size=$(du -sb "$local_dir" | cut -f1)
-    total_size=$((total_size + size))
+    bytes=$(printf '%s\n' "$out" | awk '/Total transferred file size:/{print $(NF-1)}' | tail -n1)
+    total_size=$((total_size + ${bytes:-0}))
   done
 
   restore_info
-  restore_zfs_info "$type"
+  if [[ $NO_ZFS == false && $ZFS_REMOTE == true ]]; then
+    restore_zfs_info "$type"
+  fi
 
   end_time=$(date +%s)
   elapsed_time=$((end_time - start_time))
 
-  print_info2 "Total files restored: $total_files"
-  print_info2 "Total size transferred: $((total_size / 1024)) KB"
-  print_info2 "Total errors encountered: $total_errors"
-  print_info2 "Elapsed time: ${elapsed_time}s\n"
+  print_info2 "Restore summary:"
+  print_info2 "  patterns:  $total_files"
+  print_info2 "  size:      $(human_bytes "$total_size")"
+  print_info2 "  errors:    $total_errors"
+  print_info2 "  elapsed:   ${elapsed_time}s"
+  TOTAL_ERRORS=$((TOTAL_ERRORS + total_errors))
 }
 
 restore_info() {
@@ -242,6 +537,11 @@ restore_info() {
   echo "    systemctl daemon-reload"
   echo "    systemctl enable mnt-pve-*"
   echo "    systemctl start mnt-pve-*"
+  echo "2️⃣  SSH daemon config was restored; restart sshd to apply it:"
+  echo "    systemctl restart ssh"
+  echo "3️⃣  Re-apply kernel settings if needed:"
+  echo "    sysctl --system"
+  echo "    update-grub"
 }
 
 restore_zfs_info() {
@@ -291,45 +591,36 @@ restore_zfs_info() {
 
 # ******************************************************************************
 
-# Function to list SSH hosts from ~/.ssh/config using fzf
-choose_remote_host() {
-  local ssh_config="$HOME/.ssh/config"
-  if [[ ! -f "$ssh_config" ]]; then
-    echo "No SSH config found at $ssh_config" >&2
-    exit 1
-  fi
-
-  # Extract host names from SSH config, ignoring wildcards
-  local host
-  host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
-
-  if [[ -z $host ]]; then
-    echo "No remote host selected. Exiting." >&2
-    exit 1
-  fi
-
-  REMOTE_HOST="$host"
-}
-
-# ******************************************************************************
-
 # Logging functions
 print_info1() { echo -e "$1"; }
 print_info2() { echo -e "🔭 $1"; }
-print_info3() { echo -e "$1"; }
 print_error1() { echo -e "🔴 $1" >&2; }
 print_error2() { echo -e "⚠️ $1" >&2; }
 
 usage() {
-  print_info3 "📖 Usage: $0 [-r <REMOTE_HOST>] [options]"
-  print_info3 "📖 Options:"
-  print_info3 "   -h, --help          Show this help message and exit"
-  print_info3 "   -r, --remote-host   Remote server alias from .ssh/config. If not provided, you'll be prompted via fzf."
-  print_info3 "   -b, --backup-dir    Local backup directory (for backup, a default is created; for restore, it must exist)"
-  print_info3 "   -R, --restore       Restore mode: upload files from backup directory back to remote host"
-  print_info3 "   -pve                Backup/restore from Proxmox Virtual Environment"
-  print_info3 "   -pbs                Backup/restore from Proxmox Backup Server"
-  print_info3 "   -t, --dry-run       Simulate the backup/restore process without transferring files"
+  print_info1 "📖 Usage: $0 [-r <REMOTE_HOST>] [-pve] [-pbs] [options]"
+  print_info1 ""
+  print_info1 "   🎯 Examples:"
+  print_info1 "     $0 -pve -r pve1                                   Backup PVE configs"
+  print_info1 "     $0 -pve -pbs -r proxmox -b ~/backups/pve          Backup both (see -l first)"
+  print_info1 "     $0 -pve -r pve1 -b ~/backups/pve-20260701 -R -y   Restore without prompt"
+  print_info1 "     $0 -pve -r pve1 -l                                List what would be backed up"
+  print_info1 "     $0 -pve -r pve1 -t                                Dry run"
+  print_info1 ""
+  print_info1 "📖 Options:"
+  print_info1 "   -h, --help          Show this help message and exit"
+  print_info1 "   -r, --remote-host   Remote server alias from .ssh/config. If not provided, you'll be prompted via fzf."
+  print_info1 "   -b, --backup-dir    Local backup directory (for backup, a default is created; for restore, it must exist)"
+  print_info1 "   -R, --restore       Restore mode: upload files from backup directory back to remote host"
+  print_info1 "   -pve                Backup/restore from Proxmox Virtual Environment"
+  print_info1 "   -pbs                Backup/restore from Proxmox Backup Server"
+  print_info1 "   -l, --list          List the effective backup patterns with remote existence checks"
+  print_info1 "   -t, --dry-run       Simulate the backup/restore process without transferring files"
+  print_info1 "   -s, --sudo          Use 'sudo -n rsync' on the remote host (for non-root SSH users)"
+  print_info1 "   -y, --yes           Skip the restore confirmation prompt"
+  print_info1 "   -z, --no-zfs        Skip ZFS configuration capture"
+  print_info1 "   -c, --config FILE   Use an alternate config file for extra patterns (default: ~/.config/vm-pve-backup.conf)"
+  print_info1 "   -d, --debug         Enable bash debug mode (set -x)"
 }
 
 parse_args() {
@@ -359,8 +650,32 @@ parse_args() {
       BACKUP_PBS=true
       shift
       ;;
+    -l | --list)
+      LIST_MODE=true
+      shift
+      ;;
     -t | --dry-run)
       DRY_RUN=true
+      shift
+      ;;
+    -s | --sudo)
+      SUDO_REMOTE=true
+      shift
+      ;;
+    -y | --yes)
+      ASSUME_YES=true
+      shift
+      ;;
+    -z | --no-zfs)
+      NO_ZFS=true
+      shift
+      ;;
+    -c | --config)
+      CONF_FILE="$2"
+      shift 2
+      ;;
+    -d | --debug)
+      set -x
       shift
       ;;
     *)
@@ -370,18 +685,42 @@ parse_args() {
       ;;
     esac
   done
-
-  # If REMOTE_HOST was not provided, prompt via fzf
-  if [[ -z $REMOTE_HOST ]]; then
-    choose_remote_host
-  fi
 }
+
+# ******************************************************************************
+
+# Human readable byte size
+human_bytes() {
+  local b=$1
+  if ((b >= 1073741824)); then printf '%.2f GB' "$(awk -v n="$b" 'BEGIN{printf "%.2f", n/1073741824}')";
+  elif ((b >= 1048576)); then printf '%.2f MB' "$(awk -v n="$b" 'BEGIN{printf "%.2f", n/1048576}')";
+  elif ((b >= 1024)); then printf '%.2f KB' "$(awk -v n="$b" 'BEGIN{printf "%.2f", n/1024}')";
+  else printf '%d B' "$b"; fi
+}
+
+# SSH multiplexing ---------------------------------------------------------------
+# Reuse one authenticated SSH connection for every ssh/rsync invocation, so the
+# password is only asked once per run (ControlMaster opens on first connection,
+# later calls ride the same socket via ControlPath).
+ssh_run() {
+  mkdir -p "$SSH_CTL_DIR" 2>/dev/null || true
+  # shellcheck disable=SC2029  # caller-provided args are intentionally client-side expanded
+  ssh "${SSH_CTL_OPTS[@]}" "$@"
+}
+
+# shellcheck disable=SC2329  # invoked indirectly via trap close_ssh_master EXIT
+close_ssh_master() {
+  [[ -n ${REMOTE_HOST:-} ]] || return 0
+  ssh -O exit -o ControlPath="$SSH_CTL_PATH" "$REMOTE_HOST" 2>/dev/null || true
+}
+trap close_ssh_master EXIT
 
 # ******************************************************************************
 
 # Validate required commands are available
 check_dependencies() {
-  local commands=(rsync ssh du mkdir fzf)
+  local commands=(rsync ssh mkdir fzf)
+  local cmd
   for cmd in "${commands[@]}"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
       print_error1 "Error: Required command '$cmd' not found."
@@ -390,20 +729,122 @@ check_dependencies() {
   done
 }
 
+build_file_lists() {
+  FILES_TO_BACKUP_PVE=("${FILES_COMMON[@]}" "${FILES_PVE[@]}" "${PVE_EXTRA_PATTERNS[@]}")
+  FILES_TO_BACKUP_PBS=("${FILES_COMMON[@]}" "${FILES_PBS[@]}" "${PBS_EXTRA_PATTERNS[@]}")
+}
+
+# List what would be backed up, with remote existence checks (host always set) --
+list_patterns() {
+  local -a types_to_show=()
+  if [[ $BACKUP_PVE == true || ( $BACKUP_PVE == false && $BACKUP_PBS == false ) ]]; then
+    types_to_show+=("pve")
+  fi
+  if [[ $BACKUP_PBS == true || ( $BACKUP_PVE == false && $BACKUP_PBS == false ) ]]; then
+    types_to_show+=("pbs")
+  fi
+
+  local type
+  for type in "${types_to_show[@]}"; do
+    local list_name="FILES_TO_BACKUP_PVE"
+    [[ $type == pbs ]] && list_name="FILES_TO_BACKUP_PBS"
+    # shellcheck disable=SC2034
+    local -n list_ref="$list_name"
+
+    print_info1 "\n=== $type ($((${#list_ref[@]})) patterns) ==="
+
+    # Same preprocessing as the real run: strip '?', substitute '{NODE}', sort
+    prepare_patterns "$list_name"
+    local -a counts
+    mapfile -t counts < <(remote_pattern_counts "${CHECK_PATTERNS[@]}")
+
+    local i
+    local current_group="" first_group=true
+    for i in "${!CHECK_PATTERNS[@]}"; do
+      local p="${CHECK_PATTERNS[$i]}"
+      local opt=""
+      [[ ${CHECK_OPTIONAL[$i]} == true ]] && opt=" (optional)"
+
+      # Section header per logical config area
+      local group
+      group="$(section_of "$p")"
+      if [[ $group != "$current_group" ]]; then
+        current_group="$group"
+        [[ $first_group == false ]] && print_info1 ""
+        first_group=false
+        print_info1 "=== $group ==="
+      fi
+
+      if [[ ${counts[$i]:-0} -gt 0 ]]; then
+        print_info1 "   [OK] $p$opt"
+      else
+        print_info1 "   [--] $p$opt"
+      fi
+    done
+  done
+}
+
+# Function to list SSH hosts from ~/.ssh/config using fzf
+choose_remote_host() {
+  local ssh_config="$HOME/.ssh/config"
+  if [[ ! -f "$ssh_config" ]]; then
+    echo "No SSH config found at $ssh_config" >&2
+    exit 1
+  fi
+
+  # Extract host names from SSH config, ignoring wildcards
+  local host
+  host=$(grep -E '^\s*Host\s+' "$ssh_config" | awk '{for(i=2;i<=NF;i++) print $i}' | grep -vE '^\*' | sort -u | fzf --prompt="Select remote host: ")
+
+  if [[ -z $host ]]; then
+    echo "No remote host selected. Exiting." >&2
+    exit 1
+  fi
+
+  REMOTE_HOST="$host"
+}
+
 # Validate remote host connectivity
 validate_remote_host() {
-  if ! ssh -q -o ConnectTimeout=5 "$REMOTE_HOST" exit; then
+  if ! ssh_run -q -o ConnectTimeout=5 "$REMOTE_HOST" exit; then
     print_error1 "Error: Unable to connect to remote host '$REMOTE_HOST'"
     exit 1
   fi
 }
 
-# Check if rsync is installed on the remote host
-check_remote_rsync() {
-  if ! ssh -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v rsync" >/dev/null 2>&1; then
+# Detect remote capabilities: rsync installed, node name, ZFS, role (PVE/PBS)
+detect_remote_capabilities() {
+  if ! ssh_run -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v rsync" >/dev/null 2>&1; then
     print_error1 "Error: 'rsync' is not installed on remote host '$REMOTE_HOST'"
     exit 1
   fi
+  # The PVE cluster node name (directory under /etc/pve/nodes) can differ from
+  # the machine hostname. Prefer the authoritative sources:
+  #   1. pvecm status  -> "Name (local)" of this node
+  #   2. /etc/pve/nodes -> the single node dir on single-node clusters
+  #   3. hostname -s     (last resort)
+  local node_cmd
+  node_cmd="n=\$(hostname -s); if command -v pvecm >/dev/null 2>&1; then n=\$(pvecm status 2>/dev/null | awk '/\(local\)/{print \$3}' | head -n1); fi; if [ -z \"\$n\" ] && [ -d /etc/pve/nodes ] && [ \"\$(ls -1 /etc/pve/nodes 2>/dev/null | wc -l)\" = 1 ]; then n=\$(ls -1 /etc/pve/nodes 2>/dev/null); fi; printf '%s' \"\$n\""
+  NODE_NAME="$(ssh_run -o ConnectTimeout=5 "$REMOTE_HOST" "$node_cmd" || true)"
+  NODE_NAME="${NODE_NAME:-$REMOTE_HOST}"
+
+  if ssh_run -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v zfs" >/dev/null 2>&1; then
+    ZFS_REMOTE=true
+  fi
+
+  if [[ $BACKUP_PVE == true ]]; then
+    if ! ssh_run -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v pveversion" >/dev/null 2>&1; then
+      print_error2 "Warning: 'pveversion' not found on '$REMOTE_HOST' — is this really a PVE host?"
+    fi
+  fi
+
+  if [[ $BACKUP_PBS == true ]]; then
+    if ! ssh_run -q -o ConnectTimeout=5 "$REMOTE_HOST" "command -v proxmox-backup-manager" >/dev/null 2>&1; then
+      print_error2 "Warning: 'proxmox-backup-manager' not found on '$REMOTE_HOST' — is this really a PBS host?"
+    fi
+  fi
+
+  print_info2 "Remote host '$REMOTE_HOST' (node: $NODE_NAME, zfs: $([ $ZFS_REMOTE == true ] && echo yes || echo no))"
 }
 
 # ******************************************************************************
@@ -412,12 +853,24 @@ check_remote_rsync() {
 parse_args "$@"
 check_dependencies
 
+build_file_lists
+
+# If REMOTE_HOST was not provided, prompt via fzf
+[[ -z $REMOTE_HOST ]] && choose_remote_host
+
 validate_remote_host
-check_remote_rsync
+detect_remote_capabilities
+
+[[ $LIST_MODE == true ]] && { list_patterns; exit 0; }
 
 if [[ $RESTORE_MODE == true ]]; then
   main_restore
 else
   main_backup
+fi
+
+if [[ $TOTAL_ERRORS -gt 0 ]]; then
+  print_error1 "Finished with $TOTAL_ERRORS error(s). See summary above."
+  exit 1
 fi
 exit 0
