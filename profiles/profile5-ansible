@@ -1,54 +1,97 @@
 #!/usr/bin/env bash
 
 vm_ansible_play() {
-  # Inside the ansible project root?
+  # Guard 1: must be inside an ansible project root
   local d
   for d in inventory playbooks roles; do
     [[ -d "$d" ]] ||
       { echo "[ERROR] not in an ansible project root: missing ./$d (call me from the project dir)" >&2; return 1; }
   done
 
-  # fzf on top: without it there is nothing to pick, so skip all prep work.
+  # Guard 2: fzf first — skip all prep work when it is not available.
   check_command fzf || return 1
 
-  # venv state: requirements only refresh when a venv is actually active.
+  # Guard 3: venv — auto-activate a local .venv if not already inside one.
+  if [[ -z "$VIRTUAL_ENV" && -f "$PWD/.venv/bin/activate" ]]; then
+    echo "📌 activated $PWD/.venv"
+    # shellcheck disable=SC1091
+    source "$PWD/.venv/bin/activate"
+  fi
+
+  # Requirements: only refresh when the file changed since the last run.
   if [[ -n "$VIRTUAL_ENV" ]]; then
     if [[ -f requirements.txt ]]; then
-      echo "▶ python -m pip install -r requirements.txt"
-      python -m pip install -r requirements.txt 1>/dev/null
+      local pip_mark="$VIRTUAL_ENV/.pip-requirements.done"
+      if [[ ! -f "$pip_mark" || requirements.txt -nt "$pip_mark" ]]; then
+        echo "▶ python -m pip install -r requirements.txt"
+        python -m pip install -q -r requirements.txt ||
+          { echo "[ERROR] pip install failed" >&2; return 1; }
+        touch "$pip_mark"
+      fi
     fi
-    if [[ -f requirements.yml ]] && command -v ansible-galaxy >/dev/null 2>&1; then
-      echo "▶ ansible-galaxy collection install --upgrade -r requirements.yml"
-      ansible-galaxy collection install --upgrade -r requirements.yml 1>/dev/null
+    if [[ -f requirements.yml && -x "$VIRTUAL_ENV/bin/ansible-galaxy" ]]; then
+      local gal_mark="$VIRTUAL_ENV/.galaxy-requirements.done"
+      if [[ ! -f "$gal_mark" || requirements.yml -nt "$gal_mark" ]]; then
+        echo "▶ ansible-galaxy collection install -r requirements.yml"
+        "$VIRTUAL_ENV/bin/ansible-galaxy" collection install -r requirements.yml >/dev/null ||
+          { echo "[ERROR] ansible-galaxy install failed" >&2; return 1; }
+        touch "$gal_mark"
+      fi
     fi
   else
-    if [[ -d "$PWD/.venv" ]]; then
-      echo "[NOTE] .venv exists but is not active: source .venv/bin/activate" >&2
-    else
-      echo "[INFO] not inside a venv, using system ansible-playbook" >&2
-    fi
+    echo "[INFO] no venv active, using system ansible-playbook" >&2
   fi
 
   check_command ansible-playbook || return 1
 
-  local host_list pb_list host playbook
+  # Candidate list: inventory groups (when parseable) + per-device hosts.
+  local group_list=""
+  if command -v jq >/dev/null 2>&1 && command -v ansible-inventory >/dev/null 2>&1; then
+    group_list=$(ansible-inventory --list 2>/dev/null |
+      jq -r 'keys[]' 2>/dev/null |
+      grep -vE '^(all|ungrouped|_meta)$' |
+      sed 's/^/\[group\] /')
+  fi
+  group_list=$(printf '%s\n' "$group_list" | grep .)
 
+  local host_list
   host_list=$(find inventory -maxdepth 1 -type f -name '*.yml' \
     ! -name 'inventory-default.yml' \
     ! -name 'inventory-example-*' \
     -printf '%f\n' 2>/dev/null | sed 's/\.yml$//' | sort)
-  [[ -n "$host_list" ]] ||
-    { echo "[ERROR] no per-device inventories found in ./inventory" >&2; return 1; }
 
-  host=$(printf '%s\n' "$host_list" |
+  [[ -z "$host_list" && -z "$group_list" ]] &&
+    { echo "[ERROR] no hosts or groups found in ./inventory" >&2; return 1; }
+
+  local fzf_list=""
+  [[ -n "$group_list" ]] && fzf_list+="$group_list"$'\n'
+  fzf_list+="$host_list"
+
+  local limit
+  limit=$(
+    # shellcheck disable=SC2016
+    # single-quoted $vars below are fzf preview templates, expanded by the preview shell
+    printf '%s' "$fzf_list" |
     fzf --multi \
       --reverse \
-      --header 'Select host(s) (TAB: toggle, ENTER: apply as --limit)' \
-      --prompt 'host > ' \
-      --preview "cat inventory/{}.yml")
-  [[ -n "$host" ]] || { echo "⏭️  aborted"; return 1; }
+      --header 'Select host(s)/group(s) (TAB: toggle, ENTER: apply as --limit)' \
+      --prompt 'limit > ' \
+      --preview 'c="inventory/{r}.yml"; r={}; if [ -f "$c" ]; then cat "$c"; else echo "inventory group: ${r#\[group\] }"; ansible-inventory --list 2>/dev/null | jq -r --arg g "${r#\[group\] }" '\''.[$g].hosts[]'\'' 2>/dev/null | sed "s/^/  /"; fi'
+  )
+  [[ -n "$limit" ]] || { echo "⏭️  aborted"; return 1; }
 
-  host=$(paste -sd, <<< "$host")
+  # Map [group] entries back to their group name and comma-join the selection.
+  local -a sel=()
+  local line
+  while IFS= read -r line; do
+    [[ -z "$line" ]] && continue
+    case "$line" in
+      '[group] '*) sel+=("${line#'[group] '}") ;;
+      *) sel+=("$line") ;;
+    esac
+  done <<< "$limit"
+  limit=$(printf '%s\n' "${sel[@]}" | paste -sd, -)
+  [[ -n "$limit" ]] || { echo "⏭️  nothing selected"; return 1; }
 
   pb_list=$(find playbooks -maxdepth 1 -type f -name 'playbook-*.yml' \
     ! -name 'playbook-s-*.yml' \
@@ -56,6 +99,7 @@ vm_ansible_play() {
   [[ -n "$pb_list" ]] ||
     { echo "[ERROR] no playbooks found in ./playbooks" >&2; return 1; }
 
+  local playbook
   playbook=$(printf '%s\n' "$pb_list" |
     fzf --reverse \
       --header 'Select playbook to run' \
@@ -63,24 +107,25 @@ vm_ansible_play() {
       --preview "sed -n '1,60p' playbooks/{}")
   [[ -n "$playbook" ]] || { echo "⏭️  aborted"; return 1; }
 
-  # auth flags: multi-select -k / --ask-become-pass, or none at all
+  # auth flags: multi-select -k / --ask-become-pass / --check, or none.
   local auth_sel
   auth_sel=$(printf '%s\n' \
       '--ask-become-pass     prompt for sudo password' \
-      '-k                    prompt for SSH password' |
+      '-k                    prompt for SSH password' \
+      '--check               dry-run only (no changes)' |
     fzf --multi \
       --reverse \
-      --header 'Auth flags (TAB: toggle, ENTER: confirm, none is fine)' \
-      --prompt 'auth > ')
+      --header 'Flags (TAB: toggle, ENTER: confirm, none is fine)' \
+      --prompt 'flags > ')
 
-  local -a cmd=("ansible-playbook" "playbooks/$playbook" "--limit" "$host")
+  local -a cmd=("ansible-playbook" "playbooks/$playbook" "--limit" "$limit")
   if [[ -n "$auth_sel" ]]; then
     while IFS= read -r line; do
-      if [[ "$line" == --ask-become-pass* ]]; then
-        cmd+=(--ask-become-pass)
-      elif [[ "$line" == -k* ]]; then
-        cmd+=(-k)
-      fi
+      case "$line" in
+      --ask-become-pass*) cmd+=(--ask-become-pass) ;;
+      --check*) cmd+=(--check) ;;
+      -k*) cmd+=(-k) ;;
+      esac
     done <<< "$auth_sel"
   else
     echo "ℹ️  no auth flags selected, using existing credentials"
