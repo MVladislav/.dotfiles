@@ -15,7 +15,7 @@ So **one variable, `GITHUB_TOKEN`, is enough for everything**.
 **Fastest: open this pre-filled link** — GitHub supports URL parameters that
 pre-select everything (name, expiration, and read-only repository permissions):
 
-<https://github.com/settings/personal-access-tokens/new?name=Personal+Access+(read+only)&description=Read-only+token+for+opencode+and+gh&expires_in=90&contents=read&issues=read&pull_requests=read>
+<https://github.com/settings/personal-access-tokens/new?name=Personal+Access+(read+only)&description=Read-only+token+for+opencode+and+gh&expires_in=90&administration=read&contents=read&issues=read&pull_requests=read>
 
 Then only:
 
@@ -40,6 +40,7 @@ account") belongs to the **Account** tab — **leave it untouched**. Click the
 search for and select each of these, and set the access level to **Read-only**:
 
 - `Metadata` → Read-only (**always auto-included**, cannot be disabled — required)
+- `Administration` → Read-only _(needed by `gh dash` to read branch protection rules — see `SKILL-github.md`; requires admin access to the repos it is scoped to)_
 - `Issues` → Read-only _(to list/read issues and author info)_
 - `Pull requests` → Read-only _(to read PRs, diffs, reviews)_
 - `Contents` → Read-only _(to read files/commits/branches via the MCP `get_file_contents`, `list_commits`, …)_

@@ -39,6 +39,11 @@ Prerequisites: `GITHUB_TOKEN` set (see `GITHUB.md` in this skill folder), and
    - `gh pr diff <number>` — full diff (or `git diff <base>..HEAD` for committed work).
    - `gh pr view <number>` — title, body, author, base/head refs, mergeable state.
    - Read the changed files and assess correctness, security, and tests.
+   - If the review surfaces security concerns (secrets, injection, auth/authz
+     problems, vulnerable dependencies), delegate a deep dive to the
+     `security-engineer` subagent via the Task tool
+     (`subagent_type: "security-engineer"`, it uses the `security-review`
+     skill, OWASP-based), then post its findings as review comments.
 
 5. **Work with the author info**: PR/issue results include `author.login`; use
    `gh api users/<login>` if profile details (name, bio) are needed.
