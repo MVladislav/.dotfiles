@@ -125,6 +125,7 @@ configs-single/**
 !ai/
 ai/**
 !ai/SKILL-git-release.md
+!ai/SKILL-git-commit.md
 !ai/GITHUB.md
 !ai/SKILL-github.md
 !ai/setup-ai-opencode.conf

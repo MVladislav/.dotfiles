@@ -346,6 +346,7 @@ setup_opencode_skills() {
 
   print_info2 "🔗 SKILLS :: linking ai/SKILL-*.md -> $skills_dir"
   create_symlink "${PWD}/ai/SKILL-git-release.md" "$skills_dir/git-release/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-git-commit.md" "$skills_dir/git-commit/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github.md" "$skills_dir/github/SKILL.md"
   create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/github/GITHUB.md"
 
