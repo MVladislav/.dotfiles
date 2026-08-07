@@ -1,14 +1,14 @@
 return {
-	"folke/trouble.nvim",
-	cmd = "Trouble",
-	event = "VeryLazy",
-	config = function()
-		require("trouble").setup({
-			modes = {
-				diagnostics = {
-					auto_open = false,
-					auto_close = true,
-				},
+  "folke/trouble.nvim",
+  cmd = "Trouble",
+  event = "VeryLazy",
+  config = function()
+    require("trouble").setup({
+      modes = {
+        diagnostics = {
+          auto_open = false,
+          auto_close = true,
+        },
         preview_float = {
           mode = "diagnostics",
           preview = {
@@ -22,10 +22,10 @@ return {
             zindex = 200,
           },
         },
-			},
-			warn_no_results = false,
-		})
-	end,
+      },
+      warn_no_results = false,
+    })
+  end,
   keys = {
     {
       "<leader>tt",

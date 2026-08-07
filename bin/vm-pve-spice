@@ -86,8 +86,8 @@ fetch_and_select_vm() {
         vmid: (.vmid | tonumber),
         display: (
           (if .status == "stopped" then "🔴"
-           elif .status == "running" then "🟢"
-           else .status end) + " " +
+            elif .status == "running" then "🟢"
+            else .status end) + " " +
           (.vmid | tostring) + " :: " + .name
         )
       }

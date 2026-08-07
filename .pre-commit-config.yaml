@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=nd,edn,pre-select
+          - --ignore-words-list=nd,edn,pre-select,pre-selected
           - --skip="./.*,*.csv,*.json"
           - --quiet-level=2
         exclude_types:
@@ -33,11 +33,13 @@ repos:
         types: [text]
         args: [--markdown-linebreak-ext=md]
       - id: end-of-file-fixer
-      # - id: check-toml
       # - id: check-json
+      - id: check-toml
       - id: check-yaml
         args: [--allow-multiple-documents]
       - id: mixed-line-ending
+      # - id: no-commit-to-branch
+      #   args: [--branch, main, --branch, master]
 
   # Prettier for code formatting
   - repo: https://github.com/rbubley/mirrors-prettier
@@ -57,7 +59,7 @@ repos:
     hooks:
       - id: detect-secrets
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.0
+    rev: v8.30.1
     hooks:
       - id: gitleaks
 
@@ -68,17 +70,16 @@ repos:
       - id: yamllint
 
   # # Markdownlint for Markdown files
-  # - repo: https://github.com/markdownlint/markdownlint
-  #   rev: v0.12.0
+  # - repo: https://github.com/DavidAnson/markdownlint-cli2
+  #   rev: v0.23.2
   #   hooks:
-  #     - id: markdownlint
-  #       exclude: .github/
+  #     - id: markdownlint-cli2
 
-  # # EditorConfig checker
-  # - repo: https://github.com/editorconfig-checker/editorconfig-checker
-  #   rev: v3.2.1
-  #   hooks:
-  #     - id: editorconfig-checker
+  # EditorConfig checker
+  - repo: https://github.com/editorconfig-checker/editorconfig-checker
+    rev: v3.2.1
+    hooks:
+      - id: editorconfig-checker
 
   # ShellCheck for shell script linting
   - repo: https://github.com/shellcheck-py/shellcheck-py

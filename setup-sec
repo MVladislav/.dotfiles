@@ -2,6 +2,7 @@
 PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bin"
 set -euo pipefail
 
+# editorconfig-checker-disable
 cat <<'EOF'
       .--.               [ SECURITY ]
      |o_o )
@@ -12,6 +13,7 @@ cat <<'EOF'
   \___)=(___/      '---'
 
 EOF
+# editorconfig-checker-enable
 
 [[ -f "./setup-helper" ]] || {
   echo 'Not found "./setup-helper" script'

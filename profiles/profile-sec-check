@@ -93,17 +93,17 @@ tcpdump-pcap() {
 
     # Smart capture options
     tcpdump -i "$interface" \
-           -w "$output_file" \
-           -s0 \
-           -C "$max_size_mb" \
-           -W "$max_files" \
-           -U \
-           -n \
-           -nn \
-           -q \
-           -tttt \
-           --immediate-mode \
-           --buffer-size=1000000
+            -w "$output_file" \
+            -s0 \
+            -C "$max_size_mb" \
+            -W "$max_files" \
+            -U \
+            -n \
+            -nn \
+            -q \
+            -tttt \
+            --immediate-mode \
+            --buffer-size=1000000
 
     echo "Capturing on $interface -> $output_file (max $max_size_mb MB, $max_files files)"
 }
