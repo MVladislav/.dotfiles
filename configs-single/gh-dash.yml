@@ -1,0 +1,128 @@
+# gh-dash config (https://github.com/dlvhdr/gh-dash)
+# Symlinked from configs-single/gh-dash.yml by setup-ai -> ~/.config/gh-dash/config.yml
+# NOTE: keybindings use herdr instead of tmux/wt. The `C` keybinding creates a
+# herdr workspace for the PR repo, then starts an opencode agent (code-reviewer)
+# in the new pane. Requires: gh auth, herdr running, jq.
+
+theme:
+  colors:
+    text:
+      primary: "#F7F1FF"
+      secondary: "#9A91A8"
+      inverted: "#17151E"
+      faint: "#635E6F"
+      warning: "#FFE1A8"
+      success: "#B5E5B9"
+      danger: "#FFB4A1"
+      open: "#B5E5B9"
+      closed: "#FFB4A1"
+      merged: "#C8B1FF"
+      rowSelect: "#211B2A"
+      searchMatch: "#7A5FFF"
+      searchSelect: "#17151E"
+    background:
+      selected: "#F7F1FF"
+      title: "#3A3347"
+      filterMatch: "#7A5FFF"
+      repo: "#3A3347"
+      tableHeader: "#241E30"
+      inlineCode: "#17151E"
+  transparent: false
+
+repo:
+  branchesRefetchIntervalSeconds: 30
+  prs: 60
+
+defaults:
+  preview:
+    open: false
+    width: 70
+  prsLimit: 20
+  issuesLimit: 20
+  approve: LGTM
+  layout:
+    prs:
+      show:
+        - number
+        - title
+        - author
+        - reviews
+        - checks
+        - base
+        - update
+        - lines
+        - state
+      width:
+        - 3
+        - 30
+        - 8
+        - 7
+        - 7
+        - 10
+        - 8
+        - 8
+        - 7
+    issues:
+      show:
+        - number
+        - title
+        - author
+        - state
+        - comments
+        - created
+      width:
+        - 6
+        - 30
+        - 8
+        - 7
+        - 8
+        - 12
+  comments:
+    itemsPerPage: 20
+  notifications:
+    itemsPerPage: 20
+
+prSections:
+  - title: My Pull Requests
+    filters: is:open,author:@me
+  - title: Needs My Review
+    filters: review-requested:@me
+  - title: Involved
+    filters: involves:@me,is:open
+  - title: Open Pull Requests
+    filters: is:open
+
+issuesSections:
+  - title: Created
+    filters: is:open,author:@me
+  - title: Assigned
+    filters: is:open,assignee:@me
+  - title: Mentioned
+    filters: is:open,mentions:@me
+  - title: Open
+    filters: is:open
+
+notificationsSections:
+  - title: Unread
+    filter: unread
+  - title: All
+    filter: all
+
+keybindings:
+  universal:
+    - key: g
+      name: lazygit
+      command: cd {{.RepoPath}}; lazygit
+  prs:
+    - key: C
+      name: code-review
+      command: >-
+        ws=$(herdr workspace create --cwd {{.RepoPath}} --label "PR-{{.PrNumber}}" --focus) &&
+        pane=$(echo "$ws" | jq -r .result.root_pane.pane_id) &&
+        herdr agent start opencode --kind opencode --pane "$pane" -- run --agent code-reviewer "Review PR {{.PrNumber}} in {{.RepoName}}: {{.Title}}"
+
+pager:
+  diff: delta --dark --paging=never --syntax-theme base16-256
+
+confirmQuit: false
+smartFilteringAtLaunch: true

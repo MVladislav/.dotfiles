@@ -9,6 +9,7 @@
 
 !.pre-commit-config.yaml
 !.yamllint
+!.editorconfig
 
 !README.md
 !setup-helper
@@ -118,9 +119,12 @@ configs-single/**
 !configs-single/ghostty.conf
 !configs-single/btop.conf
 !configs-single/hunk.toml
+!configs-single/gh-dash.yml
+!configs-single/herdr.toml
 
 !ai/
 ai/**
 !ai/SKILL-git-release.md
 !ai/GITHUB.md
 !ai/SKILL-github.md
+!ai/setup-ai-opencode.conf
