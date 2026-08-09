@@ -119,7 +119,7 @@ keybindings:
       command: >-
         ws=$(herdr workspace create --cwd {{.RepoPath}} --label "PR-{{.PrNumber}}" --focus) &&
         pane=$(echo "$ws" | jq -r .result.root_pane.pane_id) &&
-        herdr agent start opencode --kind opencode --pane "$pane" -- run --agent code-reviewer "Review PR {{.PrNumber}} in {{.RepoName}}: {{.Title}}"
+        herdr agent start opencode --kind opencode --pane "$pane" -- run --agent code-review "Review PR {{.PrNumber}} in {{.RepoName}}: {{.Title}}"
 
 pager:
   diff: delta --dark --paging=never --syntax-theme base16-256
