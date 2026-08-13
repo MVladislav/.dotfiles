@@ -47,7 +47,7 @@ RUN_SETUP_GH_DASH=0
 RUN_SETUP_FILEBROWSER=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_OPENCODE=v1.18.17
+VERSION_OPENCODE=v1.18.18
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
 VERSION_HERDR=v0.8.0
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
