@@ -67,7 +67,6 @@ main() {
   run_if $RUN_INSTALL_GH_DASH && install_gh_dash
   # https://github.com/aliasrobotics/cai
   # https://hermes-agent.nousresearch.com/docs/getting-started/installation
-  # https://www.agentskills.in
 
   run_if $RUN_SETUP_OPENCODE && setup_opencode
   run_if $RUN_SETUP_HERDR && setup_herdr
@@ -212,6 +211,11 @@ setup_opencode() {
   print_section_end "✅ OPENCODE :: config ready."
 }
 
+# HELPERS :: config varname of a section entry ----------------------------------
+config_varname() {
+  echo "OPENCODE_CONFIG_${1}_$(echo "$2" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+}
+
 # SERVICE :: generic section selector (MCPs / agents) --------------------------
 select_opencode_section() {
   local prefix="$1"
@@ -233,7 +237,7 @@ select_opencode_section() {
   preview_dir=$(mktemp -d)
   for name in "${names_ref[@]}"; do
     local varname
-    varname="OPENCODE_CONFIG_${prefix}_$(echo "$name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+    varname=$(config_varname "$prefix" "$name")
     echo "${!varname}" > "$preview_dir/$name.json"
   done
 
@@ -242,20 +246,10 @@ select_opencode_section() {
     fzf_list+=$'\n'"$name"
   done
 
-  local preselect_bind=()
-  local bind_value
-  bind_value=$(fzf_preselect_bind "$fzf_list" "${default_ref:-}")
-  [[ -n "$bind_value" ]] && preselect_bind=(--bind "$bind_value")
-
   local selections
-  selections=$(
-    echo "$fzf_list" |
-      fzf --sync --height=~40% --multi --cycle --border \
-        "${preselect_bind[@]}" \
-        --header 'TAB: toggle, ENTER: confirm' \
-        --prompt="Select ${label} (none = cleanup): " \
-        --preview 'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json 2>/dev/null'
-  )
+  selections=$(fzf_pick "$fzf_list" "${default_ref:-}" 'TAB: toggle, ENTER: confirm' \
+    "Select ${label} (none = cleanup): " \
+    'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json 2>/dev/null')
   rm -rf "$preview_dir"
 
   [[ -z "$selections" ]] && {
@@ -275,7 +269,7 @@ select_opencode_section() {
   combined_ref=$(jq -n '{}')
   while IFS= read -r name; do
     local varname
-    varname="OPENCODE_CONFIG_${prefix}_$(echo "$name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')"
+    varname=$(config_varname "$prefix" "$name")
     local snippet="${!varname}"
     [[ -z "$snippet" ]] && {
       print_notes "   ⚠️  No config found for '$name' (expected \$$varname), skipping"
@@ -308,17 +302,10 @@ select_opencode_lsp() {
     fzf_list+=$'\n'"$name"
   done
 
-  local preselect_bind=()
-  local bind_value
-  bind_value=$(fzf_preselect_bind "$fzf_list" "${OPENCODE_CONFIG_LSP_DEFAULT:-}")
-  [[ -n "$bind_value" ]] && preselect_bind=(--bind "$bind_value")
-
   local selections
-  selections=$(echo "$fzf_list" |
-    fzf --sync --height=~40% --multi --cycle --border \
-      "${preselect_bind[@]}" \
-      --header 'TAB: toggle, ENTER: confirm — unselected servers are disabled' \
-      --prompt 'Select LSP servers (ALL = everything): ')
+  selections=$(fzf_pick "$fzf_list" "${OPENCODE_CONFIG_LSP_DEFAULT:-}" \
+    'TAB: toggle, ENTER: confirm — unselected servers are disabled' \
+    'Select LSP servers (ALL = everything): ')
   [[ -z "$selections" ]] && {
     print_notes "   ⏭️  No LSP selected, LSP stays off"
     OPENCODE_CONFIG_LSP_COMBINED=""
@@ -360,45 +347,40 @@ setup_opencode_skills() {
   elif ! command -v fzf >/dev/null 2>&1; then
     print_notes "   ⚠️  fzf not found, upstream skills fetch skipped"
   else
-    local fzf_list="none"
-    local name
-    for name in "${OPENCODE_SKILL_NAMES[@]}"; do
-      fzf_list+=$'\n'"$name"
-    done
+    local first_label="${OPENCODE_SKILL_SOURCES[0]%%|*}"
 
-    # Map each skill name -> "label repo subdir" for the fzf preview
+    # name -> "repo subdir" lookup table for the fzf preview. A plain name maps
+    # to the first source (its install fallback); "label/name" to that source.
     local preview_dir
     preview_dir=$(mktemp -d)
     local sources_tsv="$preview_dir/sources.tsv"
-    local line label repo rev subdir
+    local line label repo rev subdir name
     for line in "${OPENCODE_SKILL_SOURCES[@]}"; do
       IFS='|' read -r label repo rev subdir <<<"$line"
       for name in "${OPENCODE_SKILL_NAMES[@]}"; do
-        if [[ $name == "$label/"* || $name != */* ]]; then
+        if [[ $name == "$label/"* ]] || [[ $name != */* && $label == "$first_label" ]]; then
           printf '%s\t%s\t%s\n' "$name" "$repo" "$subdir" >> "$sources_tsv"
         fi
       done
     done
-    cat > "$preview_dir/preview.sh" <<'EOF'
-#!/usr/bin/env bash
-awk -F '\t' -v n="$1" '$1 == n { strip = $1; sub(/^[^\/]+\//, "", strip); printf "install target: SKILLS_DIR/%s/\nsource: %s/%s/%s\n", strip, $2, $3, strip; exit }' "$2"
-EOF
-    sed -i "s|SKILLS_DIR|$skills_dir|" "$preview_dir/preview.sh"
-    chmod +x "$preview_dir/preview.sh"
+    # fzf preview: show install target + source for the current line (tsv lookup)
+    local preview_cmd
+    preview_cmd="awk -F '\t' -v n='{}' -v d='$skills_dir' '\$1 == n { strip = \$1; sub(/^[^\/]+\//, \"\", strip); printf \"install target: %s/%s/\\nsource: %s/%s/%s\\n\", d, strip, \$2, \$3, strip; exit }' '$sources_tsv'"
+    local fzf_list="none"
+    for name in "${OPENCODE_SKILL_NAMES[@]}"; do
+      fzf_list+=$'\n'"$name"
+    done
 
-    local preselect_bind=()
-    local bind_value
-    bind_value=$(fzf_preselect_bind "$fzf_list" "${OPENCODE_SKILLS_DEFAULT:-}")
-    [[ -n "$bind_value" ]] && preselect_bind=(--bind "$bind_value")
     local selections
-    selections=$(echo "$fzf_list" |
-      fzf --sync --height=~40% --multi --cycle --border \
-        "${preselect_bind[@]}" \
-        --header 'TAB: toggle, ENTER: confirm — none = remove installed skills' \
-        --prompt 'Select skills to fetch: ' \
-        --preview "$preview_dir/preview.sh {} $sources_tsv")
+    selections=$(fzf_pick "$fzf_list" "${OPENCODE_SKILLS_DEFAULT:-}" \
+      'TAB: toggle, ENTER: confirm — none = remove installed skills' \
+      'Select skills to fetch: ' \
+      "$preview_cmd")
     rm -rf "$preview_dir"
-    if echo "$selections" | grep -qx 'none'; then
+
+    if [[ -z "$selections" ]]; then
+      :
+    elif echo "$selections" | grep -qx 'none'; then
       print_notes "   🧹 Cleanup mode: removing installed skills"
       for name in "${OPENCODE_SKILL_NAMES[@]}"; do
         local dir_name="${name#*/}"
@@ -407,16 +389,9 @@ EOF
           print_notes "   🗑️  removed skill: $dir_name"
         fi
       done
-      print_info2 "✅ SKILLS :: skills ready."
-      return 0
+    else
+      mapfile -t skills_to_install <<< "$(echo "$selections" | grep -v '^none$')"
     fi
-    [[ -z "$selections" ]] && {
-      print_notes "   ⏭️  No skills selected, fetch skipped"
-      print_info2 "✅ SKILLS :: skills ready."
-      return 0
-    }
-    selections=$(echo "$selections" | grep -v '^none$')
-    mapfile -t skills_to_install <<< "$selections"
   fi
 
   if [[ ${#skills_to_install[@]} -eq 0 ]]; then
@@ -469,7 +444,11 @@ EOF
     if [[ -d "$tmp/$skill_label/$subdir/$skill_name" ]]; then
       mkdir -p "$skills_dir/$skill_name"
       cp -r "$tmp/$skill_label/$subdir/$skill_name/." "$skills_dir/$skill_name/"
-      print_notes "   ✅ installed skill: $skill_name <- $repo"
+      if [[ -f "$skills_dir/$skill_name/SKILL.md" ]]; then
+        print_notes "   ✅ installed skill: $skill_name <- $repo"
+      else
+        print_notes "   ⚠️  no SKILL.md after install: $skill_name (broken skill?)"
+      fi
     else
       print_notes "   ⚠️  skill not found upstream: $name"
     fi

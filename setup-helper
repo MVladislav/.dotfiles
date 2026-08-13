@@ -74,6 +74,29 @@ fzf_preselect_bind() {
   echo "${bind}pos(1)"
 }
 
+# HELPERS :: fzf multiselect ----------------------------------------------------
+# Run a multi-select fzf prompt. Prints the selected lines; empty when nothing
+# was chosen. ESC/abort (exit 130) is treated as "no selection", NOT an error —
+# otherwise 'set -euo pipefail' in the caller kills the script.
+# Args: $1 list (newline-joined), $2 space-separated preselect defaults,
+#       $3 header, $4 prompt, $5 (optional) preview command ({} = current line).
+fzf_pick() {
+  local list="$1" defaults="$2" header="$3" prompt="$4" preview="${5:-}"
+  local preselect_bind=() bind_value
+  bind_value=$(fzf_preselect_bind "$list" "$defaults")
+  [[ -n "$bind_value" ]] && preselect_bind=(--bind "$bind_value")
+
+  local args=(--sync --height=~40% --multi --cycle --border
+    "${preselect_bind[@]}" --header "$header" --prompt "$prompt")
+  [[ -n "$preview" ]] && args+=(--preview "$preview")
+
+  local out rc
+  out=$(echo "$list" | fzf "${args[@]}") || rc=$?
+  [[ ${rc:-0} -eq 130 ]] && rc=0
+  [[ ${rc:-0} -ne 0 ]] && return "${rc:-1}"
+  echo "$out"
+}
+
 # ******************************************************************************
 
 # HELPERS :: require commands --------------------------------------------------
