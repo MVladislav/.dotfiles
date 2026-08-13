@@ -67,6 +67,7 @@ main() {
   run_if $RUN_INSTALL_GH_DASH && install_gh_dash
   # https://github.com/aliasrobotics/cai
   # https://hermes-agent.nousresearch.com/docs/getting-started/installation
+  # https://www.agentskills.in
 
   run_if $RUN_SETUP_OPENCODE && setup_opencode
   run_if $RUN_SETUP_HERDR && setup_herdr
@@ -364,6 +365,27 @@ setup_opencode_skills() {
     for name in "${OPENCODE_SKILL_NAMES[@]}"; do
       fzf_list+=$'\n'"$name"
     done
+
+    # Map each skill name -> "label repo subdir" for the fzf preview
+    local preview_dir
+    preview_dir=$(mktemp -d)
+    local sources_tsv="$preview_dir/sources.tsv"
+    local line label repo rev subdir
+    for line in "${OPENCODE_SKILL_SOURCES[@]}"; do
+      IFS='|' read -r label repo rev subdir <<<"$line"
+      for name in "${OPENCODE_SKILL_NAMES[@]}"; do
+        if [[ $name == "$label/"* || $name != */* ]]; then
+          printf '%s\t%s\t%s\n' "$name" "$repo" "$subdir" >> "$sources_tsv"
+        fi
+      done
+    done
+    cat > "$preview_dir/preview.sh" <<'EOF'
+#!/usr/bin/env bash
+awk -F '\t' -v n="$1" '$1 == n { strip = $1; sub(/^[^\/]+\//, "", strip); printf "install target: SKILLS_DIR/%s/\nsource: %s/%s/%s\n", strip, $2, $3, strip; exit }' "$2"
+EOF
+    sed -i "s|SKILLS_DIR|$skills_dir|" "$preview_dir/preview.sh"
+    chmod +x "$preview_dir/preview.sh"
+
     local preselect_bind=()
     local bind_value
     bind_value=$(fzf_preselect_bind "$fzf_list" "${OPENCODE_SKILLS_DEFAULT:-}")
@@ -374,13 +396,15 @@ setup_opencode_skills() {
         "${preselect_bind[@]}" \
         --header 'TAB: toggle, ENTER: confirm — none = remove installed skills' \
         --prompt 'Select skills to fetch: ' \
-        --preview 'echo "install target: '"$skills_dir"'/{}/"; echo "source: '"$GETSENTRY_SKILLS_REPO"'/skills/{}"')
+        --preview "$preview_dir/preview.sh {} $sources_tsv")
+    rm -rf "$preview_dir"
     if echo "$selections" | grep -qx 'none'; then
       print_notes "   🧹 Cleanup mode: removing installed skills"
       for name in "${OPENCODE_SKILL_NAMES[@]}"; do
-        if [[ -d "$skills_dir/$name" ]]; then
-          rm -rf "${skills_dir:?}/$name"
-          print_notes "   🗑️  removed skill: $name"
+        local dir_name="${name#*/}"
+        if [[ -d "$skills_dir/$dir_name" ]]; then
+          rm -rf "${skills_dir:?}/$dir_name"
+          print_notes "   🗑️  removed skill: $dir_name"
         fi
       done
       print_info2 "✅ SKILLS :: skills ready."
@@ -401,27 +425,55 @@ setup_opencode_skills() {
     return 0
   fi
 
-  print_info2 "📥 SKILLS :: fetching $GETSENTRY_SKILLS_REPO (pinned to ${GETSENTRY_SKILLS_REV:0:8})..."
+  # Resolve source metadata per label (falls back to the first source)
+  local -A source_repos=() source_revs=() source_subdirs=()
+  local line label repo rev subdir
+  for line in "${OPENCODE_SKILL_SOURCES[@]}"; do
+    IFS='|' read -r label repo rev subdir <<<"$line"
+    source_repos[$label]=$repo
+    source_revs[$label]=$rev
+    source_subdirs[$label]=$subdir
+  done
+  local first_label
+  first_label="${OPENCODE_SKILL_SOURCES[0]%%|*}"
+
   local tmp
   tmp=$(mktemp -d)
-  if git clone --quiet --depth 1 "$GETSENTRY_SKILLS_REPO" "$tmp/skills"; then
-    if [[ -n "$GETSENTRY_SKILLS_REV" ]]; then
-      git -C "$tmp/skills" fetch --quiet --depth 1 origin "$GETSENTRY_SKILLS_REV" \
-        && git -C "$tmp/skills" checkout --quiet FETCH_HEAD
+  local -A cloned=()
+  local name skill_label skill_name
+  for name in "${skills_to_install[@]}"; do
+    skill_name="${name#*/}"
+    skill_label="${name%%/*}"
+    if [[ $skill_name == "$name" ]]; then
+      skill_label="$first_label"
     fi
-    local name
-    for name in "${skills_to_install[@]}"; do
-      if [[ -d "$tmp/skills/skills/$name" ]]; then
-        mkdir -p "$skills_dir/$name"
-        cp -r "$tmp/skills/skills/$name/." "$skills_dir/$name/"
-        print_notes "   ✅ installed skill: $name -> $skills_dir/$name/"
+    local repo="${source_repos[$skill_label]:-}"
+    if [[ -z $repo ]]; then
+      print_notes "   ⚠️  unknown skill source '$skill_label', skipping $name"
+      continue
+    fi
+    if [[ -z ${cloned[$skill_label]:-} ]]; then
+      print_info2 "📥 SKILLS :: fetching $repo..."
+      if git clone --quiet --depth 1 "$repo" "$tmp/$skill_label"; then
+        if [[ -n "${source_revs[$skill_label]:-}" ]]; then
+          git -C "$tmp/$skill_label" fetch --quiet --depth 1 origin "${source_revs[$skill_label]}" \
+            && git -C "$tmp/$skill_label" checkout --quiet FETCH_HEAD
+        fi
+        cloned[$skill_label]=1
       else
-        print_notes "   ⚠️  skill not found upstream: $name"
+        print_notes "   ⚠️  could not clone $repo, skills skipped"
+        continue
       fi
-    done
-  else
-    print_notes "   ⚠️  could not clone $GETSENTRY_SKILLS_REPO, skills skipped"
-  fi
+    fi
+    local subdir="${source_subdirs[$skill_label]:-}"
+    if [[ -d "$tmp/$skill_label/$subdir/$skill_name" ]]; then
+      mkdir -p "$skills_dir/$skill_name"
+      cp -r "$tmp/$skill_label/$subdir/$skill_name/." "$skills_dir/$skill_name/"
+      print_notes "   ✅ installed skill: $skill_name <- $repo"
+    else
+      print_notes "   ⚠️  skill not found upstream: $name"
+    fi
+  done
   rm -rf "$tmp"
 
   print_info2 "✅ SKILLS :: skills ready."
