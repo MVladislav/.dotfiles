@@ -121,6 +121,7 @@ configs-single/**
 !configs-single/hunk.toml
 !configs-single/gh-dash.yml
 !configs-single/herdr.toml
+!configs-single/filebrowser.yml
 
 !ai/
 ai/**

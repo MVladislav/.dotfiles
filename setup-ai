@@ -39,21 +39,27 @@ RUN_INSTALL_OPENCODE=0
 RUN_INSTALL_HERDR=0
 RUN_INSTALL_GH=0
 RUN_INSTALL_GH_DASH=0
+RUN_INSTALL_FILEBROWSER=0
 
 RUN_SETUP_OPENCODE=0
 RUN_SETUP_HERDR=0
 RUN_SETUP_GH_DASH=0
+RUN_SETUP_FILEBROWSER=0
 
 # CONFIG :: version pins -------------------------------------------------------
 VERSION_OPENCODE=v1.18.17
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
 VERSION_HERDR=v0.8.0
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
+VERSION_FILEBROWSER=v1.5.1-stable
+VERSION_FILEBROWSER_REPO=https://github.com/gtsteffaniak/filebrowser
 
 # CONFIG :: paths --------------------------------------------------------------
 LN_OPENCODE="${LN_OPENCODE:-"$HOME/.config/opencode"}"
 LN_HERDR="${LN_HERDR:-"$HOME/.config/herdr/config.toml"}"
 LN_GHDASH="${LN_GHDASH:-"$HOME/.config/gh-dash/config.yml"}"
+LN_FILEBROWSER="${LN_FILEBROWSER:-"$HOME/.config/filebrowser"}"
+FILEBROWSER_ROOT="${FILEBROWSER_ROOT:-"$HOME/projects"}"
 
 # ******************************************************************************
 
@@ -65,12 +71,14 @@ main() {
   run_if $RUN_INSTALL_HERDR && install_herdr
   run_if $RUN_INSTALL_GH && install_gh
   run_if $RUN_INSTALL_GH_DASH && install_gh_dash
+  run_if $RUN_INSTALL_FILEBROWSER && install_filebrowser
   # https://github.com/aliasrobotics/cai
   # https://hermes-agent.nousresearch.com/docs/getting-started/installation
 
   run_if $RUN_SETUP_OPENCODE && setup_opencode
   run_if $RUN_SETUP_HERDR && setup_herdr
   run_if $RUN_SETUP_GH_DASH && setup_ghdash
+  run_if $RUN_SETUP_FILEBROWSER && setup_filebrowser
 
   print_info2 "\n✅ All finished!"
 }
@@ -129,6 +137,19 @@ install_gh_dash() {
   print_info2 "✅ GH-DASH :: gh-dash installed!"
 
   setup_ghdash
+}
+
+# SERVICE :: install filebrowser -----------------------------------------------
+install_filebrowser() {
+  print_info2 "\n🚀 FILEBROWSER :: install filebrowser (Quantum fork)..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  curl -fsSLo "$USER_LOCAL_PREFIX_BIN/filebrowser" "$VERSION_FILEBROWSER_REPO/releases/download/$VERSION_FILEBROWSER/linux-amd64-filebrowser"
+  chmod +x "$USER_LOCAL_PREFIX_BIN/filebrowser"
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  print_info2 "✅ FILEBROWSER :: filebrowser installed!"
+
+  setup_filebrowser
 }
 
 # ******************************************************************************
@@ -476,6 +497,57 @@ setup_ghdash() {
   print_section_end "✅ GH-DASH :: config ready."
 }
 
+# SETUP :: filebrowser -----------------------------------------------------------
+# NOTE: runs inside 'install_filebrowser'
+setup_filebrowser() {
+  print_section "FILEBROWSER :: config"
+  print_info2 "🔗 FILEBROWSER :: config dir at $LN_FILEBROWSER (config.yaml + filebrowser.db)"
+  mkdir -p "$LN_FILEBROWSER"
+  mkdir -p "$FILEBROWSER_ROOT"
+
+  local config_file="$LN_FILEBROWSER/config.yaml"
+  local db_file="$LN_FILEBROWSER/filebrowser.db"
+
+  if [[ ! -f "$config_file" ]]; then
+    sed -e "s|@FILEBROWSER_DB@|$db_file|g" \
+        -e "s|@FILEBROWSER_CACHE@|$LN_FILEBROWSER/tmp|g" \
+        -e "s|@FILEBROWSER_ROOT@|$FILEBROWSER_ROOT|g" \
+        "${PWD}/configs-single/filebrowser.yml" > "$config_file"
+    print_notes "   📝 wrote $config_file from configs-single/filebrowser.yml (root: $FILEBROWSER_ROOT, port 8080)"
+  else
+    print_notes "   ⏭️  config exists, keeping it (edit $config_file to change port/root)"
+  fi
+
+  # first run: create DB + admin (full access) + readonly (read-only, scoped to
+  # root). The binary logs to stderr — capture it, show errors only on failure.
+  local out
+  if [[ -f "$db_file" ]]; then
+    print_notes "   ⏭️  database exists — users kept as-is (passwords: filebrowser set -u <user>,<pass> [-a] -c $config_file)"
+  elif [[ ! -x "$USER_LOCAL_PREFIX_BIN/filebrowser" ]]; then
+    print_notes "   ⚠️  filebrowser binary not found — run '$0 -ifb' first to create the users"
+  else
+    if out=$("$USER_LOCAL_PREFIX_BIN/filebrowser" set -u admin,admin -a -c "$config_file" 2>&1); then
+      print_notes "   ✅ admin user created (default password: admin)"
+    else
+      print_notes "   ⚠️  could not create admin user: $(echo "$out" | tail -1)"
+    fi
+    if out=$("$USER_LOCAL_PREFIX_BIN/filebrowser" set -u readonly,readonly -c "$config_file" 2>&1); then
+      print_notes "   ✅ readonly user created (default password: readonly)"
+    else
+      print_notes "   ⚠️  could not create readonly user: $(echo "$out" | tail -1)"
+    fi
+    print_notes "   ⚠️  DEFAULT PASSWORDS: admin/admin and readonly/readonly — change them with:"
+    print_notes "       $USER_LOCAL_PREFIX_BIN/filebrowser set -u admin,<newpass> -a -c $config_file"
+    print_notes "       $USER_LOCAL_PREFIX_BIN/filebrowser set -u readonly,<newpass> -c $config_file"
+  fi
+
+  print_notes "   🚀 start the server: $USER_LOCAL_PREFIX_BIN/filebrowser -c $config_file"
+  print_notes "   🌐 browse: http://localhost:8080 (admin = full access | readonly = read-only, only $FILEBROWSER_ROOT)"
+  print_notes "   🔒 per-user access control: manage users/sources in the UI, or 'filebrowser set rule'"
+  print_notes "   ℹ️  no systemd unit / firewall rules created — run it manually or set up your own service"
+  print_section_end "✅ FILEBROWSER :: config ready."
+}
+
 # ******************************************************************************
 
 # FUTURE IDEAS — uncomment sections below and add toggle flags + install/setup
@@ -527,11 +599,13 @@ usage() {
   print_info "     -ihrd      --install-herdr                  Install herdr"
   print_info "     -igh       --install-github-cli             Install GitHub CLI from releases"
   print_info "     -ighd      --install-gh-dash                Install gh-dash (gh extension) + config"
+  print_info "     -ifb       --install-filebrowser            Install filebrowser (Quantum fork) from releases"
   print_info ""
   print_info "   🔗 Setup flags (disabled by default):"
   print_info "     -soc       --setup-opencode                 Create opencode config dir"
   print_info "     -shrd      --setup-herdr                    Create herdr config dir"
   print_info "     -sgd       --setup-gh-dash                  Create gh-dash config dir"
+  print_info "     -sfb       --setup-filebrowser              Create filebrowser config + users (admin/readonly)"
   print_info "     -ds        --disable-setups                 Skip all symlink setups"
   print_info ""
   print_info "   🛠️ Meta flags:"
@@ -561,6 +635,9 @@ parse_args() {
     -ighd | --install-gh-dash)
       RUN_INSTALL_GH_DASH=1
       ;;
+    -ifb | --install-filebrowser)
+      RUN_INSTALL_FILEBROWSER=1
+      ;;
     -soc | --setup-opencode)
       RUN_SETUP_OPENCODE=1
       ;;
@@ -570,10 +647,14 @@ parse_args() {
     -sgd | --setup-gh-dash)
       RUN_SETUP_GH_DASH=1
       ;;
+    -sfb | --setup-filebrowser)
+      RUN_SETUP_FILEBROWSER=1
+      ;;
     -ds | --disable-setups)
       RUN_SETUP_OPENCODE=0
       RUN_SETUP_HERDR=0
       RUN_SETUP_GH_DASH=0
+      RUN_SETUP_FILEBROWSER=0
       ;;
     -d | --debug)
       set -x
@@ -586,6 +667,7 @@ parse_args() {
       echo
       check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE" "^v[0-9]"
       check_for_newer_tag "$VERSION_HERDR_REPO" "$VERSION_HERDR"
+      check_for_newer_tag "$VERSION_FILEBROWSER_REPO" "$VERSION_FILEBROWSER" "stable$"
       exit 0
       ;;
     *)

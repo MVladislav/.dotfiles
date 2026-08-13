@@ -1,0 +1,19 @@
+---
+server:
+  port: 8080
+  database: "@FILEBROWSER_DB@"
+  cacheDir: "@FILEBROWSER_CACHE@"
+  sources:
+    - path: "@FILEBROWSER_ROOT@"
+      config:
+        defaultEnabled: true
+        defaultUserScope: "/"
+auth:
+  adminUsername: admin
+userDefaults:
+  account:
+    permissions:
+      modify: false
+      delete: false
+      create: false
+      download: true
