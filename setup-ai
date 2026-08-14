@@ -163,6 +163,8 @@ setup_opencode() {
   command -v jq >/dev/null 2>&1 || { print_notes "   ⚠️  jq not found, cannot configure opencode"; return; }
 
   echo ""
+  select_opencode_section "PROVIDER" "providers"
+  echo ""
   select_opencode_section "MCP" "MCP configs"
   echo ""
   select_opencode_section "AGENTS" "agents"
@@ -184,6 +186,9 @@ setup_opencode() {
   if [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]]; then
     opencode_config=$(echo "$opencode_config" | jq --argjson l "$OPENCODE_CONFIG_LSP_COMBINED" '.lsp = $l')
   fi
+  if [[ -n "$OPENCODE_CONFIG_PROVIDER_COMBINED" && "$OPENCODE_CONFIG_PROVIDER_COMBINED" != "CLEANUP" ]]; then
+    opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_PROVIDER_COMBINED" '.provider = $p')
+  fi
 
   local config_file="$LN_OPENCODE/opencode.jsonc"
   if [[ -f "$config_file" ]]; then
@@ -200,6 +205,10 @@ setup_opencode() {
       jq 'del(.agent)' "$config_file" > "${config_file}.tmp" &&
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all agent configs"
+    [[ "$OPENCODE_CONFIG_PROVIDER_COMBINED" == "CLEANUP" ]] &&
+      jq 'del(.provider)' "$config_file" > "${config_file}.tmp" &&
+      mv "${config_file}.tmp" "$config_file" &&
+      print_notes "   🧹 Removed all provider configs"
 
     local merge_filter='.[0] * .[1]'
     [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_filter='.[0] * (.[1] | del(.lsp))'
@@ -216,6 +225,8 @@ setup_opencode() {
       print_notes "   ⏭️ No config file found, nothing to clean for MCPs"
     [[ "$OPENCODE_CONFIG_AGENTS_COMBINED" == "CLEANUP" ]] &&
       print_notes "   ⏭️ No config file found, nothing to clean for agents"
+    [[ "$OPENCODE_CONFIG_PROVIDER_COMBINED" == "CLEANUP" ]] &&
+      print_notes "   ⏭️ No config file found, nothing to clean for providers"
     print_notes "   📝 writing config to $config_file"
     echo "$opencode_config" > "$config_file"
   fi
