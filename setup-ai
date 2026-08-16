@@ -370,6 +370,7 @@ setup_opencode_skills() {
   create_symlink "${PWD}/ai/SKILL-git-commit.md" "$skills_dir/git-commit/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github.md" "$skills_dir/github/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github-research.md" "$skills_dir/github-research/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-security.md" "$skills_dir/github-security/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-project-bootstrap.md" "$skills_dir/project-bootstrap/SKILL.md"
   create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/github/GITHUB.md"
 
