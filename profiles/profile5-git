@@ -169,4 +169,45 @@ if check_command_q git; then
     git fetch origin "refs/pull/$pr_number/head:$branch" &&
       git checkout "$branch"
   }
+
+  vm_git_pr_apply() {
+    # Usage: vm_git_pr_apply [PR_NUMBER]
+    #   Create a local branch pr-<N> from the current HEAD, then apply the
+    #   PR's changes onto it as uncommitted changes, so you can inspect and
+    #   rework them locally. Nothing is committed.
+    #   Revert with: git restore . && git switch -
+    check_command git || return 1
+
+    local pr_number=""
+    if [[ $# -ge 1 ]]; then
+      pr_number="$1"
+    elif check_command_q fzf; then
+      pr_number=$(git ls-remote origin 'refs/pull/*/head' 2>/dev/null |
+        sed -n 's#.*refs/pull/\([0-9]*\)/head#\1#p' |
+        sort -rn |
+        head -10 |
+        fzf --reverse --header "Select a PR (enter to apply changes)")
+      [[ -n "$pr_number" ]] || return 1
+    fi
+
+    if [[ -z "$pr_number" ]]; then
+      echo "Usage: vm_git_pr_apply <PR number>   (or install fzf to pick from a list)"
+      return 1
+    fi
+
+    local branch="pr-$pr_number"
+    if git rev-parse --verify --quiet "$branch" >/dev/null; then
+      echo "[ERROR] Branch '$branch' already exists." >&2
+      echo "        Remove it (after switching away) with:" >&2
+      echo "          git switch - && git branch -D '$branch'" >&2
+      return 1
+    fi
+
+    git checkout -b "$branch" || return 1
+    git fetch origin "refs/pull/$pr_number/head" || {
+      git checkout -
+      return 1
+    }
+    git diff HEAD FETCH_HEAD | git apply --3way
+  }
 fi
