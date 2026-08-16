@@ -125,10 +125,11 @@ configs-single/**
 
 !ai/
 ai/**
+!ai/setup-ai-opencode.conf
 !ai/SKILL-git-release.md
 !ai/SKILL-git-commit.md
 !ai/GITHUB.md
 !ai/SKILL-github.md
 !ai/SKILL-github-research.md
+!ai/SKILL-github-security.md
 !ai/SKILL-project-bootstrap.md
-!ai/setup-ai-opencode.conf
