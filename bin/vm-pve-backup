@@ -4,12 +4,16 @@
 #
 # Pattern syntax:
 #   '?/path'  → optional: skipped (with a note) when it doesn't exist remotely
+#   '!/path'  → secret: contains credentials/keys — skipped when the
+#               -n/--no-secrets option is used, e.g. for a sanitized backup you
+#               can share with coworkers or AI without leaking secrets
+#   '?!path'  → optional AND secret (prefixes combine in any order)
 #   '{NODE}'  → replaced with the PVE cluster node name (pvecm/corosync based,
 #               falls back to the remote hostname) — may differ from hostname
 #   '*.glob'  → expanded by the remote shell; rsync transfers exactly the matches
 #
 # Extend the lists with a config file (see -c / $VM_PVE_BACKUP_CONF):
-#   PVE_EXTRA_PATTERNS=( "?/etc/custom.conf" )
+#   PVE_EXTRA_PATTERNS=( "!/etc/custom-secret.conf" )
 #   PBS_EXTRA_PATTERNS=( "/etc/other/*" )
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
@@ -22,15 +26,17 @@ trap 'echo "Interrupted. Exiting..."; exit 1' SIGINT SIGTERM
 CONF_FILE="${VM_PVE_BACKUP_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/vm-pve-backup.conf}"
 
 # CONFIG :: file lists ---------------------------------------------------------
-# NOTE: '-' prefix handled at runtime ('?' = optional, '{NODE}' = PVE cluster
-# node name, auto-detected from the remote host — may differ from its hostname).
+# NOTE: prefixes handled at runtime ('?' = optional, '!' = secret, '{NODE}' =
+# PVE cluster node name, auto-detected from the remote host — may differ from
+# its hostname). '!' patterns are skipped by default only when -n/--no-secrets
+# is given; a pattern can carry both prefixes ('?!/path').
 # shellcheck disable=SC2034
 readonly FILES_COMMON=(
   "/etc/hosts"
   "/etc/hostname"
   "/etc/resolv.conf"
-  # "/etc/passwd"
-  # "/etc/shadow"
+  # !"/etc/passwd"
+  # !"/etc/shadow"
   # "/etc/fstab"
   "/etc/default/grub"
   "?/etc/kernel/cmdline"
@@ -44,7 +50,7 @@ readonly FILES_COMMON=(
   "/etc/modules"
   "/etc/modprobe.d/*"
   # "?/etc/rc.local"
-  # "/etc/ssh/ssh_host_*"
+  # "!/etc/ssh/ssh_host_*"
   "/etc/ssh/sshd_config"
   "?/etc/ssh/sshd_config.d/*"
   "?/etc/systemd/network/*.link"
@@ -58,27 +64,27 @@ readonly FILES_COMMON=(
 readonly FILES_PVE=(
   "?/etc/pve/corosync.conf"
   "/etc/pve/datacenter.cfg"
-  "?/etc/pve/domains.cfg"
-  "/etc/pve/user.cfg"
-  "/etc/pve/storage.cfg"
+  "?!/etc/pve/domains.cfg"
+  "!/etc/pve/user.cfg"
+  "?!/etc/pve/storage.cfg"
   "/etc/pve/jobs.cfg"
   "/etc/pve/notifications.cfg"
-  "?/etc/pve/authkey.json"
+  "?!/etc/pve/authkey.json"
   "?/etc/pve/resources.cfg"
   "?/etc/pve/status.cfg"
-  "?/etc/pve/tfa.cfg"
+  "?!/etc/pve/tfa.cfg"
   "?/etc/pve/ceph.conf"
   "/etc/pve/mapping/pci.cfg"
   "/etc/pve/mapping/usb.cfg"
   "?/etc/pve/firewall/*.fw"
   "?/etc/pve/ha/*"
-  "/etc/pve/priv/*"
+  "!/etc/pve/priv/*"
   "/etc/pve/sdn/*"
   "/etc/pve/nodes/{NODE}/config"
-  "/etc/pve/nodes/{NODE}/pve-ssl.pem"
-  "/etc/pve/nodes/{NODE}/pve-ssl.key"
-  "/etc/pve/nodes/{NODE}/pveproxy-ssl.pem"
-  "/etc/pve/nodes/{NODE}/pveproxy-ssl.key"
+  "!/etc/pve/nodes/{NODE}/pve-ssl.pem"
+  "!/etc/pve/nodes/{NODE}/pve-ssl.key"
+  "!/etc/pve/nodes/{NODE}/pveproxy-ssl.pem"
+  "!/etc/pve/nodes/{NODE}/pveproxy-ssl.key"
   "/etc/pve/nodes/{NODE}/qemu-server/*.conf"
   "/etc/pve/nodes/{NODE}/lxc/*.conf"
   # "?/etc/pve/qemu-server/*.conf"
@@ -86,15 +92,15 @@ readonly FILES_PVE=(
 )
 # shellcheck disable=SC2034
 readonly FILES_PBS=(
-  "/etc/proxmox-backup/acme/*"
+  "!/etc/proxmox-backup/acme/*"
   "/etc/proxmox-backup/datastore.cfg"
-  "/etc/proxmox-backup/domains.cfg"
-  "/etc/proxmox-backup/user.cfg"
+  "?!/etc/proxmox-backup/domains.cfg"
+  "!/etc/proxmox-backup/user.cfg"
   "/etc/proxmox-backup/node.cfg"
   "/etc/proxmox-backup/notifications.cfg"
   "/etc/proxmox-backup/prune.cfg"
-  "?/etc/proxmox-backup/remote.cfg"
-  "?/etc/proxmox-backup/tape.cfg"
+  "?!/etc/proxmox-backup/remote.cfg"
+  "?!/etc/proxmox-backup/tape.cfg"
   "/etc/proxmox-backup/verification.cfg"
   "?/etc/proxmox-backup/limits.cfg"
 )
@@ -113,6 +119,7 @@ FILES_TO_BACKUP_PBS=()
 # Per-run pattern state (filled by prepare_patterns)
 CHECK_PATTERNS=()
 CHECK_OPTIONAL=()
+CHECK_SECRET=()
 
 # CONFIG :: variables ----------------------------------------------------------
 REMOTE_HOST=""
@@ -127,6 +134,7 @@ LIST_MODE=false
 SUDO_REMOTE=false
 ASSUME_YES=false
 NO_ZFS=false
+NO_SECRETS=false
 ZFS_REMOTE=false
 
 # CONFIG :: ssh ----------------------------------------------------------------
@@ -136,36 +144,52 @@ readonly SSH_CTL_OPTS=(-o ControlMaster=auto -o ControlPersist=600 -o ControlPat
 
 # ******************************************************************************
 
-# Pre-process a pattern list: strip '?', substitute '{NODE}', sort by path so
-# the per-directory section headers stay contiguous. Results land in the global
-# CHECK_PATTERNS / CHECK_OPTIONAL arrays (same index order).
+# Pre-process a pattern list: strip '?' (optional) and '!' (secret) prefixes,
+# substitute '{NODE}', sort by path so the per-directory section headers stay
+# contiguous. Results land in the global CHECK_PATTERNS / CHECK_OPTIONAL /
+# CHECK_SECRET arrays (same index order).
 prepare_patterns() {
   local -n files_list="$1"
   CHECK_PATTERNS=()
   CHECK_OPTIONAL=()
-  local FILE_PATTERN p opt
+  CHECK_SECRET=()
+  local FILE_PATTERN p opt secret
   for FILE_PATTERN in "${files_list[@]}"; do
     [[ -n $FILE_PATTERN ]] || continue
     opt=false
-    p="${FILE_PATTERN#\?}"
-    [[ $FILE_PATTERN == \?* ]] && opt=true
+    secret=false
+    p="$FILE_PATTERN"
+    while [[ $p == \?* || $p == \!* ]]; do
+      if [[ $p == \?* ]]; then
+        opt=true
+        p="${p#\?}"
+      fi
+      if [[ $p == \!* ]]; then
+        secret=true
+        p="${p#\!}"
+      fi
+    done
     p="${p//\{NODE\}/$NODE_NAME}"
     CHECK_PATTERNS+=("$p")
     CHECK_OPTIONAL+=("$opt")
+    CHECK_SECRET+=("$secret")
   done
 
   local -a pairs=()
   local i
   for i in "${!CHECK_PATTERNS[@]}"; do
-    pairs+=("$(section_of "${CHECK_PATTERNS[$i]}")"$'\t'"${CHECK_PATTERNS[$i]}"$'\t'"${CHECK_OPTIONAL[$i]}")
+    pairs+=("$(section_of "${CHECK_PATTERNS[$i]}")"$'\t'"${CHECK_PATTERNS[$i]}"$'\t'"${CHECK_OPTIONAL[$i]}"$'\t'"${CHECK_SECRET[$i]}")
   done
   mapfile -t pairs < <(printf '%s\n' "${pairs[@]}" | sort)
   CHECK_PATTERNS=()
   CHECK_OPTIONAL=()
+  CHECK_SECRET=()
   for i in "${!pairs[@]}"; do
     local rest="${pairs[$i]#*$'\t'}"
     CHECK_PATTERNS+=("${rest%%$'\t'*}")
-    CHECK_OPTIONAL+=("${rest#*$'\t'}")
+    rest="${rest#*$'\t'}"
+    CHECK_OPTIONAL+=("${rest%%$'\t'*}")
+    CHECK_SECRET+=("${rest#*$'\t'}")
   done
 }
 
@@ -268,9 +292,9 @@ section_of() {
 # Sync files (Backup direction: Remote -> Local) --------------------------------
 sync_files() {
   local type="$1"
-  local total_files=0 total_errors=0 total_size=0
+  local total_files=0 total_errors=0 total_size=0 total_skipped=0
   local start_time end_time elapsed_time
-  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}")
+  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}") secret=("${CHECK_SECRET[@]}")
 
   start_time=$(date +%s)
 
@@ -297,6 +321,12 @@ sync_files() {
     # Construct local target directory
     local local_dir
     local_dir="$BACKUP_DIR/$type$(dirname "$p")"
+
+    if [[ $NO_SECRETS == true && ${secret[$i]} == true ]]; then
+      print_info1 "🔒 Skipping (secrets excluded): $p"
+      total_skipped=$((total_skipped + 1))
+      continue
+    fi
 
     if ((count == 0)); then
       if [[ ${optional[$i]} == true ]]; then
@@ -351,6 +381,8 @@ sync_files() {
   print_info2 "  patterns:  $total_files"
   print_info2 "  size:      $(human_bytes "$total_size")"
   print_info2 "  errors:    $total_errors"
+  [[ $NO_SECRETS == true && $total_skipped -gt 0 ]] &&
+    print_info2 "  skipped:   $total_skipped (secrets)"
   print_info2 "  elapsed:   ${elapsed_time}s"
   TOTAL_ERRORS=$((TOTAL_ERRORS + total_errors))
 }
@@ -419,6 +451,11 @@ write_manifest() {
     echo "node: $NODE_NAME"
     echo "types: ${types% }"
     echo "backup_dir: $BACKUP_DIR"
+    if [[ $NO_SECRETS == true ]]; then
+      echo "secrets: excluded"
+    else
+      echo "secrets: included"
+    fi
     echo ""
     echo "# patterns:"
     local FILE_PATTERN
@@ -440,9 +477,9 @@ write_manifest() {
 # Restore files (Restore direction: Local -> Remote) ---------------------------
 restore_files() {
   local type="$1"
-  local total_files=0 total_errors=0 total_size=0
+  local total_files=0 total_errors=0 total_size=0 total_skipped=0
   local start_time end_time elapsed_time
-  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}")
+  local check=("${CHECK_PATTERNS[@]}") optional=("${CHECK_OPTIONAL[@]}") secret=("${CHECK_SECRET[@]}")
 
   start_time=$(date +%s)
 
@@ -475,6 +512,12 @@ restore_files() {
     # Local directory holding the backup
     local local_dir
     local_dir="$BACKUP_DIR/$type$(dirname "$p")"
+
+    if [[ $NO_SECRETS == true && ${secret[$i]} == true ]]; then
+      print_info1 "🔒 Skipping (secrets excluded): $p"
+      total_skipped=$((total_skipped + 1))
+      continue
+    fi
 
     # Glob the matching files in the backup (compgen handles the glob)
     local -a matches=()
@@ -527,6 +570,8 @@ restore_files() {
   print_info2 "  patterns:  $total_files"
   print_info2 "  size:      $(human_bytes "$total_size")"
   print_info2 "  errors:    $total_errors"
+  [[ $NO_SECRETS == true && $total_skipped -gt 0 ]] &&
+    print_info2 "  skipped:   $total_skipped (secrets)"
   print_info2 "  elapsed:   ${elapsed_time}s"
   TOTAL_ERRORS=$((TOTAL_ERRORS + total_errors))
 }
@@ -619,6 +664,7 @@ usage() {
   print_info1 "   -s, --sudo          Use 'sudo -n rsync' on the remote host (for non-root SSH users)"
   print_info1 "   -y, --yes           Skip the restore confirmation prompt"
   print_info1 "   -z, --no-zfs        Skip ZFS configuration capture"
+  print_info1 "   -n, --no-secrets    Exclude files marked as secrets ('!' prefix in pattern lists)"
   print_info1 "   -c, --config FILE   Use an alternate config file for extra patterns (default: ~/.config/vm-pve-backup.conf)"
   print_info1 "   -d, --debug         Enable bash debug mode (set -x)"
 }
@@ -668,6 +714,10 @@ parse_args() {
       ;;
     -z | --no-zfs)
       NO_ZFS=true
+      shift
+      ;;
+    -n | --no-secrets)
+      NO_SECRETS=true
       shift
       ;;
     -c | --config)
@@ -764,6 +814,8 @@ list_patterns() {
       local p="${CHECK_PATTERNS[$i]}"
       local opt=""
       [[ ${CHECK_OPTIONAL[$i]} == true ]] && opt=" (optional)"
+      local sec=""
+      [[ ${CHECK_SECRET[$i]} == true ]] && sec=" [SECRET]"
 
       # Section header per logical config area
       local group
@@ -776,9 +828,9 @@ list_patterns() {
       fi
 
       if [[ ${counts[$i]:-0} -gt 0 ]]; then
-        print_info1 "   [OK] $p$opt"
+        print_info1 "   [OK] $p$opt$sec"
       else
-        print_info1 "   [--] $p$opt"
+        print_info1 "   [--] $p$opt$sec"
       fi
     done
   done
