@@ -375,6 +375,14 @@ setup_opencode_skills() {
   create_symlink "${PWD}/ai/SKILL-github-research.md" "$skills_dir/github-research/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github-security.md" "$skills_dir/github-security/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-project-bootstrap.md" "$skills_dir/project-bootstrap/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-bash-script.md" "$skills_dir/bash-script/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-project-audit.md" "$skills_dir/github-project-audit/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-unifi.md" "$skills_dir/unifi/SKILL.md"
+  create_symlink "${PWD}/ai/unifi-companion/UNIFI-API.md" "$skills_dir/unifi/UNIFI-API.md"
+  create_symlink "${PWD}/ai/unifi-companion/UNIFI-ONBOARDING.md" "$skills_dir/unifi/UNIFI-ONBOARDING.md"
+  create_symlink "${PWD}/ai/SKILL-opnsense.md" "$skills_dir/opnsense/SKILL.md"
+  create_symlink "${PWD}/ai/opnsense-companion/API.md" "$skills_dir/opnsense/API.md"
+  create_symlink "${PWD}/ai/opnsense-companion/ONBOARDING.md" "$skills_dir/opnsense/ONBOARDING.md"
   create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/github/GITHUB.md"
 
   local skills_to_install=()

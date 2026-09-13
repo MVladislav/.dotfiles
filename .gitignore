@@ -133,3 +133,15 @@ ai/**
 !ai/SKILL-github-research.md
 !ai/SKILL-github-security.md
 !ai/SKILL-project-bootstrap.md
+!ai/SKILL-github-project-audit.md
+!ai/SKILL-bash-script.md
+!ai/SKILL-unifi.md
+!ai/unifi-companion/
+ai/unifi-companion/**
+!ai/unifi-companion/UNIFI-API.md
+!ai/unifi-companion/UNIFI-ONBOARDING.md
+!ai/SKILL-opnsense.md
+!ai/opnsense-companion/
+ai/opnsense-companion/**
+!ai/opnsense-companion/API.md
+!ai/opnsense-companion/ONBOARDING.md
