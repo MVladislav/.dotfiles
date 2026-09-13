@@ -9,15 +9,33 @@ vm_xterm_cp_ssh() {
   infocmp -x | ssh "$1" -- tic -x -
 }
 vm_xterm_cp_local() {
-  local term_dir term_path
-  term_dir=$(echo "$TERM" | cut -c1)
-  term_path="${TERMINFO:-$HOME/.terminfo}/$term_dir/$TERM"
+  local term_dir="${TERM:0:1}"
+  local term_path="${TERMINFO:-$HOME/.terminfo}/$term_dir/$TERM"
 
-  if [ ! -f "$term_path" ]; then
-    echo "Terminfo for $TERM not found at $term_path"
-    return 1
+  # Validate source
+  [ -f "$term_path" ] || { echo "Error: $term_path not found" >&2; return 1; }
+
+  # System-wide install
+  if [ $# -eq 0 ]; then
+    sudo install -D -m 644 "$term_path" "/etc/terminfo/$term_dir/$TERM"
+    return $?
   fi
-  sudo install -D "$term_path" "/etc/terminfo/$term_dir/$TERM"
+
+  # User-specific install
+  local user="$1"
+  local user_home
+  user_home=$(getent passwd "$user" | cut -d: -f6)
+  [ -n "$user_home" ] || { echo "Error: user '$user' not found" >&2; return 1; }
+
+  # Validate home directory exists
+  [ -d "$user_home" ] || { echo "Error: home '$user_home' not found" >&2; return 1; }
+
+  # Install and set ownership
+  local user_group
+  user_group=$(id -gn "$user") || { echo "Error: group for '$user' not found" >&2; return 1; }
+  sudo install -D -m 644 -o "$user" -g "$user_group" \
+    "$term_path" "$user_home/.terminfo/$term_dir/$TERM" &&
+  sudo chown -R "$user:$user_group" "$user_home/.terminfo"
 }
 
 ### General ###
