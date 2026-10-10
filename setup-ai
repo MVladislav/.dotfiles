@@ -377,6 +377,7 @@ setup_opencode_skills() {
   create_symlink "${PWD}/ai/SKILL-project-bootstrap.md" "$skills_dir/project-bootstrap/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-bash-script.md" "$skills_dir/bash-script/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github-project-audit.md" "$skills_dir/github-project-audit/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-docker-stack-maintainer.md" "$skills_dir/docker-stack-maintainer/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-unifi.md" "$skills_dir/unifi/SKILL.md"
   create_symlink "${PWD}/ai/unifi-companion/UNIFI-API.md" "$skills_dir/unifi/UNIFI-API.md"
   create_symlink "${PWD}/ai/unifi-companion/UNIFI-ONBOARDING.md" "$skills_dir/unifi/UNIFI-ONBOARDING.md"
