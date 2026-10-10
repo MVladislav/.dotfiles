@@ -36,6 +36,8 @@ RUN_SETUP_ZED=1
 RUN_SETUP_PROFILES=1
 RUN_SETUP_GITCONFIG=1
 
+RUN_SETUP_BTOP=0
+RUN_SETUP_HUNK=0
 RUN_SETUP_TMUX=0
 RUN_SETUP_ZSH=0
 
@@ -66,7 +68,7 @@ VERSION_BTOP=v1.4.7
 VERSION_BTOP_REPO=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-7.2.4
 VERSION_RSMI_REPO=https://github.com/ROCm/rocm-systems.git
-VERSION_HUNK=v0.17.6
+VERSION_HUNK=v0.23.0
 VERSION_HUNK_REPO=https://github.com/modem-dev/hunk.git
 VERSION_FONTS_RELEASE=v3.4.0
 VERSION_FONTS_REPO=https://github.com/ryanoasis/nerd-fonts
@@ -141,6 +143,8 @@ main() {
   run_if $RUN_SETUP_ZSH && setup_zsh
   run_if $RUN_SETUP_TMUX && setup_tmux
   run_if $RUN_SETUP_CODE && setup_code
+  run_if $RUN_SETUP_BTOP && setup_btop
+  run_if $RUN_SETUP_HUNK && setup_hunk
 
   run_if $RUN_INSTALL_CODE_EXT && install_code_ext
   run_if $RUN_INSTALL_FONTS && install_fonts
@@ -293,7 +297,7 @@ install_dependencies_dev() {
 # SERVICE :: install ghostty ---------------------------------------------------
 install_ghostty() {
   print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
 
   # Define packages needed for build and install
@@ -322,7 +326,7 @@ install_ghostty() {
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
   update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q || true
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/ghostty" --version 2>/dev/null | head -n1)'"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
 
   if command -v gsettings &>/dev/null; then
     print_notes "   ⚙️ switching default keybind to open terminal ('<Ctrl><Alt>T')"
@@ -340,13 +344,12 @@ install_ghostty() {
 
   print_info2 "✅ GHOSTTY :: ghostty installed!"
 
-  setup_ghostty
 }
 
 # SERVICE :: install nvim ------------------------------------------------------
 install_nvim() {
   print_info2 "\n🚀 NVIM :: install nvim..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
 
   # Define packages needed for build and install
@@ -365,7 +368,7 @@ install_nvim() {
   make install 1>/dev/null
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/nvim" -v 2>/dev/null | head -n1)'"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
@@ -377,7 +380,7 @@ install_nvim() {
 # SERVICE :: install zsh -------------------------------------------------------
 install_zsh() {
   print_info2 "\n🚀 ZSH :: install zsh ..."
-  print_notes "   💡 current installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
+  print_notes "   💡 current installed version :: '$(installed_version zsh --version)'"
   rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
 
   if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
@@ -410,9 +413,8 @@ install_zsh() {
   zsh_install_bin_path=$(command -v zsh >/dev/null 2>&1 || echo "/usr/bin/zsh")
   # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
 
-  print_notes "   💡 new installed version :: '$(zsh --version 2>/dev/null | head -n1)'"
+  print_notes "   💡 new installed version :: '$(installed_version zsh --version)'"
 
-  setup_zsh
 
   if [[ "$(basename "$SHELL")" != "zsh" ]]; then
     print_info2 "🚀 ZSH :: setting zsh as default shell for user '$USER'"
@@ -432,7 +434,7 @@ install_zsh() {
 # SERVICE :: install tmux ------------------------------------------------------
 install_tmux() {
   print_info2 "\n🚀 TMUX :: install tmux..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
 
   # Define packages needed for build and install
@@ -452,9 +454,8 @@ install_tmux() {
   make install 1>/dev/null
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/tmux" -V 2>/dev/null)'"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
 
-  setup_tmux
 
   # Remove build dependencies if any
   install_dependencies_needs_rm
@@ -467,7 +468,7 @@ install_tmux() {
 # SERVICE :: install btop ------------------------------------------------------
 install_btop() {
   print_info2 "\n🚀 BTOP :: install btop..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
 
   # Define packages needed for build and install
@@ -503,7 +504,7 @@ install_btop() {
 
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/btop" -v 2>/dev/null | head -n1)'"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
 
   if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
     print_notes "   ⚙️ configuring btop with setcap for GPU and CPU watts access without sudo"
@@ -520,23 +521,15 @@ install_btop() {
 
   print_info2 "✅ BTOP :: btop installed!"
 
-  setup_btop
 }
 
 # SERVICE :: install hunk ------------------------------------------------------
 install_hunk() {
   print_info2 "\n🚀 HUNK :: install hunk..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
   download_github_binary "$VERSION_HUNK_REPO" 'hunkdiff-linux-x64\.tar\.gz'
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/hunk" --version 2>/dev/null)'"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
   print_info2 "✅ HUNK :: hunk installed!"
-
-  print_info2 "\n🔧 HUNK :: setting hunk as git pager"
-  git config --global core.pager "hunk pager"
-
-  print_info2 "🔗 HUNK :: linking configs-single/hunk.toml -> $LN_HUNK"
-  create_symlink "${PWD}/configs-single/hunk.toml" "${LN_HUNK}"
-  print_info2 "✅ HUNK :: all symlinks created."
 }
 
 # SERVICE :: install android emulator ------------------------------------------
@@ -557,7 +550,8 @@ install_setup_android_emulator() {
     print_info2 "📦 downloading Android command-line tools..."
     # https://developer.android.com/studio#command-line-tools-only
     # - https://dl.google.com/android/repository/commandlinetools-<os>-<version>_latest.zip
-    curl -sLo "$ANDROID_HOME/cmdline-tools.zip" \
+    run_quiet_hint "⏳ downloading ~150 MB (commandlinetools), this can take a few minutes..." \
+      curl -fsSL "$ANDROID_HOME/cmdline-tools.zip" \
       https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
 
     unzip -q "$ANDROID_HOME/cmdline-tools.zip" -d "$ANDROID_HOME/cmdline-tools"
@@ -609,29 +603,33 @@ install_setup_android_emulator() {
 
 # SETUP :: bin -----------------------------------------------------------------
 setup_bin() {
-  print_info2 "\n🔗 BIN :: linking ./bin/* -> $LN_VM_BIN"
+  print_section "BIN :: config"
+  print_info2 "🔗 BIN :: linking ./bin/* -> $LN_VM_BIN"
   create_symlink "$PWD/bin" "$LN_VM_BIN"
-  print_info2 "✅ BIN :: symlinks created."
+  print_section_end "✅ BIN :: config ready."
 }
 
 # SETUP :: ghostty -------------------------------------------------------------
 # NOTE: runs inside 'install_ghostty'
 setup_ghostty() {
-  print_info2 "\n🔗 GHOSTTY :: linking configs-single/ghostty.conf -> $LN_GHOSTTY/config"
+  print_section "GHOSTTY :: config"
+  print_info2 "🔗 GHOSTTY :: linking configs-single/ghostty.conf -> $LN_GHOSTTY/config"
   create_symlink "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY}/config"
-  print_info2 "✅ GHOSTTY :: symlinks created."
+  print_section_end "✅ GHOSTTY :: config ready."
 }
 
 # SETUP :: nvim ----------------------------------------------------------------
 setup_nvim() {
-  print_info2 "\n🔗 NVIM :: linking ./nvim -> $LN_NVIM"
+  print_section "NVIM :: config"
+  print_info2 "🔗 NVIM :: linking ./nvim -> $LN_NVIM"
   create_symlink "${PWD}/nvim" "${LN_NVIM}"
-  print_info2 "✅ NVIM :: symlinks created."
+  print_section_end "✅ NVIM :: config ready."
 }
 
 # SETUP :: zed -----------------------------------------------------------------
 setup_zed() {
-  print_info2 "\n🔗 ZED :: linking zed/settings.json -> $LN_ZED/settings.json"
+  print_section "ZED :: config"
+  print_info2 "🔗 ZED :: linking zed/settings.json -> $LN_ZED/settings.json"
   create_symlink "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
   print_info2 "🔗 ZED :: linking zed/keymap.json -> $LN_ZED/keymap.json"
   create_symlink "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
@@ -641,12 +639,13 @@ setup_zed() {
   print_info2 "🔗 ZED :: linking zed/codebook.toml -> $LN_ZED_CODEBOOK/codebook.toml"
   create_symlink "${PWD}/zed/codebook.toml" "${LN_ZED_CODEBOOK}/codebook.toml"
 
-  print_info2 "✅ ZED :: symlinks created."
+  print_section_end "✅ ZED :: config ready."
 }
 
 # SETUP :: profiles ------------------------------------------------------------
 setup_profiles() {
-  print_info2 "\n🔗 PROFILES :: linking profiles/profile-append -> $LN_PROFILES_01"
+  print_section "PROFILES :: config"
+  print_info2 "🔗 PROFILES :: linking profiles/profile-append -> $LN_PROFILES_01"
   create_symlink "${PWD}/profiles/profile-append" "${LN_PROFILES_01}"
   print_info2 "🔗 PROFILES :: linking profiles/profile-sec -> $LN_PROFILES_02"
   create_symlink "${PWD}/profiles/profile-sec" "${LN_PROFILES_02}"
@@ -676,14 +675,15 @@ setup_profiles() {
     done
   done
 
-  print_info2 "✅ PROFILES :: symlinks created."
+  print_section_end "✅ PROFILES :: config ready."
 }
 
 # SETUP :: gitconfig -----------------------------------------------------------
 setup_gitconfig() {
   setup_lazygit
 
-  print_info2 "\n🚀 GIT :: setting up git..."
+  print_section "GIT :: config"
+  print_info2 "🚀 GIT :: setting up git..."
 
   local -a ssh_keys
   local git_user_name git_user_email git_signing_key signing_key_path_expanded
@@ -749,15 +749,16 @@ setup_gitconfig() {
     print_info2 "  💡 GPG signing disabled"
   fi
 
-  print_info2 "✅ GIT :: setup complete!"
+  print_section_end "✅ GIT :: config ready."
 }
 
 # SETUP :: lazygit -------------------------------------------------------------
 setup_lazygit() {
-  print_info2 "\n🔗 LAZYGIT :: linking git/lazygit.yml -> $LN_LAZYGIT"
+  print_section "LAZYGIT :: config"
+  print_info2 "🔗 LAZYGIT :: linking git/lazygit.yml -> $LN_LAZYGIT"
   create_symlink "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
 
-  print_info2 "✅ LAZYGIT :: symlinks created."
+  print_section_end "✅ LAZYGIT :: config ready."
 }
 
 # ******************************************************************************
@@ -765,7 +766,8 @@ setup_lazygit() {
 # SETUP :: zsh -----------------------------------------------------------------
 # NOTE: runs inside 'install_zsh'
 setup_zsh() {
-  print_info2 "\n📦 ZSH :: loading git submodules"
+  print_section "ZSH :: config"
+  print_info2 "📦 ZSH :: loading git submodules"
   git submodule update -q --init --remote \
     zsh/themes/spaceship \
     zsh/plugins/zsh-autosuggestions \
@@ -781,13 +783,14 @@ setup_zsh() {
 
   print_info2 "🔗 ZSH :: linking zsh/zshrc -> $LN_ZSHRC"
   create_symlink "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-  print_info2 "✅ ZSH :: symlinks created."
+  print_section_end "✅ ZSH :: config ready."
 }
 
 # SETUP :: tmux ----------------------------------------------------------------
 # NOTE: runs inside 'install_tmux'
 setup_tmux() {
-  print_info2 "\n🔗 TMUX :: linking tmux/tmux -> $LN_TMUX"
+  print_section "TMUX :: config"
+  print_info2 "🔗 TMUX :: linking tmux/tmux -> $LN_TMUX"
   create_symlink "${PWD}/tmux/tmux" "${LN_TMUX}"
   print_info2 "🔗 TMUX :: linking tmux/tmux.conf -> $LN_TMUX_CONF"
   create_symlink "${PWD}/tmux/tmux.conf" "${LN_TMUX_CONF}"
@@ -799,26 +802,38 @@ setup_tmux() {
     PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX}/plugins/tpm/bin/install_plugins" 1>/dev/null
   fi
 
-  print_info2 "✅ TMUX :: symlinks created."
+  print_section_end "✅ TMUX :: config ready."
 }
 
 # SETUP :: btop ----------------------------------------------------------------
 # NOTE: runs inside 'install_btop'
 setup_btop() {
-  print_info2 "\n🔧 BTOP :: copying configs-single/btop.conf -> $LN_BTOP"
+  print_section "BTOP :: config"
+  print_info2 "🔧 BTOP :: copying configs-single/btop.conf -> $LN_BTOP"
   copy_config "${PWD}/configs-single/btop.conf" "${LN_BTOP}"
-  print_info2 "✅ BTOP :: config copied."
+  print_section_end "✅ BTOP :: config ready."
+}
+
+setup_hunk() {
+  print_section "HUNK :: config"
+  print_info2 "🔧 HUNK :: setting hunk as git pager"
+  git config --global core.pager "hunk pager"
+
+  print_info2 "🔗 HUNK :: linking configs-single/hunk.toml -> $LN_HUNK"
+  create_symlink "${PWD}/configs-single/hunk.toml" "${LN_HUNK}"
+  print_section_end "✅ HUNK :: config ready."
 }
 
 # SETUP :: code ----------------------------------------------------------------
 setup_code() {
-  print_info2 "\n🔗 CODE :: linking code/keybindings.json -> $LN_VS_CODE/keybindings.json"
+  print_section "CODE :: config"
+  print_info2 "🔗 CODE :: linking code/keybindings.json -> $LN_VS_CODE/keybindings.json"
   create_symlink "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
   print_info2 "🔗 CODE :: linking code/settings.json -> $LN_VS_CODE/settings.json"
   create_symlink "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
   print_info2 "🔗 CODE :: linking code/snippets -> $LN_VS_CODE/snippets"
   create_symlink "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
-  print_info2 "✅ CODE :: symlinks created."
+  print_section_end "✅ CODE :: config ready."
 }
 
 # ******************************************************************************
@@ -936,7 +951,18 @@ usage() {
   print_info "     $0 -ds -invim                                Install nvim only (no symlinks)"
   print_info "     $0 -itools -idev                             Install CLI tools + dev deps + symlinks"
   print_info "     $0 -it -invim -izsh -ighost                  Install nvim, zsh, ghostty + tools + symlinks"
-  print_info "     $0 -upc                                      Check for newer versions of all tools"
+  print_info "     $0 -upc                                    Check for newer versions of all tools"
+  print_info ""
+  print_info "     Install and config are separate steps. Pair the -i flag"
+  print_info "     with the -s flag for tools whose config is not on by default:"
+  print_info "     $0 -ibtop -sbt                             Install btop, then copy its config"
+  print_info "     $0 -ihunk -shk                             Install hunk, link config + set git pager"
+  print_info "     $0 -izsh -szh                              Install zsh, then link its config"
+  print_info "     $0 -itmux -stx                             Install tmux, then link its config"
+  print_info "     $0 -ice -scd                               Install VS Code extensions, link config"
+  print_info ""
+  print_info "     nvim and ghostty configs are linked by default, so they need"
+  print_info "     no -s flag: $0 -invim | $0 -ighost"
   print_info ""
   print_info "   ⚙️ Install flags (enable tool installations):"
   print_info "     -itools      --install-additional-tools         CLI tools: curl, git, git-delta, jq, fzf, eza, bat, ripgrep, fd-find, ..."
@@ -965,6 +991,8 @@ usage() {
   print_info "     -stx         --setup-tmux                       Force tmux symlink setup"
   print_info "     -szh         --setup-zsh                        Force zsh symlink setup"
   print_info "     -scd         --setup-code                       Link VS Code config"
+  print_info "     -sbt         --setup-btop                       Copy btop config"
+  print_info "     -shk         --setup-hunk                       Link hunk config + git pager"
   print_info ""
   print_info "   🛠️ Meta flags:"
   print_info "     -h           --help                             Show this help"
@@ -1068,6 +1096,12 @@ parse_args() {
     -stx | --setup-tmux)
       RUN_SETUP_TMUX=1
       ;;
+    -sbt | --setup-btop)
+      RUN_SETUP_BTOP=1
+      ;;
+    -shk | --setup-hunk)
+      RUN_SETUP_HUNK=1
+      ;;
     -scd | --setup-code)
       RUN_SETUP_CODE=1
       ;;
@@ -1103,8 +1137,8 @@ parse_args() {
       check_for_newer_tag "$VERSION_TMUX_REPO" "$VERSION_TMUX"
       check_for_newer_tag "$VERSION_BTOP_REPO" "$VERSION_BTOP"
       check_for_newer_tag "$VERSION_RSMI_REPO" "$VERSION_RSMI" "rocm"
-      check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK"
-      check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE"
+      check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK" "" "releases"
+      check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
       ;;
     *)
       print_error "❌ Unknown option: $key"

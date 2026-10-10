@@ -17,6 +17,8 @@
 !setup
 !setup-sec
 !setup-ai
+!setup-ai-install
+!setup-ai-config
 
 !git/
 git/**

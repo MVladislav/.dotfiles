@@ -150,6 +150,29 @@ run_quiet_hint() {
   run_quiet "$@"
 }
 
+# Print the first line a command reports as its version, or 'not installed'.
+# stdout wins and stderr is only read as a fallback, so a tool that logs noise
+# to stderr still reports its real version. The 'not installed' fallback keeps
+# a missing binary from surfacing as an empty '' in the output.
+installed_version() {
+  local version
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'not installed'
+    return 0
+  fi
+  version=$("$@" 2>/dev/null)
+  if [[ -z ${version//[[:space:]]/} ]]; then
+    version=$("$@" 2>&1 >/dev/null)
+  fi
+  version=${version%%$'\n'*}
+  # sed, not glob: in bash patterns '[0-9;]*' means one digit then *anything*,
+  # which matches greedily across the version and eats it.
+  [[ $version == *$'\e'* ]] && version=$(printf '%s' "$version" | sed $'s/\033\\[[0-9;]*m//g')
+  version=${version#"${version%%[![:space:]]*}"}
+  version=${version%"${version##*[![:space:]]}"}
+  printf '%s' "$version"
+}
+
 # HELPERS :: github api --------------------------------------------------------
 # Adds an Authorization header when GITHUB_TOKEN is set (raises rate limit to 5000/h)
 github_api() {
@@ -164,7 +187,6 @@ github_api() {
 # ******************************************************************************
 
 install_dependencies_needs() {
-  print_notes "   📥 Installing build dependencies..."
   DEPS_PACKAGES_TO_REMOVE=()
 
   local -n tools_ref="${1%\[@\]}"
@@ -189,30 +211,32 @@ install_dependencies_needs() {
     fi
   done
 
+  # Nothing missing: one line and out, no sudo, no empty [ ] lists.
+  if [[ ${#packages_to_install[@]} -eq 0 ]]; then
+    print_notes "   📥 All dependencies already installed, skipping"
+    return 0
+  fi
+
+  print_notes "   📥 Installing build dependencies..."
   print_notes "   📥 Packages to install: [${packages_to_install[*]}]"
   print_notes "   📥 Packages to remove afterward: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
 
-  # Only run sudo update and install if any package is missing.
-  if [[ ${#packages_to_install[@]} -gt 0 ]]; then
-    # `env` runs as the sudo'ed command so the variables actually reach apt:
-    # sudo strips the environment, and without these debconf opens a dialog and
-    # every maintainer script reprints the perl locale warnings.
-    local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
-    if ! run_quiet_hint "⏳ refreshing package lists (sudo may ask for your password)..." \
-      $RUN_WITH_SUDO "${apt_env[@]}" apt-get update -qqq; then
-      print_error "❌ Failed to update package list"
-      exit 1
-    fi
-    if ! run_quiet_hint "⏳ installing packages, this can take a minute..." \
-      $RUN_WITH_SUDO "${apt_env[@]}" apt-get install -y "${packages_to_install[@]}"; then
-      print_error "❌ Failed to install packages"
-      exit 1
-    fi
-    [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
-    print_notes "   📥 Build dependencies installed"
-  else
-    print_notes "   📥 All dependencies already installed. Skipping dependencies installation."
+  # `env` runs as the sudo'ed command so the variables actually reach apt:
+  # sudo strips the environment, and without these debconf opens a dialog and
+  # every maintainer script reprints the perl locale warnings.
+  local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
+  if ! run_quiet_hint "⏳ refreshing package lists (sudo may ask for your password)..." \
+    $RUN_WITH_SUDO "${apt_env[@]}" apt-get update -qqq; then
+    print_error "❌ Failed to update package list"
+    exit 1
   fi
+  if ! run_quiet_hint "⏳ installing packages, this can take a minute..." \
+    $RUN_WITH_SUDO "${apt_env[@]}" apt-get install -y "${packages_to_install[@]}"; then
+    print_error "❌ Failed to install packages"
+    exit 1
+  fi
+  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  print_notes "   📥 Build dependencies installed"
 }
 
 install_dependencies_needs_rm() {
@@ -342,6 +366,12 @@ check_for_newer_tag() {
   local repo_url="$1"
   local current_tag="$2"
   local tag_filter="${3:-}"
+  # Where to read the newest version from: 'tags' for tools installed with
+  # 'git clone && git checkout <tag>', 'releases' for tools installed from
+  # /releases/latest. The two can diverge - anomalyco/opencode tags v2.x while
+  # only releasing v1.18.x - so comparing against the wrong one reports a
+  # version the install path never actually provides.
+  local latest_from="${4:-tags}"
 
   require_cmds curl jq || return 1
 
@@ -357,7 +387,11 @@ check_for_newer_tag() {
 
   # Fetch all tags via GitHub API
   local tags_json
-  tags_json=$(github_api "https://api.github.com/repos/$repo_name/tags")
+  if [[ "$latest_from" == "releases" ]]; then
+    tags_json=$(github_api "https://api.github.com/repos/$repo_name/releases?per_page=100")
+  else
+    tags_json=$(github_api "https://api.github.com/repos/$repo_name/tags")
+  fi
 
   if [[ -z $tags_json ]]; then
     print_error "⚠️ No response from GitHub API for $repo_name."
@@ -374,7 +408,11 @@ check_for_newer_tag() {
 
   # Extract tag names
   local tags
-  tags=$(echo "$tags_json" | jq -r '.[].name')
+  if [[ "$latest_from" == "releases" ]]; then
+    tags=$(echo "$tags_json" | jq -r '.[].tag_name')
+  else
+    tags=$(echo "$tags_json" | jq -r '.[].name')
+  fi
 
   # Handle tag filtering
   if [[ -n $tag_filter ]]; then

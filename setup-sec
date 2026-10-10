@@ -207,8 +207,9 @@ install_tools_hard_scan() {
 install_rocm() {
   print_info2 "\n🚀 ROCM :: Installing AMD ROCm support..."
 
-  curl -L https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb \
-    -o "$DEPS_INSTALL_PATH/amdgpu-install.deb"
+  print_notes "   ⏳ downloading the ROCm installer package (~100 MB)..."
+  run_quiet curl -fsSL -o "$DEPS_INSTALL_PATH/amdgpu-install.deb" \
+    https://repo.radeon.com/amdgpu-install/latest/ubuntu/noble/amdgpu-install_7.0.1.70001-1_all.deb
   $RUN_WITH_SUDO apt install -y "$DEPS_INSTALL_PATH/amdgpu-install.deb"
   $RUN_WITH_SUDO apt update
   $RUN_WITH_SUDO apt install -y python3-setuptools python3-wheel
@@ -351,12 +352,15 @@ load_lists() {
   print_info2 "\n🚀 TOOLS :: Clone lists..."
 
   print_notes "   ⬇️ Cloning 'SecLists'..."
-  git clone -q https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
+  run_quiet_hint "⏳ cloning SecLists (large repo, several minutes)..." \
+    git clone -q https://github.com/danielmiessler/SecLists.git "$VM_SEC_LISTS_SECLISTS"
   print_notes "   ⬇️ Cloning 'PayloadsAllTheThings'..."
-  git clone -q https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
+  run_quiet_hint "⏳ cloning PayloadsAllTheThings (large repo, several minutes)..." \
+    git clone -q https://github.com/swisskyrepo/PayloadsAllTheThings.git "$VM_SEC_LISTS_PAYLOADS"
 
   print_notes "   ⬇️ Cloning 'Nuclei Templates 1'..."
-  git clone -q https://github.com/coffinxp/nuclei-templates.git "$VM_SEC_LISTS_NUCLEI/tmp1"
+  run_quiet_hint "⏳ cloning nuclei-templates (large repo, several minutes)..." \
+    git clone -q https://github.com/coffinxp/nuclei-templates.git "$VM_SEC_LISTS_NUCLEI/tmp1"
 
   print_info2 "🚀 TOOLS :: Lists cloning done!"
 }
@@ -364,10 +368,13 @@ load_templates() {
   print_info2 "\n🚀 TOOLS :: Clone lists..."
 
   print_notes "   ⬇️ Download 'trivy html template'..."
-  curl -Lo "$VM_SEC_TEMPLATES/trivy-html.tpl" https://github.com/aquasecurity/trivy/blob/main/contrib/html.tpl
+  run_quiet curl -fsSL "$VM_SEC_TEMPLATES/trivy-html.tpl" \
+    https://github.com/aquasecurity/trivy/blob/main/contrib/html.tpl
   print_notes "   ⬇️ Download 'grype html template'..."
-  curl -Lo "$VM_SEC_TEMPLATES/grype-html.tmpl" https://github.com/anchore/grype/raw/refs/heads/main/templates/html.tmpl
-  curl -Lo "$VM_SEC_TEMPLATES/grype-markdown.tmpl" https://github.com/anchore/grype/raw/refs/heads/main/templates/markdown.tmpl
+  run_quiet curl -fsSL "$VM_SEC_TEMPLATES/grype-html.tmpl" \
+    https://github.com/anchore/grype/raw/refs/heads/main/templates/html.tmpl
+  run_quiet curl -fsSL "$VM_SEC_TEMPLATES/grype-markdown.tmpl" \
+    https://github.com/anchore/grype/raw/refs/heads/main/templates/markdown.tmpl
 
   print_info2 "🚀 TOOLS :: Lists cloning done!"
 }

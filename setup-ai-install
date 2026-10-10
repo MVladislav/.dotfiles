@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+PATH="/usr/bin/:/usr/local/bin/:/bin/:/usr/sbin/:/sbin/:/snap/bin/:$HOME/.local/bin"
+set -euo pipefail
+
+# CONFIG/INSTALL :: sourced by setup-ai
+# Installer functions for every tool setup-ai manages.
+# Functions only - this file is never executed on its own.
+
+# **********************************************************************************
+
+# SERVICE :: install opencode --------------------------------------------------
+install_opencode() {
+  print_info2 "\n🚀 OPENCODE :: install opencode..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
+  download_github_binary "$VERSION_OPENCODE_REPO" 'opencode-linux-x64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
+  print_info2 "✅ OPENCODE :: opencode installed!"
+
+  # setup_opencode
+}
+
+# SERVICE :: install herdr --------------------------------------------------
+install_herdr() {
+  print_info2 "\n🚀 HERDR :: install herdr..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/herdr" --version)'"
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  curl -fsSLo "$USER_LOCAL_PREFIX_BIN/herdr" "$VERSION_HERDR_REPO/releases/download/$VERSION_HERDR/herdr-linux-x86_64"
+  chmod +x "$USER_LOCAL_PREFIX_BIN/herdr"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/herdr" --version)'"
+  print_info2 "✅ HERDR :: herdr installed!"
+
+}
+
+# SERVICE :: install gh (GitHub CLI) -------------------------------------------
+install_gh() {
+  print_info2 "\n🚀 GH :: install GitHub CLI..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/gh" --version)'"
+  download_github_binary "$VERSION_GH_REPO" 'gh_.*_linux_amd64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/gh" --version)'"
+  print_notes "   💡 authenticate: gh auth login (or reuse GITHUB_TOKEN, see ai/GITHUB.md)"
+  print_info2 "✅ GH :: GitHub CLI installed!"
+}
+
+# SERVICE :: install gh-dash (GitHub dashboard) ---------------------------------
+# NOTE: installed as a gh extension; requires gh + gh auth (see ai/GITHUB.md)
+install_gh_dash() {
+  print_info2 "\n🚀 GH-DASH :: install gh-dash..."
+  command -v gh >/dev/null 2>&1 || {
+    print_notes "   ⚠️  gh not found - install GitHub CLI first (setup-ai -igh)"
+    return 0
+  }
+  if gh extension list | grep -q '^gh-dash'; then
+    print_notes "   💡 gh-dash already installed, upgrading..."
+    run_quiet_hint "⏳ upgrading the gh-dash extension..." \
+      gh extension upgrade gh-dash --force
+  else
+    run_quiet_hint "⏳ installing the gh-dash extension..." \
+      gh extension install dlvhdr/gh-dash
+  fi
+  print_notes "   💡 start it with: gh dash (token via gh auth / GITHUB_TOKEN, see ai/GITHUB.md)"
+  print_info2 "✅ GH-DASH :: gh-dash installed!"
+
+}
+
+# SERVICE :: install filebrowser -----------------------------------------------
+install_filebrowser() {
+  print_info2 "\n🚀 FILEBROWSER :: install filebrowser (Quantum fork)..."
+  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  curl -fsSLo "$USER_LOCAL_PREFIX_BIN/filebrowser" "$VERSION_FILEBROWSER_REPO/releases/download/$VERSION_FILEBROWSER/linux-amd64-filebrowser"
+  chmod +x "$USER_LOCAL_PREFIX_BIN/filebrowser"
+  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  print_info2 "✅ FILEBROWSER :: filebrowser installed!"
+
+}
+
+# SERVICE :: install llama.cpp -------------------------------------------------
+# Install-only: builds llama.cpp and drops the binaries in ~/.local/bin.
+# Runtime configuration lives in setup_llamacpp() ('-sll').
+install_llamacpp() {
+  print_info2 "\n🚀 LLAMACPP :: install llama.cpp..."
+  print_notes "   💡 current installed version :: '$(llamacpp_binary_version)'"
+  rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+
+  # -- dependencies -----------------------------------------------------------
+  # packages_tools stay installed (runtime needs them), packages_build is
+  # removed again afterwards.
+  # pkg-config is REQUIRED, not optional: with -DGGML_BLAS=ON, CMake's FindBLAS
+  # leaves BLAS_INCLUDE_DIRS empty on Debian/Ubuntu (kitware#20268), and
+  # ggml/src/ggml-blas/CMakeLists.txt then does find_package(PkgConfig REQUIRED)
+  # to locate the library. Without it the configure step dies with
+  # "Could NOT find PkgConfig (missing: PKG_CONFIG_EXECUTABLE)".
+  local packages_tools=(libopenblas-dev)
+    # shellcheck disable=SC2034
+  local packages_build=(git cmake build-essential pkg-config)
+  if [[ $RUN_INSTALL_LLAMACPP_VULKAN -eq 1 ]]; then
+    # Vulkan backend (AMD via RADV, Intel, NVIDIA); drivers stay installed
+    # shellcheck disable=SC2034
+    packages_tools+=(mesa-vulkan-drivers vulkan-tools libvulkan-dev glslang-tools)
+  fi
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  # -- backend selection ------------------------------------------------------
+  # Vulkan (explicit) > CUDA > HIP (ROCm) > CPU+BLAS. GGML_NATIVE (default ON)
+  # already compiles for the exact host CPU, so the CPU path needs no flag.
+  local gpu_flags=()
+  local cmake_env=()
+  if [[ $RUN_INSTALL_LLAMACPP_VULKAN -eq 1 ]]; then
+    gpu_flags=(-DGGML_VULKAN=ON)
+    print_notes "   🎮 Vulkan backend requested (GGML_VULKAN=ON) - works with AMD/RADV, Intel and NVIDIA"
+  elif command -v nvcc >/dev/null 2>&1; then
+    local cuda_archs
+    cuda_archs=$(llamacpp_detect_cuda_archs)
+    gpu_flags=(-DGGML_CUDA=ON)
+    [[ -n "$cuda_archs" ]] && gpu_flags+=(-DCMAKE_CUDA_ARCHITECTURES="$cuda_archs")
+    cmake_env=(env PATH="$(dirname "$(command -v nvcc)"):$PATH"
+      LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH:-}")
+    print_notes "   🎮 NVIDIA CUDA toolkit detected - building with GGML_CUDA=ON${cuda_archs:+ (arches: $cuda_archs)}"
+  elif lspci 2>/dev/null | grep -qiE 'AMD/ATI|Radeon'; then
+    if [[ -d /opt/rocm ]] && command -v rocminfo >/dev/null 2>&1; then
+      local gfx_target
+      gfx_target=$(rocminfo 2>/dev/null | grep -m1 -oE 'gfx[0-9a-f]+' || true)
+      if [[ -n "$gfx_target" ]]; then
+        gpu_flags=(-DGGML_HIPBLAS=ON -DAMDGPU_TARGETS="$gfx_target")
+        cmake_env=(env PATH="/opt/rocm/bin:$PATH")
+        print_notes "   🎮 AMD GPU + ROCm ($gfx_target) detected - building with HIPBLAS"
+        print_notes "   💡 unsupported GPU at runtime: HSA_OVERRIDE_GFX_VERSION=$gfx_target"
+      else
+        print_notes "   ⚠️  AMD GPU found, no gfx target from rocminfo - building CPU-only"
+      fi
+    else
+      print_notes "   ⚠️  AMD GPU found but ROCm toolkit missing - building CPU-only"
+      print_notes "   💡 install ROCm (https://rocm.docs.amd.com) or use $0 -illv for Vulkan"
+    fi
+  else
+    print_notes "   💡 no supported GPU detected - building CPU-only with OpenBLAS"
+  fi
+
+  # -- fetch ------------------------------------------------------------------
+  print_notes "   📦 cloning llama.cpp $VERSION_LLAMACPP..."
+  run_quiet_hint "⏳ cloning $VERSION_LLAMACPP_REPO (a few MB, can take a minute)..." \
+    git clone -q "$VERSION_LLAMACPP_REPO" "$DEPS_INSTALL_PATH/llama.cpp"
+  pushd "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_LLAMACPP"
+
+  # -- build ------------------------------------------------------------------
+  # Only the four binaries this dotfiles setup actually uses; skipping the test
+  # suite, examples and the remaining tools cuts build time by more than half.
+  # Configure and build are captured: cmake progress is not our output, but a
+  # failure prints the tail so the actual error is never hidden.
+  print_notes "   🔧 building llama-server, llama-cli, llama-quantize, llama-bench (${gpu_flags[*]:-CPU})..."
+  if ! run_quiet_hint "⏳ configuring the build (cmake)..." "${cmake_env[@]}" cmake -B build \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_EXAMPLES=OFF \
+    -DLLAMA_BUILD_TOOLS=ON \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DGGML_BLAS=ON \
+    -DGGML_BLAS_VENDOR=OpenBLAS \
+    "${gpu_flags[@]}"; then
+    print_error "   ❌ cmake configure failed"
+    popd 1>/dev/null
+    rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+    install_dependencies_needs_rm
+    return 1
+  fi
+
+  # A build log is worth keeping on failure, so only tail it live.
+  local build_log="$DEPS_INSTALL_PATH/llamacpp-build.log"
+  print_notes "   ⏳ this takes a few minutes on $(nproc) cores (log: $build_log)"
+  if ! "${cmake_env[@]}" cmake --build build --config Release \
+    -j "$(nproc)" \
+    --target llama-server llama-cli llama-quantize llama-bench >"$build_log" 2>&1; then
+    print_error "   ❌ build failed - last 25 lines:"
+    tail -n 25 "$build_log" | while IFS= read -r line; do print_notes "      $line"; done
+    print_notes "   ↳ full log: $build_log"
+    popd 1>/dev/null
+    rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+    install_dependencies_needs_rm
+    return 1
+  fi
+  rm -f "$build_log"
+
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  local installed=() bin
+  for bin in llama-server llama-cli llama-quantize llama-bench; do
+    if [[ -f "build/bin/$bin" ]]; then
+      cp -f "build/bin/$bin" "$USER_LOCAL_PREFIX_BIN/"
+      installed+=("$bin")
+    fi
+  done
+  popd 1>/dev/null
+
+  if [[ ${#installed[@]} -eq 0 ]]; then
+    print_error "   ❌ build produced no binaries"
+    rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+    install_dependencies_needs_rm
+    return 1
+  fi
+
+  # Smoke test: a build can succeed and still produce binaries that cannot
+  # start (missing shared library, wrong RPATH). Catch that here rather than at
+  # first use. NOTE: --version prints on stderr and exits 0, so judge by exit
+  # code and by the loader's message, never by "stderr was non-empty".
+  local smoke_out smoke_rc=0
+  smoke_out=$("$USER_LOCAL_PREFIX_BIN/llama-server" --version 2>&1) || smoke_rc=$?
+  if ((smoke_rc != 0)) || [[ "$smoke_out" == *"error while loading shared"* ]]; then
+    print_error "   ❌ llama-server is installed but cannot run (exit $smoke_rc):"
+    print_notes "      $(echo "$smoke_out" | head -n1)"
+    print_error "   ❌ build tree kept for inspection: $DEPS_INSTALL_PATH/llama.cpp"
+    install_dependencies_needs_rm
+    return 1
+  fi
+  print_notes "   ✅ smoke test: llama-server starts"
+
+  # Only now is the build tree disposable.
+  rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
+  print_notes "   💡 new installed version :: '$(llamacpp_binary_version)'"
+
+  install_dependencies_needs_rm
+
+  print_info2 "✅ LLAMACPP :: llama.cpp installed ($(echo "${installed[*]}" | tr ' ' ','))!"
+  print_notes "   ➡️ next: $0 -sll   (pick a model + start the API server)"
+}
+
+# HELPERS :: detect CUDA architectures ------------------------------------------
+# Empty result = let CMake pick the default (native/CUDA default arch).
+llamacpp_detect_cuda_archs() {
+  command -v nvidia-smi >/dev/null 2>&1 || return 0
+  local sm
+  sm=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -n1) || return 0
+  [[ "$sm" =~ ^([0-9]+)\.([0-9]+)$ ]] || return 0
+  # CMake wants "major;minor", nvidia-smi reports "major.minor" (8.6 -> 86).
+  printf '%s;%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+}
+
+# HELPERS :: llama-server version, never blank ----------------------------------
+# Two traps this avoids:
+#  - llama.cpp prints its version banner on STDERR, not stdout, so "2>/dev/null"
+#    hides it and yields an empty string.
+#  - a binary that cannot start (missing shared library) also fails on stderr.
+# Capture both streams, then tell the two apart.
+llamacpp_binary_version() {
+  local bin="$USER_LOCAL_PREFIX_BIN/llama-server"
+  if [[ ! -x "$bin" ]]; then
+    echo "not installed"
+    return 0
+  fi
+  local out
+  out=$("$bin" --version 2>&1 | head -n1)
+  out="${out%"${out##*[![:space:]]}"}"
+  if [[ "$out" == *"error while loading shared"* || "$out" == *"cannot open shared object"* ]]; then
+    echo "unrunnable: $out"
+  elif [[ -z "$out" ]]; then
+    echo "installed, but '--version' printed nothing"
+  else
+    echo "$out"
+  fi
+}
