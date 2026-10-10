@@ -1,0 +1,50 @@
+# systemd user unit :: llama.cpp server (llama-server)
+# Installed by 'setup-ai -sll' as a symlink into ~/.config/systemd/user/.
+# Linked from the dotfiles so config changes follow a git pull.
+#
+# The server is configured entirely through the EnvironmentFile below - every
+# llama-server flag has a LLAMA_ARG_* environment form, so ExecStart stays
+# argument-free and all runtime settings live in one editable, git-ignorable
+# file (~/.config/llamacpp/llamacpp.env).
+#
+#   systemctl --user start|stop|restart|status llamacpp
+#   systemctl --user status llamacpp
+#   journalctl --user -u llamacpp -f
+#
+# REF: https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+
+[Unit]
+Description=llama.cpp server (OpenAI-compatible local API)
+Documentation=https://github.com/ggml-org/llama.cpp
+After=network-online.target
+Wants=network-online.target
+# Bounded retries: a broken config or an unreachable model should surface as a
+# failed unit instead of an endless restart loop. (StartLimit* lives in [Unit]
+# since systemd v229 - systemd-analyze verify fails if it sits in [Service].)
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/llamacpp/llamacpp.env
+ExecStart=%h/.local/bin/llama-server
+
+# The first start downloads the GGUF from HuggingFace, which can take a long
+# time on a slow link - never let systemd give up or restart mid-download.
+TimeoutStartSec=0
+Restart=on-failure
+RestartSec=10
+
+# Model load + inference are long-running and memory hungry; keep the service
+# from competing with interactive work.
+Nice=-5
+IOSchedulingClass=idle
+
+# Hardening. Deliberately no ProtectSystem=strict: the server writes the model
+# cache under ~/.cache/llama.cpp at runtime.
+NoNewPrivileges=true
+PrivateTmp=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=default.target

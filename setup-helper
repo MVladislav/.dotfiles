@@ -76,7 +76,7 @@ fzf_preselect_bind() {
 
 # HELPERS :: fzf multiselect ----------------------------------------------------
 # Run a multi-select fzf prompt. Prints the selected lines; empty when nothing
-# was chosen. ESC/abort (exit 130) is treated as "no selection", NOT an error —
+# was chosen. ESC/abort (exit 130) is treated as "no selection", NOT an error -
 # otherwise 'set -euo pipefail' in the caller kills the script.
 # Args: $1 list (newline-joined), $2 space-separated preselect defaults,
 #       $3 header, $4 prompt, $5 (optional) preview command ({} = current line).
@@ -115,6 +115,39 @@ require_cmds() {
 # HELPERS :: package installed? ------------------------------------------------
 is_package_installed() {
   dpkg -l "$1" 2>/dev/null | grep -q "^ii  $1 "
+}
+
+# HELPERS :: run a command quietly -----------------------------------------------
+# Spew from apt, cmake and git is not the script talking, so it is captured to a
+# temp log and shown only when the command actually fails. Usage:
+#   run_quiet <command> [args...]
+# REF: passes 2 = lines of log to show on failure.
+run_quiet() {
+  local log lines="${RUN_QUIET_TAIL_LINES:-20}" rc=0
+  log=$(mktemp)
+  "$@" >"$log" 2>&1 || rc=$?
+  if ((rc == 0)); then
+    rm -f "$log"
+    return 0
+  fi
+  print_error "❌ command failed (exit $rc): $*"
+  print_notes "   ↳ last $lines lines of output:"
+  tail -n "$lines" "$log" | while IFS= read -r line; do
+    print_notes "      $line"
+  done
+  print_notes "   ↳ full log: $log"
+  return $rc
+}
+
+# HELPERS :: run a command quietly, with a "this may take a while" line --------
+# Silence is fine for a fast command, but a quiet sudo/apt/build that takes a
+# minute reads as a hang - and users assume the password prompt is broken. This
+# prints the hint first, then behaves exactly like run_quiet.
+run_quiet_hint() {
+  local hint="$1"
+  shift
+  print_notes "   $hint"
+  run_quiet "$@"
 }
 
 # HELPERS :: github api --------------------------------------------------------
@@ -161,14 +194,20 @@ install_dependencies_needs() {
 
   # Only run sudo update and install if any package is missing.
   if [[ ${#packages_to_install[@]} -gt 0 ]]; then
-    $RUN_WITH_SUDO apt-get update -qqq || {
+    # `env` runs as the sudo'ed command so the variables actually reach apt:
+    # sudo strips the environment, and without these debconf opens a dialog and
+    # every maintainer script reprints the perl locale warnings.
+    local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
+    if ! run_quiet_hint "⏳ refreshing package lists (sudo may ask for your password)..." \
+      $RUN_WITH_SUDO "${apt_env[@]}" apt-get update -qqq; then
       print_error "❌ Failed to update package list"
       exit 1
-    }
-    $RUN_WITH_SUDO apt-get install -y "${packages_to_install[@]}" 1>/dev/null || {
+    fi
+    if ! run_quiet_hint "⏳ installing packages, this can take a minute..." \
+      $RUN_WITH_SUDO "${apt_env[@]}" apt-get install -y "${packages_to_install[@]}"; then
       print_error "❌ Failed to install packages"
       exit 1
-    }
+    fi
     [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
     print_notes "   📥 Build dependencies installed"
   else
@@ -183,12 +222,14 @@ install_dependencies_needs_rm() {
   fi
 
   print_notes "   📥 Removing build dependencies: [${DEPS_PACKAGES_TO_REMOVE[*]}]..."
-  $RUN_WITH_SUDO apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}" 1>/dev/null || {
+  local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
+  if ! run_quiet_hint "⏳ removing packages (sudo may ask for your password)..." \
+    $RUN_WITH_SUDO "${apt_env[@]}" apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}"; then
     print_error "❌ Failed to remove packages"
     return 1
-  }
-  $RUN_WITH_SUDO apt-get -y autoremove -qqq 1>/dev/null
-  $RUN_WITH_SUDO apt-get -y autoclean -qqq 1>/dev/null
+  fi
+  run_quiet $RUN_WITH_SUDO "${apt_env[@]}" apt-get -y autoremove -qqq || true
+  run_quiet $RUN_WITH_SUDO "${apt_env[@]}" apt-get -y autoclean -qqq || true
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_notes "   📥 Packages removed: [${DEPS_PACKAGES_TO_REMOVE[*]}]"

@@ -122,10 +122,13 @@ configs-single/**
 !configs-single/gh-dash.yml
 !configs-single/herdr.toml
 !configs-single/filebrowser.yml
+!configs-single/llamacpp.service
 
 !ai/
 ai/**
 !ai/setup-ai-opencode.conf
+!ai/setup-ai-llamacpp.conf
+!ai/LLAMACPP.md
 !ai/SKILL-git-release.md
 !ai/SKILL-git-commit.md
 !ai/GITHUB.md
