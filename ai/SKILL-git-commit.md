@@ -50,10 +50,22 @@ explicitly asked.
 
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`,
   `test:`, `perf:`, `ci:`.
+- **Scopes are optional and rarely used here.** Decide from the repository's own
+  history, not from the spec's `type(scope):` muscle memory: run
+  `git log --format='%s' -40` and look for scoped subjects first. Feature work is
+  unscoped (`feat:`, `fix:`, `refactor:`). Scopes are reserved for mechanical,
+  self-describing sweeps - `chore(deps):` version bumps, `chore(config):` config
+  refreshes, `chore(lint):` tool passes, `fix(#N):` issue references. Never
+  invent a scope from a file or component name (`feat(setup-ai):`, `fix(api):`);
+  that pattern appears nowhere in this history.
 - Imperative mood, lowercase after the prefix, subject ≤ ~72 chars.
 - Match the repository's historical style (some repos use long-form
   subjects like `chore: enhance setup-ai with fzf preselects`).
-- Only add a body when it explains _why_, not what.
+- Only add a body when it explains _why_, not what. Default to the subject alone:
+  a bullet list of implementation facts ("added flag X", "uses Y") restates the
+  diff and is noise. Put that material in the code or its docs instead, and add a
+  body only when the change is genuinely surprising and cannot be explained
+  anywhere cheaper.
 
 ### 4. Present the plan
 
