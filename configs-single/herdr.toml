@@ -4,9 +4,9 @@ onboarding = false
 [theme]
 # Built-in themes: catppuccin, terminal, tokyo-night, dracula, nord, gruvbox, one-dark, solarized, kanagawa, rose-pine, vesper
 name = "catppuccin"
-auto_switch = true
-dark_name = "catppuccin"
-light_name = "catppuccin-latte"
+auto_switch = false
+# dark_name = "catppuccin"
+# light_name = "catppuccin-latte"
 
 [update]
 channel = "stable"
@@ -30,3 +30,4 @@ show_agent_labels_on_pane_borders = true
 # Accent color for highlights, borders, and navigation UI.
 # Accepts: hex (#89b4fa), named colors (cyan, blue, magenta), or rgb(r,g,b)
 accent = "magenta"
+status_indicators = "dots"

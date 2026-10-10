@@ -75,7 +75,7 @@ tcpdump-pcap() {
     local max_files="${4:-5}"      # Default: 5 rotated files
 
     # Validate interface
-    if ! ip link show "$interface" &>/dev/null; then
+    if [[ "$interface" != "any" ]] && ! ip link show "$interface" &>/dev/null; then
         echo "Error: Interface '$interface' not found." >&2
         return 1
     fi
@@ -103,7 +103,13 @@ tcpdump-pcap() {
             -q \
             -tttt \
             --immediate-mode \
-            --buffer-size=1000000
+            --buffer-size=1000000 ||
+      {
+        echo "Error: nothing captured!";
+        echo "  If because of root right, perform:";
+        echo "  \`sudo setcap cap_net_raw=eip $(which tcpdump)\`";
+        return 1;
+      }
 
     echo "Capturing on $interface -> $output_file (max $max_size_mb MB, $max_files files)"
 }
