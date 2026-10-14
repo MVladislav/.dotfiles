@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+# Shared helpers for the sessionizer-* scripts. Sourced, never executed.
+#
+# Which folders are searched comes from $SESSION_WORKSPACES, the first argument,
+# or $HOME. Globs are allowed, so nested layouts work:
+#
+#   export SESSION_WORKSPACES=(
+#     "$HOME/projects/dev/"
+#     "$HOME/projects/dev/0-development/*/*"
+#     "$HOME/projects/dev/1-logseq/"
+#   )
+#
+# Clipboard order: wl-copy, pbcopy, xclip/xsel, termux, OSC 52, stdout.
+# OSC 52 is what makes it work on a headless server: the text goes to the
+# clipboard of the terminal you are connected from, over ssh or inside tmux.
+
+SESSIONIZER_TARGET=
+export SESSIONIZER_TARGET
+
+sessionizer_die() {
+  printf 'error: %s\n' "$*" >&2
+  exit 1
+}
+
+# Fill SESSIONIZER_TARGET with the picked folder, 1 when nothing was picked
+sessionizer_target() {
+  local -a patterns=() roots=() missing=() list=()
+  local pattern path dir selected
+
+  if [[ -n ${1:-} ]]; then
+    patterns=("$1")
+  elif [[ -n ${SESSION_WORKSPACES:-} ]]; then
+    patterns=("${SESSION_WORKSPACES[@]}")
+  else
+    patterns=("$HOME")
+  fi
+
+  # not mounted, mistyped or an empty glob: report it and carry on with the rest
+  for pattern in "${patterns[@]}"; do
+    for path in $pattern; do # shellcheck disable=SC2086 # unquoted on purpose: expands globs
+      if [[ -d $path ]]; then
+        roots+=("$path")
+      else
+        missing+=("$path")
+      fi
+    done
+  done
+
+  [[ ${#missing[@]} -gt 0 ]] && printf 'skipping missing path(s): %s\n' "${missing[*]}" >&2
+
+  for path in "${roots[@]}"; do
+    while IFS= read -r -d '' dir; do
+      list+=("$dir")
+    done < <(find "$path" -mindepth 1 -maxdepth 1 ! -name '.*' \( -type d -o -xtype d \) -print0 2>/dev/null)
+  done
+
+  [[ ${#list[@]} -gt 0 ]] || sessionizer_die "no project folder found, nothing matched: ${patterns[*]}"
+
+  selected=$(printf '%s\n' "${list[@]}" | sort | fzf \
+    --prompt='projects> ' \
+    --layout=reverse \
+    --border=rounded \
+    --height="${SESSIONIZER_HEIGHT:-40}") || return 1
+
+  SESSIONIZER_TARGET=$selected
+}
+
+# OSC 52, base64 encoded, DCS wrapped when inside tmux
+sessionizer_osc52() {
+  local b64
+  [[ -t 1 ]] || return 1
+  command -v base64 >/dev/null 2>&1 || return 1
+  b64=$(printf '%s' "$1" | base64 | tr -d '\n') || return 1
+
+  if [[ -n ${TMUX:-} ]]; then
+    command -v tmux >/dev/null 2>&1 || return 1
+    tmux set-buffer -- "$1" >/dev/null 2>&1 || true
+    printf '\033Ptmux;\033\033]52;c;%s\007\033\134' "$b64"
+  else
+    printf '\033]52;c;%s\007' "$b64"
+  fi
+}
+
+# Copy to the first clipboard backend that takes it, 1 when none can
+sessionizer_copy() {
+  local text="$1"
+
+  if [[ -n ${WAYLAND_DISPLAY:-} ]] && command -v wl-copy >/dev/null 2>&1 &&
+    printf '%s' "$text" | wl-copy 2>/dev/null; then return 0; fi
+
+  if command -v pbcopy >/dev/null 2>&1 && printf '%s' "$text" | pbcopy 2>/dev/null; then return 0; fi
+
+  if [[ -n ${DISPLAY:-} ]]; then
+    if command -v xclip >/dev/null 2>&1 &&
+      printf '%s' "$text" | xclip -selection clipboard 2>/dev/null; then return 0; fi
+    if command -v xsel >/dev/null 2>&1 &&
+      printf '%s' "$text" | xsel --clipboard --input 2>/dev/null; then return 0; fi
+  fi
+
+  if [[ ${PREFIX:-} == *com.termux* ]] && command -v termux-clipboard-set >/dev/null 2>&1 &&
+    printf '%s' "$text" | termux-clipboard-set 2>/dev/null; then return 0; fi
+
+  sessionizer_osc52 "$text"
+}

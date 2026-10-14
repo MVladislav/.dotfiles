@@ -1,41 +1,21 @@
 #!/usr/bin/env bash
+# Pick a project folder and open it in VS Code.
 set -euo pipefail
 
-# Ensure required dependencies are available
+# shellcheck disable=SC1091
+source "$(dirname -- "$(readlink -f "$0")")/_sessionizer-common"
+# shellcheck disable=SC1091 # optional, only present on some machines
+[[ -r $HOME/.profile-secrets ]] && source "$HOME/.profile-secrets"
+
 command -v fzf >/dev/null 2>&1 || {
-  echo "fzf is not installed. Please install it and try again."
+  echo "fzf is not installed. Please install it and try again." >&2
   exit 1
 }
 command -v code >/dev/null 2>&1 || {
-  echo "code is not installed. Please install it and try again."
+  echo "code is not installed. Please install it and try again." >&2
   exit 1
 }
 
-# shellcheck disable=SC1091
-source "$HOME/.profile-secrets"
+sessionizer_target "${1:-}" || exit 0
 
-if [[ $# -eq 1 ]]; then
-  SESSION_WORKSPACES=("$1")
-elif [[ -z ${SESSION_WORKSPACES+x} || ! "$(declare -p SESSION_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
-  SESSION_WORKSPACES=("$HOME")
-fi
-
-SESSION_WORKSPACES_EXPAND=()
-for pattern in "${SESSION_WORKSPACES[@]}"; do
-  for path in $pattern; do
-    [[ -d $path ]] && SESSION_WORKSPACES_EXPAND+=("$path")
-  done
-done
-
-selected=$(
-  find \
-    "${SESSION_WORKSPACES_EXPAND[@]}" \
-    -mindepth 1 -maxdepth 1 -type d | fzf
-)
-
-if [[ -z $selected ]]; then
-  echo "No selection made. Exiting."
-  exit 0
-fi
-
-code -n "$selected"
+exec code -n "$SESSIONIZER_TARGET"

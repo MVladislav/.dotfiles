@@ -1,50 +1,30 @@
 #!/usr/bin/env bash
+# Pick a project folder and open it in tmux, named after the folder.
 set -euo pipefail
 
-# Ensure required dependencies are available
+# shellcheck disable=SC1091
+source "$(dirname -- "$(readlink -f "$0")")/_sessionizer-common"
+# shellcheck disable=SC1091 # optional, only present on some machines
+[[ -r $HOME/.profile-secrets ]] && source "$HOME/.profile-secrets"
+
 command -v fzf >/dev/null 2>&1 || {
-  echo "fzf is not installed. Please install it and try again."
+  echo "fzf is not installed. Please install it and try again." >&2
   exit 1
 }
 command -v tmux >/dev/null 2>&1 || {
-  echo "tmux is not installed. Please install it and try again."
+  echo "tmux is not installed. Please install it and try again." >&2
   exit 1
 }
 
-# shellcheck disable=SC1091
-source "$HOME/.profile-secrets"
+sessionizer_target "${1:-}" || exit 0
+name=$(basename -- "$SESSIONIZER_TARGET" | tr ' ./' '__')
 
-if [[ $# -eq 1 ]]; then
-  SESSION_WORKSPACES=("$1")
-elif [[ -z ${SESSION_WORKSPACES+x} || ! "$(declare -p SESSION_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
-  SESSION_WORKSPACES=("$HOME")
+if [[ -n ${TMUX:-} ]]; then
+  if tmux list-windows -F '#{window_name}' 2>/dev/null | grep -qxF -- "$name"; then
+    exec tmux select-window -t ":$name"
+  fi
+  exec tmux new-window -n "$name" -c "$SESSIONIZER_TARGET"
 fi
 
-SESSION_WORKSPACES_EXPAND=()
-for pattern in "${SESSION_WORKSPACES[@]}"; do
-  for path in $pattern; do
-    [[ -d $path ]] && SESSION_WORKSPACES_EXPAND+=("$path")
-  done
-done
-
-selected=$(
-  find \
-    "${SESSION_WORKSPACES_EXPAND[@]}" \
-    -mindepth 1 -maxdepth 1 -type d | fzf
-)
-
-if [[ -z $selected ]]; then
-  echo "No selection made. Exiting."
-  exit 0
-fi
-
-selected_name=$(basename "$selected" | tr . _)
-tmux_running=$(pgrep tmux)
-
-if [[ -z $TMUX ]] && [[ -z $tmux_running ]]; then
-  tmux new-session -s "$selected_name" -c "$selected"
-  # tmux attach-session -t $selected_name
-  exit 0
-fi
-
-tmux new-window -n "$selected_name" -c "$selected"
+# outside tmux: create the session, or attach to it when it is already there
+exec tmux new-session -A -s "$name" -c "$SESSIONIZER_TARGET"

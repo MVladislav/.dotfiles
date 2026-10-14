@@ -1,52 +1,18 @@
 #!/usr/bin/env bash
+# Pick a project folder and get a ready to paste "cd <path>" command.
 set -euo pipefail
 
-# Ensure required dependencies are available
+# shellcheck disable=SC1091
+source "$(dirname -- "$(readlink -f "$0")")/_sessionizer-common"
+# shellcheck disable=SC1091 # optional, only present on some machines
+[[ -r $HOME/.profile-secrets ]] && source "$HOME/.profile-secrets"
+
 command -v fzf >/dev/null 2>&1 || {
-  echo "fzf is not installed. Please install it and try again."
+  echo "fzf is not installed. Please install it and try again." >&2
   exit 1
 }
 
-# shellcheck disable=SC1091
-source "$HOME/.profile-secrets"
-
-if [[ $# -eq 1 ]]; then
-  SESSION_WORKSPACES=("$1")
-elif [[ -z ${SESSION_WORKSPACES+x} || ! "$(declare -p SESSION_WORKSPACES 2>/dev/null)" =~ "declare -a" ]]; then
-  SESSION_WORKSPACES=("$HOME")
-fi
-
-SESSION_WORKSPACES_EXPAND=()
-for pattern in "${SESSION_WORKSPACES[@]}"; do
-  for path in $pattern; do
-    [[ -d $path ]] && SESSION_WORKSPACES_EXPAND+=("$path")
-  done
-done
-
-selected=$(
-  find \
-    "${SESSION_WORKSPACES_EXPAND[@]}" \
-    -mindepth 1 -maxdepth 1 -type d | fzf
-)
-
-if [[ -z $selected ]]; then
-  echo "No selection made. Exiting."
-  exit 0
-fi
-
-if command -v pstree >/dev/null 2>&1; then
-  USED_TERMINAL=$(pstree -s $$ | head -n1 | awk -F '---' '{print $3}')
-  USED_SHELL=$(pstree -s $$ | head -n1 | awk -F '---' '{print $NF}' | sed 's/[-+|`].*//')
-  if [[ "${USED_TERMINAL:-}" == "ghostty" ]]; then
-    echo "Running in Ghostty [$USED_SHELL]"
-  elif [[ "${USED_TERMINAL:-}" == "gnome-terminal" ]]; then
-    echo "Running in GNOME Terminal [$USED_SHELL]"
-  elif [[ "${USED_TERMINAL:-}" == "ptyxis" ]]; then
-    echo "Running in Ptyxis [$USED_SHELL]"
-  else
-    echo "Running in: USED_TERMINAL='${USED_TERMINAL:-}' :: TERM_PROGRAM='${TERM_PROGRAM:-}' :: TERM='$TERM'"
-  fi
-fi
-
-echo "copied 'cd $selected' into clipboard"
-echo -n "cd '$selected'" | wl-copy
+sessionizer_target "${1:-}" || exit 0
+printf -v jump 'cd %q' "$SESSIONIZER_TARGET"
+sessionizer_copy "$jump" || true
+printf '%s\n' "$jump"
