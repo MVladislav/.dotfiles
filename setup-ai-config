@@ -414,6 +414,8 @@ select_opencode_lsp() {
 # the directory against what the current run wants.
 #
 # Args: <skills_dir> <prune_upstream:0|1> [upstream names to keep...]
+# Keys are the LEAF dir names the installer flattens to (step in
+# setup_opencode_skills), not the "label/[path/]name" selection strings.
 reconcile_opencode_skills() {
   local skills_dir="$1" prune_upstream="$2"
   shift 2
@@ -422,10 +424,10 @@ reconcile_opencode_skills() {
   local -A keep=() declared=()
   local name
   for name in "$@"; do
-    keep["${name#*/}"]=1
+    keep["${name##*/}"]=1
   done
   for name in ${OPENCODE_SKILL_NAMES[@]+"${OPENCODE_SKILL_NAMES[@]}"}; do
-    declared["${name#*/}"]=1
+    declared["${name##*/}"]=1
   done
 
   local manifest="$skills_dir/.managed"
@@ -489,6 +491,7 @@ setup_opencode_skills() {
   create_symlink "${PWD}/ai/SKILL-bash-script-style.md" "$skills_dir/vm-bash-script-style/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-github-repo-audit.md" "$skills_dir/vm-github-repo-audit/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-docker-stack-ops.md" "$skills_dir/vm-docker-stack-ops/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-skill-authoring.md" "$skills_dir/vm-skill-authoring/SKILL.md"
   create_symlink "${PWD}/ai/SKILL-unifi-network.md" "$skills_dir/vm-unifi-network/SKILL.md"
   create_symlink "${PWD}/ai/unifi-companion/UNIFI-API.md" "$skills_dir/vm-unifi-network/UNIFI-API.md"
   create_symlink "${PWD}/ai/unifi-companion/UNIFI-ONBOARDING.md" "$skills_dir/vm-unifi-network/UNIFI-ONBOARDING.md"
@@ -513,7 +516,7 @@ setup_opencode_skills() {
     local preview_dir
     preview_dir=$(mktemp -d)
     local sources_tsv="$preview_dir/sources.tsv"
-    local line label repo rev subdir name
+    local line label repo rev subdir name bundle_alias bundle_prefix
     for line in "${OPENCODE_SKILL_SOURCES[@]}"; do
       IFS='|' read -r label repo rev subdir <<<"$line"
       for name in "${OPENCODE_SKILL_NAMES[@]}"; do
@@ -522,10 +525,20 @@ setup_opencode_skills() {
         fi
       done
     done
-    # fzf preview: show install target + source for the current line (tsv lookup)
+    for line in ${OPENCODE_SKILL_BUNDLES[@]+"${OPENCODE_SKILL_BUNDLES[@]}"}; do
+      IFS='|' read -r bundle_alias bundle_prefix <<<"$line"
+      printf '%s\tBUNDLE\t%s\n' "$bundle_alias" "$bundle_prefix" >> "$sources_tsv"
+    done
+    # fzf preview: show install target + source for the current line (tsv lookup).
+    # Target is the flattened leaf (opencode IDs come from the leaf dir name);
+    # the source shows the full <subdir>/<path> inside the repo.
     local preview_cmd
-    preview_cmd="awk -F '\t' -v n='{}' -v d='$skills_dir' '\$1 == n { strip = \$1; sub(/^[^\/]+\//, \"\", strip); printf \"install target: %s/%s/\\nsource: %s/%s/%s\\n\", d, strip, \$2, \$3, strip; exit }' '$sources_tsv'"
+    preview_cmd="awk -F '\t' -v n='{}' -v d='$skills_dir' '\$1 == n { if (\$2 == \"BUNDLE\") { printf \"bundle: installs all selectable skills matching %s\\n\", \$3; exit } strip = \$1; sub(/^[^\/]+\//, \"\", strip); leaf = strip; sub(/^.*\//, \"\", leaf); printf \"install target: %s/%s/\\nsource: %s/%s/%s\\n\", d, leaf, \$2, \$3, strip; exit }' '$sources_tsv'"
     local fzf_list="none"
+    for line in ${OPENCODE_SKILL_BUNDLES[@]+"${OPENCODE_SKILL_BUNDLES[@]}"}; do
+      IFS='|' read -r bundle_alias bundle_prefix <<<"$line"
+      fzf_list+=$'\n'"$bundle_alias"
+    done
     for name in "${OPENCODE_SKILL_NAMES[@]}"; do
       fzf_list+=$'\n'"$name"
     done
@@ -542,7 +555,39 @@ setup_opencode_skills() {
     elif echo "$selections" | grep -qx 'none'; then
       print_notes "   🧹 Cleanup mode: removing installed skills"
     else
-      mapfile -t skills_to_install <<< "$(echo "$selections" | grep -v '^none$')"
+      local -a selected_rows=()
+      mapfile -t selected_rows <<< "$(echo "$selections" | grep -v '^none$')"
+
+      # Expand selected bundles before individual names so the bundle's source
+      # wins when two sources publish the same leaf skill ID.
+      local -A expanded_skills=()
+      local selected bundle_is_selected
+      for line in ${OPENCODE_SKILL_BUNDLES[@]+"${OPENCODE_SKILL_BUNDLES[@]}"}; do
+        IFS='|' read -r bundle_alias bundle_prefix <<<"$line"
+        bundle_is_selected=0
+        for selected in "${selected_rows[@]}"; do
+          [[ $selected == "$bundle_alias" ]] && bundle_is_selected=1
+        done
+        if [[ $bundle_is_selected == 1 ]]; then
+          for name in "${OPENCODE_SKILL_NAMES[@]}"; do
+            if [[ $name == "$bundle_prefix"* && -z "${expanded_skills[$name]:-}" ]]; then
+              skills_to_install+=("$name")
+              expanded_skills[$name]=1
+            fi
+          done
+        fi
+      done
+      for selected in "${selected_rows[@]}"; do
+        bundle_is_selected=0
+        for line in ${OPENCODE_SKILL_BUNDLES[@]+"${OPENCODE_SKILL_BUNDLES[@]}"}; do
+          IFS='|' read -r bundle_alias bundle_prefix <<<"$line"
+          [[ $selected == "$bundle_alias" ]] && bundle_is_selected=1
+        done
+        if [[ $bundle_is_selected != 1 && -z "${expanded_skills[$selected]:-}" ]]; then
+          skills_to_install+=("$selected")
+          expanded_skills[$selected]=1
+        fi
+      done
     fi
   fi
 
@@ -567,13 +612,25 @@ setup_opencode_skills() {
 
   local tmp
   tmp=$(mktemp -d)
-  local -A cloned=()
-  local name skill_label skill_name
+  local -A cloned=() installed_dest=()
+  local name skill_label skill_name dest source_skill
   for name in "${skills_to_install[@]}"; do
     skill_name="${name#*/}"
     skill_label="${name%%/*}"
     if [[ $skill_name == "$name" ]]; then
       skill_label="$first_label"
+    fi
+    # Sources may nest skills one level deeper (mattpocock: skills/engineering/
+    # tdd). opencode derives the skill ID from the leaf dir name, so install
+    # flat; two selected names with the same leaf would clobber each other.
+    dest="${skill_name##*/}"
+    if [[ ! "$dest" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+      print_notes "   ⚠️  invalid skill directory name '$dest', skipping $name"
+      continue
+    fi
+    if [[ -n "${installed_dest[$dest]:-}" ]]; then
+      print_notes "   ⚠️  duplicate skill name '$dest' ('$name' vs '${installed_dest[$dest]}'), skipping $name"
+      continue
     fi
     local repo="${source_repos[$skill_label]:-}"
     if [[ -z $repo ]]; then
@@ -594,16 +651,32 @@ setup_opencode_skills() {
       fi
     fi
     local subdir="${source_subdirs[$skill_label]:-}"
-    if [[ -d "$tmp/$skill_label/$subdir/$skill_name" ]]; then
-      mkdir -p "$skills_dir/$skill_name"
-      cp -r "$tmp/$skill_label/$subdir/$skill_name/." "$skills_dir/$skill_name/"
-      if [[ -f "$skills_dir/$skill_name/SKILL.md" ]]; then
-        print_notes "   ✅ installed skill: $skill_name <- $repo"
+    source_skill="$tmp/$skill_label/$subdir/$skill_name"
+    if [[ -f "$source_skill/SKILL.md" ]]; then
+      # Replace a previous managed copy cleanly (a bundle can switch a colliding
+      # leaf from one upstream source to another). Never overwrite a foreign
+      # directory or symlink in the user's skills dir.
+      if [[ -L "$skills_dir/$dest" ]]; then
+        print_notes "   ⚠️  skill target is a symlink, leaving it untouched: $dest"
+        continue
+      elif [[ -e "$skills_dir/$dest" ]]; then
+        if grep -qxF "$dest" "$skills_dir/.managed" 2>/dev/null; then
+          rm -rf -- "${skills_dir:?}/$dest"
+        else
+          print_notes "   ⚠️  skill target is not managed by setup-ai, leaving it untouched: $dest"
+          continue
+        fi
+      fi
+      mkdir -p "$skills_dir/$dest"
+      cp -r "$source_skill/." "$skills_dir/$dest/"
+      if [[ -f "$skills_dir/$dest/SKILL.md" ]]; then
+        installed_dest[$dest]="$name"
+        print_notes "   ✅ installed skill: $dest <- $repo/$subdir/$skill_name"
       else
-        print_notes "   ⚠️  no SKILL.md after install: $skill_name (broken skill?)"
+        print_notes "   ⚠️  no SKILL.md after install: $dest (broken skill?)"
       fi
     else
-      print_notes "   ⚠️  skill not found upstream: $name"
+      print_notes "   ⚠️  skill not found upstream or has no SKILL.md: $name"
     fi
   done
   rm -rf "$tmp"
