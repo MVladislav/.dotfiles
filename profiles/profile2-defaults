@@ -80,15 +80,12 @@ alias catt='batcat -p -P --color always'
 alias catt-b='batcat -P --color always'
 
 ### CP as RSYNC ###
-alias rsync-d='rsync --info=progress2 -az --no-o --no-g --no-perms --no-times --stats'
-alias cp-r='rsync-d -u'
-alias cp-ra='rsync-d'
-scp-r() {
-  rsync-d -u -e "ssh -T -o Compression=no -x" "$@"
-}
-scp-ra() {
-  rsync-d -e "ssh -T -o Compression=no -x" "$@"
-}
+alias rsync-d='rsync -rlt --partial -z --mkpath --info=progress2 --stats'
+SSH_OPTS='ssh -T -o BatchMode=yes -o ConnectTimeout=10 -o Compression=no'
+cp-r()   { rsync-d --ignore-times "$@"; }
+cp-ru()  { rsync-d --update "$@"; }
+scp-r()  { rsync-d --ignore-times -e "$SSH_OPTS" "$@"; }
+scp-ru() { rsync-d --update -e "$SSH_OPTS" "$@"; }
 
 ### GREP ###
 alias grep='grep --color'
