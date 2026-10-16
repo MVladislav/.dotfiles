@@ -1,6 +1,6 @@
 ---
-name: project-bootstrap
-description: Audit a project's structure, tooling, and CI setup, then propose and add missing recommended base configuration — for starting a new project, enhancing an existing one, or preparing a refactor
+name: vm-repo-setup
+description: Audit and set up the repo-local base configuration of a project - structure, docs, VCS hygiene, CI, lint/type, tests, dependencies - when starting, enhancing, or refactoring a project. For GitHub-side settings use github-repo-audit.
 license: MIT
 compatibility: opencode
 metadata:

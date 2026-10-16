@@ -1,6 +1,6 @@
 ---
-name: bash-script
-description: Write, edit, or proofread bash scripts in house style (standalone bin/ scripts and config-driven setup tools): shebang, set -euo pipefail, usage/parse_args/main flow, print helpers, quoting, error handling, validation
+name: vm-bash-script-style
+description: Write, edit, or proofread bash scripts in house dotfiles style (standalone bin/ scripts, config-driven setup tools, sourced libraries): shebang, set -euo pipefail, usage/parse_args/main flow, print helpers, quoting, error handling, validation.
 license: MIT
 compatibility: opencode
 metadata:

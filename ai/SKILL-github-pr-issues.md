@@ -1,6 +1,6 @@
 ---
-name: github
-description: Browse GitHub issues and pull requests, review PRs locally with AI, comment on or create PRs
+name: vm-github-pr-issues
+description: Work GitHub issues and pull requests day-to-day: list, read, and filter them, review a PR locally with AI, post comments or formal reviews, create branches and PRs. Use for any request to open, comment on, review, or label an issue or PR.
 license: MIT
 compatibility: opencode
 metadata:

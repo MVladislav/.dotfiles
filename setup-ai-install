@@ -10,10 +10,21 @@ set -euo pipefail
 # **********************************************************************************
 
 # SERVICE :: install opencode --------------------------------------------------
+# v2 ships on npm (@opencode/cli-linux-x64), not as a GitHub release asset: the
+# repo TAGS v2.x but only RELEASES v1.18.x, so download_github_binary can never
+# reach it. Stream the binary out of the pinned npm tarball instead.
 install_opencode() {
   print_info2 "\n🚀 OPENCODE :: install opencode..."
   print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
-  download_github_binary "$VERSION_OPENCODE_REPO" 'opencode-linux-x64\.tar\.gz'
+  local version
+  version="${VERSION_OPENCODE#v}" # npm versions carry no leading "v", the pin does
+  mkdir -p "$USER_LOCAL_PREFIX_BIN"
+  # stream the member out of the tarball: unpacking into a temp dir needs ~3x the
+  # binary in $TMPDIR, which is a small tmpfs on some hosts
+  curl -fsSL "https://registry.npmjs.org/@opencode/cli-linux-x64/-/cli-linux-x64-${version}.tgz" |
+    tar -xzO package/bin/opencode > "$USER_LOCAL_PREFIX_BIN/opencode.tmp"
+  mv "$USER_LOCAL_PREFIX_BIN/opencode.tmp" "$USER_LOCAL_PREFIX_BIN/opencode"
+  chmod +x "$USER_LOCAL_PREFIX_BIN/opencode"
   print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
   print_info2 "✅ OPENCODE :: opencode installed!"
 

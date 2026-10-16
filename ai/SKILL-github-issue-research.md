@@ -1,6 +1,6 @@
 ---
-name: github-research
-description: Research issues, PRs, or discussions against the project itself — existing issues, pull requests, discussions, code, docs, and git history — to answer requests with knowledge already available, falling back to online research when the project has no answer; writes a research report file for later use
+name: vm-github-issue-research
+description: Answer a question about an issue, PR, or discussion from evidence inside the project first (code, docs, git history, issues, PRs, discussions), falling back to online research only when the project has no answer; writes a research report file.
 license: MIT
 compatibility: opencode
 metadata:

@@ -1,6 +1,6 @@
 ---
-name: git-release
-description: Generate conventional changelog and release notes from git log and GitHub PRs between two refs
+name: vm-git-release-notes
+description: Write conventional changelog and release notes for a version range from git log plus GitHub PR data, and propose the semver bump.
 license: MIT
 compatibility: opencode
 metadata:

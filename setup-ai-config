@@ -216,20 +216,20 @@ setup_opencode() {
 
   local opencode_config
   opencode_config=$(jq -n --arg schema "https://opencode.ai/config.json" '{"$schema": $schema}')
-  opencode_config=$(echo "$opencode_config" | jq --arg timeout "3600000" '.timeout = $timeout')
+  opencode_config=$(echo "$opencode_config" | jq '.update = "notify"')
 
   echo ""
   if [[ -n "$OPENCODE_CONFIG_MCP_COMBINED" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]]; then
     opencode_config=$(echo "$opencode_config" | jq --argjson m "$OPENCODE_CONFIG_MCP_COMBINED" '.mcp = $m')
   fi
   if [[ -n "$OPENCODE_CONFIG_AGENTS_COMBINED" && "$OPENCODE_CONFIG_AGENTS_COMBINED" != "CLEANUP" ]]; then
-    opencode_config=$(echo "$opencode_config" | jq --argjson a "$OPENCODE_CONFIG_AGENTS_COMBINED" '.agent = $a')
+    opencode_config=$(echo "$opencode_config" | jq --argjson a "$OPENCODE_CONFIG_AGENTS_COMBINED" '.agents = $a')
   fi
   if [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]]; then
     opencode_config=$(echo "$opencode_config" | jq --argjson l "$OPENCODE_CONFIG_LSP_COMBINED" '.lsp = $l')
   fi
   if [[ -n "$OPENCODE_CONFIG_PROVIDER_COMBINED" && "$OPENCODE_CONFIG_PROVIDER_COMBINED" != "CLEANUP" ]]; then
-    opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_PROVIDER_COMBINED" '.provider = $p')
+    opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_PROVIDER_COMBINED" '.providers = $p')
   fi
 
   local config_file="$LN_OPENCODE/opencode.jsonc"
@@ -244,18 +244,18 @@ setup_opencode() {
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all MCP configs"
     [[ "$OPENCODE_CONFIG_AGENTS_COMBINED" == "CLEANUP" ]] &&
-      jq 'del(.agent)' "$config_file" > "${config_file}.tmp" &&
+      jq 'del(.agents, .agent)' "$config_file" > "${config_file}.tmp" &&
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all agent configs"
     [[ "$OPENCODE_CONFIG_PROVIDER_COMBINED" == "CLEANUP" ]] &&
-      jq 'del(.provider)' "$config_file" > "${config_file}.tmp" &&
+      jq 'del(.providers, .provider)' "$config_file" > "${config_file}.tmp" &&
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all provider configs"
 
     local merge_del=""
     [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_del=".lsp"
     [[ -n "$OPENCODE_CONFIG_PROVIDER_COMBINED" && "$OPENCODE_CONFIG_PROVIDER_COMBINED" != "CLEANUP" ]] &&
-      merge_del="${merge_del:+$merge_del,}.provider"
+      merge_del="${merge_del:+$merge_del,}.providers,.provider"
     local merge_filter='.[0] * .[1]'
     [[ -n "$merge_del" ]] && merge_filter=".[0] * (.[1] | del($merge_del))"
 
@@ -407,34 +407,105 @@ select_opencode_lsp() {
   return 0
 }
 
+# HELPERS :: prune skill dirs that are no longer wanted ------------------------
+# ~/.config/opencode/skills accumulates silently: a skill dropped from
+# OPENCODE_SKILL_NAMES, unselected in the fzf picker, or renamed in the symlink
+# block above leaves its directory behind and stays advertised. This reconciles
+# the directory against what the current run wants.
+#
+# Args: <skills_dir> <prune_upstream:0|1> [upstream names to keep...]
+reconcile_opencode_skills() {
+  local skills_dir="$1" prune_upstream="$2"
+  shift 2
+  [[ -d "$skills_dir" ]] || return 0
+
+  local -A keep=() declared=()
+  local name
+  for name in "$@"; do
+    keep["${name#*/}"]=1
+  done
+  for name in ${OPENCODE_SKILL_NAMES[@]+"${OPENCODE_SKILL_NAMES[@]}"}; do
+    declared["${name#*/}"]=1
+  done
+
+  local manifest="$skills_dir/.managed"
+  local dir base target removed=() foreign=()
+  for dir in "$skills_dir"/*/; do
+    [[ -d "$dir" ]] || continue
+    base="${dir%/}"
+    base="${base##*/}"
+
+    if [[ -L "$dir/SKILL.md" ]]; then
+      # -e matters: readlink -f still prints a path for a dangling link, and a
+      # rename in ai/ leaves exactly that behind
+      target="$(readlink -f "$dir/SKILL.md" 2>/dev/null || true)"
+      if [[ -e "$dir/SKILL.md" && "$target" == "$PWD/ai/"* ]]; then
+        continue # linked above: ours and current
+      fi
+      removed+=("$base") # stale own skill: link dangling or no longer created
+      continue
+    fi
+
+    [[ -n "${keep[$base]:-}" ]] && continue
+    [[ "$prune_upstream" != "1" ]] && continue # no selection ran: leave upstream alone
+    if [[ -n "${declared[$base]:-}" ]] || grep -qxF "$base" "$manifest" 2>/dev/null; then
+      removed+=("$base") # our upstream copy, no longer selected
+    else
+      foreign+=("$base")
+    fi
+  done
+
+  for base in ${removed[@]+"${removed[@]}"}; do
+    rm -rf "${skills_dir:?}/${base}"
+    print_notes "   🗑️  removed skill: $base"
+  done
+
+  # manifest = the kept upstream copies (own skills are self-identifying)
+  {
+    for base in "${!keep[@]}"; do
+      if [[ -d "$skills_dir/$base" && ! -L "$skills_dir/$base/SKILL.md" ]]; then
+        printf '%s\n' "$base"
+      fi
+    done | sort
+  } >"$manifest"
+
+  if [[ ${#foreign[@]} -gt 0 ]]; then
+    print_notes "   ℹ️  not managed by setup-ai, left alone: ${foreign[*]}"
+  fi
+}
+
 # SETUP :: opencode skills ----------------------------------------------------
 setup_opencode_skills() {
   local skills_dir="$LN_OPENCODE/skills"
+  local prune_upstream=0 # 1 = reconcile the upstream copies against the selection
 
   print_info2 "🔗 SKILLS :: linking ai/SKILL-*.md -> $skills_dir"
-  create_symlink "${PWD}/ai/SKILL-git-release.md" "$skills_dir/git-release/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-git-commit.md" "$skills_dir/git-commit/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-github.md" "$skills_dir/github/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-github-research.md" "$skills_dir/github-research/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-github-security.md" "$skills_dir/github-security/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-project-bootstrap.md" "$skills_dir/project-bootstrap/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-bash-script.md" "$skills_dir/bash-script/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-github-project-audit.md" "$skills_dir/github-project-audit/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-docker-stack-maintainer.md" "$skills_dir/docker-stack-maintainer/SKILL.md"
-  create_symlink "${PWD}/ai/SKILL-unifi.md" "$skills_dir/unifi/SKILL.md"
-  create_symlink "${PWD}/ai/unifi-companion/UNIFI-API.md" "$skills_dir/unifi/UNIFI-API.md"
-  create_symlink "${PWD}/ai/unifi-companion/UNIFI-ONBOARDING.md" "$skills_dir/unifi/UNIFI-ONBOARDING.md"
-  create_symlink "${PWD}/ai/SKILL-opnsense.md" "$skills_dir/opnsense/SKILL.md"
-  create_symlink "${PWD}/ai/opnsense-companion/API.md" "$skills_dir/opnsense/API.md"
-  create_symlink "${PWD}/ai/opnsense-companion/ONBOARDING.md" "$skills_dir/opnsense/ONBOARDING.md"
-  create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/github/GITHUB.md"
+  create_symlink "${PWD}/ai/SKILL-git-release-notes.md" "$skills_dir/vm-git-release-notes/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-git-commit.md" "$skills_dir/vm-git-commit/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-pr-issues.md" "$skills_dir/vm-github-pr-issues/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-issue-research.md" "$skills_dir/vm-github-issue-research/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-advisories.md" "$skills_dir/vm-github-advisories/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-repo-setup.md" "$skills_dir/vm-repo-setup/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-bash-script-style.md" "$skills_dir/vm-bash-script-style/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-github-repo-audit.md" "$skills_dir/vm-github-repo-audit/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-docker-stack-ops.md" "$skills_dir/vm-docker-stack-ops/SKILL.md"
+  create_symlink "${PWD}/ai/SKILL-unifi-network.md" "$skills_dir/vm-unifi-network/SKILL.md"
+  create_symlink "${PWD}/ai/unifi-companion/UNIFI-API.md" "$skills_dir/vm-unifi-network/UNIFI-API.md"
+  create_symlink "${PWD}/ai/unifi-companion/UNIFI-ONBOARDING.md" "$skills_dir/vm-unifi-network/UNIFI-ONBOARDING.md"
+  create_symlink "${PWD}/ai/SKILL-opnsense-firewall.md" "$skills_dir/vm-opnsense-firewall/SKILL.md"
+  create_symlink "${PWD}/ai/opnsense-companion/API.md" "$skills_dir/vm-opnsense-firewall/API.md"
+  create_symlink "${PWD}/ai/opnsense-companion/ONBOARDING.md" "$skills_dir/vm-opnsense-firewall/ONBOARDING.md"
+  create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/vm-github-pr-issues/GITHUB.md"
+
 
   local skills_to_install=()
   if [[ ${#OPENCODE_SKILL_NAMES[@]} -eq 0 ]]; then
     print_notes "   ⏭️  No upstream skills available, fetch skipped"
+    prune_upstream=1 # nothing wanted upstream -> drop whatever we installed before
   elif ! command -v fzf >/dev/null 2>&1; then
     print_notes "   ⚠️  fzf not found, upstream skills fetch skipped"
   else
+    prune_upstream=1
     local first_label="${OPENCODE_SKILL_SOURCES[0]%%|*}"
 
     # name -> "repo subdir" lookup table for the fzf preview. A plain name maps
@@ -470,13 +541,6 @@ setup_opencode_skills() {
       :
     elif echo "$selections" | grep -qx 'none'; then
       print_notes "   🧹 Cleanup mode: removing installed skills"
-      for name in "${OPENCODE_SKILL_NAMES[@]}"; do
-        local dir_name="${name#*/}"
-        if [[ -d "$skills_dir/$dir_name" ]]; then
-          rm -rf "${skills_dir:?}/$dir_name"
-          print_notes "   🗑️  removed skill: $dir_name"
-        fi
-      done
     else
       mapfile -t skills_to_install <<< "$(echo "$selections" | grep -v '^none$')"
     fi
@@ -484,6 +548,7 @@ setup_opencode_skills() {
 
   if [[ ${#skills_to_install[@]} -eq 0 ]]; then
     print_notes "   ⏭️  No skills selected, fetch skipped"
+    reconcile_opencode_skills "$skills_dir" "$prune_upstream"
     print_info2 "✅ SKILLS :: skills ready."
     return 0
   fi
@@ -542,6 +607,8 @@ setup_opencode_skills() {
     fi
   done
   rm -rf "$tmp"
+
+  reconcile_opencode_skills "$skills_dir" "$prune_upstream" "${skills_to_install[@]}"
 
   print_info2 "✅ SKILLS :: skills ready."
 }
@@ -1199,7 +1266,7 @@ llamacpp_generate_opencode_provider() {
       --argjson reasoning "$reasoning" --argjson ctx "$ctx" --arg url "$base" \
       --argjson auth "$auth" \
       '{"llama.cpp":{"npm":"@ai-sdk/openai-compatible","name":"llama-server (local)",
-        "options":({baseURL:$url} + $auth),
+        "options":({baseURL:$url, timeout:3600000} + $auth),
         "models":{($id):{"name":$name,"reasoning":$reasoning,
           "limit":{"context":$ctx,"output":$ctx}}}}}')
     return 0
@@ -1229,5 +1296,5 @@ llamacpp_generate_opencode_provider() {
   OPENCODE_CONFIG_PROVIDER_LLAMACPP=$(jq -nc \
     --argjson models "$models" --arg url "$base" \
     '{"llama.cpp":{"npm":"@ai-sdk/openai-compatible","name":"llama-server (local, router)",
-      "options":{"baseURL":$url},"models":$models}}')
+      "options":{"baseURL":$url,"timeout":3600000},"models":$models}}')
 }

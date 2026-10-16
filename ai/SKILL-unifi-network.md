@@ -1,10 +1,11 @@
 ---
-name: unifi
-description: Inspect UniFi OS Network configuration via the Network Integration API (sites, devices, clients, networks, firewall, wifi, vpn) using an API key; read-only by discipline
+name: vm-unifi-network
+description: Read the UniFi OS Network configuration over the Network Integration API (sites, devices, clients, networks, firewall, wifi, VPN) with an API key; read-only, changes are only ever recommended, never applied.
 license: MIT
 compatibility: opencode
 metadata:
   audience: network-admins
+  opencode/autoinvoke: "false"
   workflow: unifi
 ---
 

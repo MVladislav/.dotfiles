@@ -1,5 +1,5 @@
 ---
-name: git-commit
+name: vm-git-commit
 description: Split working-tree changes into topic-related commits and write conventional commit messages, presented as step-by-step commands for manual execution
 license: MIT
 compatibility: opencode

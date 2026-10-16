@@ -1,6 +1,6 @@
 ---
-name: github-security
-description: Handle GitHub security advisories end-to-end — triage and verify each report against the actual code, fix with one commit per advisory, and manage the advisory record (CVSS, summary, body, versions, state, publication)
+name: vm-github-advisories
+description: Triage and fix GitHub security advisories (GHSA) end-to-end: verify each report against the code at HEAD, fix confirmed ones with one commit each plus regression tests, and manage the advisory record (CVSS, summary, body, versions, state, publication).
 license: MIT
 compatibility: opencode
 metadata:

@@ -1,10 +1,11 @@
 ---
-name: opnsense
-description: Read-only OPNsense firewall configuration via its REST API (firewall, interfaces, NAT, DHCP, VPN, routing, system) using an API key/secret pair
+name: vm-opnsense-firewall
+description: Read the OPNsense firewall configuration over its REST API (rules, interfaces, NAT, DHCP, VPN, routing, system) with an API key/secret pair; read-only, changes are only ever recommended, never applied.
 license: MIT
 compatibility: opencode
 metadata:
   audience: network-admins
+  opencode/autoinvoke: "false"
   workflow: opnsense
 ---
 

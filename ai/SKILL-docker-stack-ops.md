@@ -1,10 +1,11 @@
 ---
-name: docker-stack-maintainer
-description: Maintain a Traefik-fronted Docker Compose/Swarm stack collection — prove and bump versions from registry tags and release notes, align stacks against the template anchors, keep image pins Renovate-trackable, harden config, run the repository gates, prepare conventional commits
+name: vm-docker-stack-ops
+description: Operate a Traefik-fronted Docker Compose/Swarm stack collection: prove and bump image versions from registry tags and release notes, align stacks with the __template__ anchors, keep pins Renovate-trackable, harden config, run the repo gates, prepare commits.
 license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
+  opencode/autoinvoke: "false"
   workflow: infrastructure
 ---
 
@@ -470,5 +471,5 @@ duplicate it here. Verify with a command rather than trusting this list.
 Use when maintaining an existing Compose/Swarm stack collection: bumping a
 service version, adding or aligning a stack against the template, hardening a
 stack, running the validation gates, or doing a cleanup pass. Pair with
-`git-commit` for the commit plan and `github`/`github-research` when an
-issue/PR needs evidence.
+`vm-git-commit` for the commit plan and `vm-github-pr-issues`/`vm-github-issue-research`
+when an issue/PR needs evidence.

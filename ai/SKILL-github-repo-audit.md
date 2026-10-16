@@ -1,6 +1,6 @@
 ---
-name: github-project-audit
-description: Audit and verify a repository's GitHub helper setup (Renovate, Codecov, pre-commit, CI workflows and their security, labels, templates, branch protection); then produce a detailed improvement markdown with how/what/where and machine-checkable evidence
+name: vm-github-repo-audit
+description: Audit the GitHub-side setup of a repository - Renovate, Codecov, pre-commit, CI workflows and their security, labels, templates, branch protection - and produce an improvement report with evidence. For repo-local config use repo-setup.
 license: MIT
 compatibility: opencode
 metadata:
@@ -30,9 +30,10 @@ protection/rulesets, labels and releases — use a read-only PAT that includes
 `contents`/`issues`/`pull_requests` reads documented in `GITHUB.md`.
 
 Scope note: this skill audits the **GitHub-side** helper setup and is
-complementary to the `project-bootstrap` skill, which covers the **repository
-side** (structure, tooling, CI config files, quality gates). Run `github-project-audit`
-when you want the GitHub view, `project-bootstrap` when you want the repo-local view.
+complementary to the `vm-repo-setup` skill, which covers the **repository
+side** (structure, tooling, CI config files, quality gates). Run
+`vm-github-repo-audit` when you want the GitHub view, `vm-repo-setup` when you want
+the repo-local view.
 
 ## Step-by-step
 

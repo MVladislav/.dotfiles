@@ -65,7 +65,7 @@ RUN_SETUP_FILEBROWSER=0
 RUN_SETUP_LLAMACPP=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_OPENCODE=v1.18.35
+VERSION_OPENCODE=v2.0.31
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
 VERSION_HERDR=v0.9.3
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
@@ -222,7 +222,10 @@ parse_args() {
       RUN_SETUP_HERDR=0
       RUN_SETUP_LLAMACPP=0
       echo
-      check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE" "^v[0-9]" "releases"
+      # opencode v2 is TAGGED but not RELEASED on GitHub (releases/latest is
+      # still v1.19.x), so the update check must read tags or it always offers
+      # a v1 downgrade. The npm tarball is what install_opencode actually pulls.
+      check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE" "^v[0-9]" "tags"
       check_for_newer_tag "$VERSION_HERDR_REPO" "$VERSION_HERDR" "" "releases"
       check_for_newer_tag "$VERSION_GH_REPO" "$VERSION_GH" "^v[0-9]" "releases"
       check_for_newer_tag "$VERSION_FILEBROWSER_REPO" "$VERSION_FILEBROWSER" "stable$" "releases"
