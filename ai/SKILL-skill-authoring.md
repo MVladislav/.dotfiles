@@ -1,34 +1,49 @@
 ---
 name: vm-skill-authoring
-description: Add, rename, retire, or externally source a skill in this dotfiles repo - the wiring steps (ai/SKILL-*.md, setup-ai-config symlink, .gitignore allowlist), naming and description conventions, shared companion docs, the external-repo skill fetch and prune logic, and the sibling MCP/agent/LSP/provider pickers a skill often also needs.
+description: Create, improve, or retire portable agent skills and connect them to the active project's discovery mechanism. Use when authoring skills; keep reusable guidance generic and clearly scope project-specific integration details.
 license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
-  opencode/autoinvoke: "false"
+  opencode/autoinvoke: false
   workflow: development
 ---
 
 ## What I do
 
-Turn "I want a skill that does X" into a skill that is **wired, tracked, and
-discoverable** in this repo, and tell you honestly when the request is better
-served by a script or an agent instead.
+Turn "I want a skill that does X" into reusable guidance that is **wired,
+tracked, and discoverable** in the active environment, and tell you honestly
+when the request is better served by a script or an agent instead.
 
-A `SKILL.md` on disk is not a skill. It becomes one only when three more things
-are true: it is symlinked into `~/.config/opencode/skills/<id>/`, it is
-allow-listed in `.gitignore` (the `ai/` tree is ignored wholesale), and its
-`name:` matches the id you will type. Miss any one and you get a skill that
-appears to work locally and vanishes later - the exact failure this skill exists
-to prevent.
+A `SKILL.md` on disk is not necessarily discoverable. Verify how the active
+skill host loads and identifies skills. OpenCode V2 derives the skill ID from
+the file path; frontmatter `name` is only a display label. In this dotfiles
+repository, local skills must also be linked into OpenCode's skills directory
+and allow-listed in `.gitignore`.
+
+## Portability
+
+- Keep the skill's main procedure usable in a different project. Derive paths,
+  tools, permissions, and conventions from the active repository instead of
+  assuming the current dotfiles layout.
+- Preserve useful local expertise in a clearly labeled project-specific section
+  or companion reference. State when those details apply rather than removing
+  them or making them look universal.
+- Use placeholders for example paths and values that vary by project. Keep
+  examples that depend on this dotfiles repository under the local integration
+  section below.
+- Use the ASCII hyphen-minus (`-`) for dash punctuation in skill prose and
+  examples. Avoid typographic em and en dashes.
 
 ---
 
 ## Step-by-step
 
-### 1. Pick the id - the name you will type
+### 1. Pick the id - the path you will use
 
-- Lowercase kebab-case, `^[a-z0-9]+(-[a-z0-9]+)*$`, 1-64 chars.
+- OpenCode V2 derives the exact, case-sensitive ID from the skill path. Use
+  lowercase kebab-case, `^[a-z0-9]+(-[a-z0-9]+)*$`, 1-64 characters as a
+  portability convention; V2 does not enforce that pattern or length.
 - `vm-` prefix for skills this repo owns. Upstream-fetched skills keep their
   upstream name (`code-review`, `gh-review-requests`) because their directory
   comes from the fetch, not from us.
@@ -36,8 +51,10 @@ to prevent.
   `vm-git-commit`, `vm-repo-setup`, `vm-docker-stack-ops` - good;
   `vm-github`, `vm-skills`, `vm-vm` - bad, they collide with siblings and tell
   you nothing at the `@` picker.
-- The id must be **identical** in four places (steps 2-4). One character off and
-  opencode silently drops the skill from its list.
+- For repository-owned skills, keep the source filename `SKILL-<id>.md`,
+  installed directory `<id>`, and ignore exception aligned. This repository
+  conventionally sets frontmatter `name` to the same text for clarity, but V2
+  treats `name` as a display label and does not require it to equal the ID.
 
 ### 2. Write the file - `ai/SKILL-<id>.md`
 
@@ -45,20 +62,20 @@ Frontmatter contract (opencode v2, `~/.config/opencode/skills/<id>/SKILL.md`):
 
 ```yaml
 ---
-name: vm-skill-authoring # MUST equal <id>
+name: vm-skill-authoring # Display label; the path determines the ID
 description: <what it does> + <when to reach for it>
 license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers # free-form, our own convention
   workflow: development
-  opencode/autoinvoke: "false" # only for niche skills (see step 6)
+  opencode/autoinvoke: false # only for niche skills (see step 6)
 ---
 ```
 
-**The description is the only part always loaded** (~15 lines of context per
-skill, every session), and it is what the model matches against to pick the
-skill. Write it as one sentence of _what_ plus one of _when_:
+The description is the discovery summary shown to the model; the skill body is
+added only when the skill is loaded. Write it as one sentence of _what_ plus
+one of _when_:
 
 > `Write conventional changelog and release notes for a version range from git
 log plus GitHub PR data, and propose the semver bump.`
@@ -78,11 +95,26 @@ Rules of thumb, from the renames done in this repo:
   anything past ~350 belongs in the body.
 - The v1 `metadata.opencode/slash` key does nothing in v2 and was removed. Do not
   re-add it.
+- In OpenCode V2, `name` is a display label, not the skill ID. Use
+  `metadata.opencode/autoinvoke: false` as a YAML boolean to hide a skill from
+  automatic discovery while keeping it explicitly loadable. The alternative
+  `disable-model-invocation: true` is also supported; if both are set, the
+  metadata value takes precedence.
 
 Body shape that matches the other skills here: `## What I do` (a paragraph),
 `## Step-by-step` (numbered, each step with the exact commands), `## Constraints`
 (the never-do list). Add a `## When to use me` only when a skill is likely to be
 invoked in the wrong context.
+
+## This repository's OpenCode integration
+
+The remaining wiring and runtime details apply to this dotfiles repository.
+For another project, inspect its own skill host, source directory, ignore rules,
+and setup mechanism before applying these steps.
+
+OpenCode derives the ID from the installed path, such as
+`<source>/<id>/SKILL.md`. This repository uses `name: <id>` as a convention for
+readability, not as a discovery requirement.
 
 ### 3. Wire it - `setup-ai-config`, `setup_opencode_skills()`
 
@@ -113,14 +145,19 @@ ignored until you add its line:
 !ai/SKILL-<id>.md
 ```
 
-Prove it rather than assume it:
+Prove it rather than assume it. For a new, untracked path, use the quiet check
+to distinguish an ignored path from one allowed by a `!` exception:
 
 ```bash
-git check-ignore -v ai/SKILL-<id>.md   # no output = tracked correctly
+git check-ignore -q ai/SKILL-<id>.md   # exit 0 = ignored; exit 1 = not ignored
+git status --short -- ai/SKILL-<id>.md # confirms tracked, staged, or untracked state
 ```
 
-If it prints a rule, the file is ignored and will disappear on the next clone.
-This is the single most common way a new skill gets lost here.
+`git check-ignore -v` can print a matching negated rule (beginning with `!`)
+for an allowed untracked path, so output alone does not mean the file is ignored.
+Tracked files are normally omitted by `check-ignore`; use `git status` to confirm
+their VCS state. A positive matching rule means the new skill is ignored and
+will be missing from the next clone.
 
 ### 5. Verify it is live
 
@@ -194,8 +231,10 @@ says "do NOT turn this into a data file". Consequences for editing it:
 
 ### 7. Retiring or renaming a skill
 
-Renaming = change the file name, the frontmatter `name:`, the symlink line and
-the allow-list line. The old directory is **not** your problem:
+Changing a path-derived ID means updating the source filename, installed skill
+directory/symlink, allow-list line, and references to the old ID. Update
+frontmatter `name:` only if the display label should also change. The old
+directory is **not** your problem:
 `reconcile_opencode_skills()` in `setup-ai-config` deletes it on the next
 `setup-ai -soc`, because its `SKILL.md` is then a dangling symlink.
 
@@ -407,8 +446,9 @@ Two behaviours worth knowing before you touch any of these:
 
 ## Constraints
 
-- Never leave out the `.gitignore` allow-list line; verify with
-  `git check-ignore -v` before declaring the skill done.
+- Never leave out the `.gitignore` allow-list line; verify the ignore status
+  with `git check-ignore -q` and the VCS state with `git status` before declaring
+  the skill done.
 - Never edit `ai/setup-ai-opencode.conf` with a data-file mindset: it is
   `source`d by `setup-ai`, so it must stay valid bash with quoted JSON blobs,
   and it must be linted with `shellcheck -x setup-ai`.
@@ -417,8 +457,9 @@ Two behaviours worth knowing before you touch any of these:
   provider. Fix the input (the conf, the picker choice) and re-run.
 - Never add an MCP snippet without the `"servers"` wrapper - v2 nests servers
   under `mcp.servers`, while agent and provider snippets stay flat.
-- Never let the frontmatter `name:` and the directory name diverge - opencode
-  then advertises a skill it cannot load by that id.
+- Keep the path-derived ID stable and unique. Frontmatter `name:` is a display
+  label; matching it to the ID is this repository's convention, not a V2
+  requirement.
 - Never hand-edit `~/.config/opencode/opencode.jsonc`; it is generated.
 - Never add `metadata.opencode/slash` (no-op in v2) or `enabled` to an agent
   (v2 files it under an internal request body).

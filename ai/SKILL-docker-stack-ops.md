@@ -5,7 +5,7 @@ license: MIT
 compatibility: opencode
 metadata:
   audience: maintainers
-  opencode/autoinvoke: "false"
+  opencode/autoinvoke: false
   workflow: infrastructure
 ---
 

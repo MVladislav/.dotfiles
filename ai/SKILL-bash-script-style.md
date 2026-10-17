@@ -1,6 +1,6 @@
 ---
 name: vm-bash-script-style
-description: Write, edit, or proofread bash scripts in house dotfiles style (standalone bin/ scripts, config-driven setup tools, sourced libraries): shebang, set -euo pipefail, usage/parse_args/main flow, print helpers, quoting, error handling, validation.
+description: Write, edit, or proofread Bash scripts in this dotfiles repo using its standalone, setup, and sourced-helper styles; for other projects, follow their local conventions unless this style is requested.
 license: MIT
 compatibility: opencode
 metadata:
@@ -10,22 +10,34 @@ metadata:
 
 ## What I do
 
-When asked to write, edit/improve, or proofread a bash script in any
-project, follow the house dotfiles style so the result matches the rest
-of the user's scripts. Three script shapes exist — pick the right one:
+When asked to write, edit, improve, or proofread a Bash script in this
+dotfiles repository, follow the house style below. In other projects,
+inspect and follow that repository's conventions unless the user asks for
+this style. Three script shapes exist - pick the right one:
 
-- **Standalone script** (`bin/` family) — a single self-contained tool
-  with plain `echo` output and inline dependency checks. Canonical:
-  `bin/md2pdf`, `bin/sessionizer-tmux`, `bin/vm-diff-gsettings`.
-- **Config-driven tool** (`setup-ai` family) — install/config tooling
+- **Standalone script** (`bin/` family) - a self-contained tool with plain
+  `echo` output and inline dependency checks. Canonical examples:
+  `bin/vm-git-sync`, `bin/sessionizer-tmux`, `bin/vm-diff-gsettings`.
+- **Config-driven tool** (`setup-ai` family) - install/config tooling
   with toggle flags, version pins, colored print helpers and fzf
   selection. Canonical: `setup-ai` + `setup-helper`.
-- **Sourced library** (`setup-helper` style) — functions only, sourced
-  by entry scripts; uses `return` (never `exit`) and includes the ERR trap.
+- **Sourced helper** (`setup-helper` style) - shared functions plus minimal,
+  intentional source-time initialization, sourced by entry scripts; it has no
+  standalone entry point and returns recoverable failures to its caller.
 
 The skill also applies when **proofreading**: review an existing script
 against the quoting, error-handling, and validation rules below and
 report deviations (as a list, not by silently rewriting).
+
+### Where code belongs in this repository
+
+- `profiles/` is sourced during shell startup. Keep it to environment setup,
+  aliases, and shell functions that are useful interactively; avoid expensive
+  work or commands that provision the machine at source time.
+- Put substantial standalone workflows and commands with their own usage,
+  dependencies, or operational side effects in `bin/`.
+- Put shared setup/install helpers in `setup-helper`; keep the device setup
+  entry point in `setup` and AI-workstation setup in `setup-ai`.
 
 ## Step-by-step
 
@@ -42,7 +54,7 @@ script", default to **standalone**.
 
 ### 2. Write the preamble
 
-**Standalone** (`bin/` family) — minimal, optional fixed `PATH`, optional
+**Standalone** (`bin/` family) - minimal, optional fixed `PATH`, optional
 traps:
 
 ```bash
@@ -55,7 +67,7 @@ trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >
 trap cleanup EXIT INT TERM
 ```
 
-**Config-driven** (`setup-ai` family) — `PATH` also includes the
+**Config-driven** (`setup-ai` family) - `PATH` also includes the
 `~/.local/bin` user prefix:
 
 ```bash
@@ -64,9 +76,10 @@ PATH="/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/:$HOME/.local/bi
 set -euo pipefail
 ```
 
-**Sourced library** — shebang + `set -euo pipefail` + colored ERR trap,
-no `PATH` (the sourcing script owns the environment), no `main()`,
-`return` not `exit`:
+**Sourced helper** - no `main()` or entry-point execution. Source-time
+initialization is limited to intentional shared state, such as constants,
+PATH, shell options, and traps; remember that it changes the caller's
+environment. Recoverable function failures use `return`, not `exit`:
 
 ```bash
 #!/usr/bin/env bash
@@ -76,7 +89,7 @@ trap 'echo -e "${BRED}ERROR: Unexpected error on line $LINENO (command: $BASH_CO
 
 ### 3. Structure the body
 
-**Standalone** (from `bin/md2pdf`) — section banners with `***`:
+**Standalone** (for example, `bin/vm-git-sync`) - section banners with `***`:
 
 ```
 # *** Main Flow ***              main() { validate_environment; prepare_*; build_*; echo "tool: OK in -> out"; }
@@ -86,7 +99,7 @@ trap 'echo -e "${BRED}ERROR: Unexpected error on line $LINENO (command: $BASH_CO
 # *** Entrypoint ***             parse_args "$@"; main
 ```
 
-**Config-driven** (from `setup-ai`) — category-prefixed headers + a
+**Config-driven** (from `setup-ai`) - category-prefixed headers + a
 `CONFIG ::` block:
 
 ```
@@ -118,8 +131,8 @@ indent, and confirm `.editorconfig` is honoured if present.
 
 ### Standalone script style (`bin/` family)
 
-- Plain `echo` output — no colors, no emoji. Optionally prefixed with
-  the tool name: `md2pdf: OK $INPUT_MD -> $OUTPUT_PDF`.
+- Plain `echo` output - no colors, no emoji. Optionally prefix output with
+  the tool name: `vm-git-sync: OK $FROM_REPO -> $TO_REPO`.
 - Errors to stderr via a single helper:
 
   ```bash
@@ -146,7 +159,7 @@ indent, and confirm `.editorconfig` is honoured if present.
 
   ```bash
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  ASSET_DIR="${SCRIPT_DIR}/md2pdf.d"
+  ASSET_DIR="${SCRIPT_DIR}/assets"
   ```
 
 - Build command arrays and run them as one word-split array:
@@ -170,7 +183,7 @@ indent, and confirm `.editorconfig` is honoured if present.
 | Config/toggle flags             | `UPPER_SNAKE_CASE`                          | `RUN_INSTALL_OPENCODE=0`, `VERSION_GH=v2.97.0`           |
 | Globals (standalone)            | `UPPER_SNAKE_CASE`                          | `OUTPUT_DIR`, `TMP_DEFAULTS`                             |
 | Paths (env-overridable)         | `UPPER_SNAKE_CASE` with `${VAR:-"default"}` | `LN_OPENCODE="${LN_OPENCODE:-"$HOME/.config/opencode"}"` |
-| Output binary / script filename | `lowercase-hyphen` (no underscores)         | `setup-ai`, `md2pdf`, `sessionizer-tmux`                 |
+| Output binary / script filename | `lowercase-hyphen` (no underscores)         | `setup-ai`, `vm-git-sync`, `sessionizer-tmux`            |
 
 ### Comments and section dividers
 
@@ -216,7 +229,7 @@ fzf_pick() {
 
 - **Always double-quote variable expansions**: `"$1"`, `"$var"`, `"${arr[@]}"`, `"${var:-default}"`.
 - **Single quotes** for literal strings: `'config:recommended'`, regex patterns.
-- Redirects: `command -v foo >/dev/null 2>&1`, `1>/dev/null` (not `>/dev/null 2>&1` everywhere — use contextually).
+- Redirects: `command -v foo >/dev/null 2>&1`, `1>/dev/null` (not `>/dev/null 2>&1` everywhere - use contextually).
 
 ### Variables and arrays
 
@@ -240,7 +253,7 @@ Always prefix `local` at the top of a function. One `local` per line.
 
 ### Error handling
 
-**Fatal errors** — guard with `|| { print_error; return 1; }`, `|| exit_with_error "..."`, or `exit 1`:
+**Fatal errors** - guard with `|| { print_error; return 1; }`, `|| exit_with_error "..."`, or `exit 1`:
 
 ```bash
 release_json=$(github_api "$api_url") || {
@@ -249,14 +262,14 @@ release_json=$(github_api "$api_url") || {
 }
 ```
 
-**Dependency check** — standalone: inline `command -v` loop (above);
+**Dependency check** - standalone: inline `command -v` loop (above);
 config-driven: `require_cmds`:
 
 ```bash
 require_cmds curl jq || return 1
 ```
 
-**Argument validation** — guard at function top:
+**Argument validation** - guard at function top:
 
 ```bash
 if [[ -z "$repo_url" || -z "$binary_regex" ]]; then
@@ -335,14 +348,14 @@ VERSION_GH_REPO=https://github.com/cli/cli
 LN_OPENCODE="${LN_OPENCODE:-"$HOME/.config/opencode"}"
 ```
 
-**`parse_args`** — long/short flag pairs, `case ... esac`, shift on every iteration.
+**`parse_args`** - long/short flag pairs, `case ... esac`, shift on every iteration.
 
-**Interactive selection** — use `fzf_pick` with preselect defaults and
+**Interactive selection** - use `fzf_pick` with preselect defaults and
 a clear header/prompt (from `setup-helper` or inline equivalent).
 
-**`run_if`** — toggle-gate pattern: `run_if $FLAG && function_name`
+**`run_if`** - toggle-gate pattern: `run_if $FLAG && function_name`
 
-**Symlinks** — always use `create_symlink()`:
+**Symlinks** - always use `create_symlink()`:
 
 ```bash
 create_symlink() {
@@ -374,8 +387,8 @@ to document the correct lint invocation.
 
 Use the narrowest suppression needed:
 
-- `SC2034` — unused variable (config vars are often `SC2034`)
-- `SC1091` — can't follow sourced file
+- `SC2034` - unused variable (config vars are often `SC2034`)
+- `SC1091` - can't follow sourced file
 - Add the suppression as close to the offending line as possible
 - Prefer `# shellcheck disable=SCnnnn` per-line over file-wide
 
@@ -383,12 +396,12 @@ Use the narrowest suppression needed:
 
 ## Canonical reference
 
-Your canonical implementations live in `/home/ai/.dotfiles/`:
+Current examples in `/home/ai/.dotfiles/`:
 
-- `bin/md2pdf`, `bin/sessionizer-tmux`, `bin/vm-diff-gsettings` — standalone family
-- `setup-helper` — sourced helper library (print helpers, fzf_pick, download_github_binary, etc.)
-- `setup-ai` — config-driven entry-point script (flags, parse_args, main, service functions)
-- `.editorconfig` — LF, UTF-8, 2-space indent, final newline
+- `bin/vm-git-sync`, `bin/sessionizer-tmux`, `bin/vm-diff-gsettings` - standalone family
+- `setup-helper` - sourced helper library (print helpers, fzf_pick, download_github_binary, etc.)
+- `setup-ai` - config-driven entry-point script (flags, parse_args, main, service functions)
+- `.editorconfig` - LF, UTF-8, 2-space indent, final newline
 
 Use these as the living style reference. Do not invent conventions that
 contradict them.
@@ -403,8 +416,10 @@ contradict them.
   `${VAR:-"default"}` with env override.
 - Never echo secrets (API keys, tokens, passwords). Print a redacted
   placeholder if logging is needed.
-- `sudo` usage: gate behind `RUN_WITH_SUDO` and call `sudo -k` after
-  the install step. Never `sudo` without the guard.
+- In config-driven installers, route privileged package operations through
+  `RUN_WITH_SUDO` and call `sudo_drop` after the install step. Standalone
+  operational tools may invoke `sudo` directly when privilege is central to
+  their documented purpose; validate targets and make effects clear.
 - `set -x` (debug) is toggled via `-d` / `--debug` flag, never hardcoded.
 - When the script is a helper library (sourced, not run directly):
   include the ERR trap; do not use `exit` (use `return`).

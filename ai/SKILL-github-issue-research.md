@@ -17,8 +17,9 @@ an evidence-backed verdict so the requester can be helped fast, and clearly
 separate what is known in-project from what still needs manual or online
 research.
 
-Prerequisites: `gh` installed and `GITHUB_TOKEN` set (see `GITHUB.md` in the
-`github` skill folder), plus a local clone of the project.
+Prerequisites: `gh` installed with the read-only `GITHUB_TOKEN` from `GITHUB.md`
+in the `github` skill folder, plus a local clone of the project. Do not use a
+write-capable stored `gh` credential as a fallback.
 
 ---
 
@@ -36,7 +37,7 @@ Prerequisites: `gh` installed and `GITHUB_TOKEN` set (see `GITHUB.md` in the
     URL). If `gh discussion` is not available on your gh version, fall back
     to a GraphQL search:
     `gh api graphql -f query='query($q: String!) { search(query: $q, type: DISCUSSION, first: 5) { nodes { ... on Discussion { title url number body } } } }' -F q="repo:<owner/repo> <terms>"`.
-- Restate the question in one or two sentences — searching works much better
+- Restate the question in one or two sentences - searching works much better
   against a distilled question than against the raw wall of text.
 
 ### 2. Search inside the project first (in this order)
@@ -47,24 +48,24 @@ Prerequisites: `gh` installed and `GITHUB_TOKEN` set (see `GITHUB.md` in the
 - **Git history**: `git log --all --oneline --grep="<term>"` and
   `git log -S"<term>" --all` to find where a feature was added, changed, or
   removed.
-- **Issues**: `gh issue list --state all --search "<terms>"` — search terms
+- **Issues**: `gh issue list --state all --search "<terms>"` - search terms
   are AND-joined; quote phrases and add `OR` between alternatives.
 - **PRs**: `gh pr list --state all --search "<terms>"` (or
   `gh search prs --repo <owner/repo> <terms>`).
 - **Discussions**: `gh discussion list --search "<terms>"` (add
-  `--state all` to include answered ones; preview command — fall back to the
+  `--state all` to include answered ones; preview command - fall back to the
   GraphQL `search` from step 1 if unavailable).
 - **Labels**: `gh issue list --label <label>` when the target fits a known
   label (bug, enhancement, wontfix, ...).
 
 ### 3. Classify the finding
 
-- **ANSWERED** — an existing issue/PR/discussion/code/doc directly answers
+- **ANSWERED** - an existing issue/PR/discussion/code/doc directly answers
   it: cite the number, URL, and a short snippet, plus `file:line` or commit
   hash for code findings.
-- **PARTIAL** — related context exists but the exact question is not covered:
+- **PARTIAL** - related context exists but the exact question is not covered:
   cite what exists and name the gap explicitly.
-- **NOT FOUND IN PROJECT** — nothing relevant found; move to online research.
+- **NOT FOUND IN PROJECT** - nothing relevant found; move to online research.
 
 ### 4. Online fallback (only when the project has no answer)
 
@@ -96,12 +97,16 @@ manual or online research`.
   issue).
 - Close with a short draft reply the user can adapt for the requester,
   marking project facts vs external sources.
+- If a new GitHub issue or discussion is the suggested next step, prepare a
+  draft for the user. Do not create or post it.
 
 ## Constraints
 
 - Read-only for project files and GitHub items: never modify project files,
   never create or edit issues/PRs/discussions, never push. The only write is
   the research report file from step 5.
+- If the requester wants a GitHub item created or updated, provide a draft for
+  the maintainer to post; never perform the remote action.
 - Base every claim on evidence: issue/PR numbers, `file:line`, commit hashes,
   or URLs. Never invent search results.
 - Search the project first; web research is only the fallback.

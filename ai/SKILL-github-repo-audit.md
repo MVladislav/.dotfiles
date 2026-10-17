@@ -25,7 +25,7 @@ mismatches_ and _scope inconsistencies_, not missing files.
 
 Prerequisite: `GITHUB_TOKEN` set (see `GITHUB.md` in this skill folder) and
 `gh` installed. The token drives `gh api` reads of commits, check runs, branch
-protection/rulesets, labels and releases — use a read-only PAT that includes
+protection/rulesets, labels and releases - use a read-only PAT that includes
 `administration: read` (for rulesets/branch-protection reads) together with the
 `contents`/`issues`/`pull_requests` reads documented in `GITHUB.md`.
 
@@ -40,10 +40,10 @@ the repo-local view.
 ### 1. Orient
 
 - Get `owner/repo`: `gh repo view --json nameWithOwner -q .nameWithOwner`.
-- Check the runner/agent actually has permission to _see_ the relevant state
-  (`gh auth status`). Fine-grained PATs often cannot read secrets, app
-  installations, or branch protection, and cannot create/edit labels — report
-  those as "manual action for the maintainer" instead of failing.
+- Check the runner/agent actually has permission to _read_ the relevant state
+  (`gh auth status`) and uses the read-only token from `GITHUB.md`. Fine-grained
+  PATs often cannot read secrets, app installations, or branch protection;
+  report those as "manual action for the maintainer" instead of failing.
 - Read README, AGENTS.md/CLAUDE.md and the main config files to learn
   conventions (commit style, changelog, release process) before judging.
 
@@ -77,13 +77,13 @@ Use Glob/Grep for:
 
 ### 4. Verify each helper (statuses: OK / ISSUE / NEEDS ACTION / N/A)
 
-**Renovate** — config file at a valid location (root, `.github/`, `renovate.json`,
+**Renovate** - config file at a valid location (root, `.github/`, `renovate.json`,
 `.renovaterc.json`), valid JSON, `extends` a preset (`config:recommended`),
 labels referenced in `packageRules` **exist** in the repo, and behavior is
 visible (merged `renovate/*` PRs authored by `app/renovate`). If the app never
 opens PRs → installation/grant problem, not config.
 
-**Codecov** — `.codecov.yml` parses; CI has a `codecov/codecov-action` step;
+**Codecov** - `.codecov.yml` parses; CI has a `codecov/codecov-action` step;
 newer action versions support tokenless upload via the Codecov app + GitHub
 OIDC (`permissions: id-token: write`), otherwise a `CODECOV_TOKEN` secret is
 required. Coverage should be scoped to the _shipped package_, not the whole
@@ -91,7 +91,7 @@ repo (check `--cov=<package>` vs `.coveragerc` `source`); contradictory scoped
 vs. whole-repo numbers on one PR = scope mismatch. Statuses must match repo
 reality; a red `codecov/project/*` that never blocks is a classic silent break.
 
-**pre-commit** — `.pre-commit-config.yaml` exists and its hooks/versions are
+**pre-commit** - `.pre-commit-config.yaml` exists and its hooks/versions are
 valid. Note: the top-level `ci:` block is **only** read by the pre-commit.ci
 service; local/CI pre-commit ignores it (dead config when pre-commit.ci is not
 used). Skips in CI are done via `SKIP`/`PREK_SKIP` env vars, not the `ci:`
@@ -99,35 +99,36 @@ block. pre-commit.ci GitHub App vs a GH Actions step (`pre-commit/action` or
 `j178/prek-action`) are the two execution options; check the chosen one is
 actually running.
 
-**CI workflows (minimal set)** — lint + type-check + test on `push`/`pull_request`;
+**CI workflows (minimal set)** - lint + type-check + test on `push`/`pull_request`;
 `concurrency` group to cancel superseded runs; `workflow_dispatch` where useful;
 no `pull_request_target` without required-dispatch safety. Gate logic sanity:
-if tests `needs:` lint, a flaky lint kills coverage/tests entirely — flag it as
+if tests `needs:` lint, a flaky lint kills coverage/tests entirely - flag it as
 a decision point.
 
-**CI security** — actions pinned to full SHAs (or at least exact `@vX.Y.Z`
+**CI security** - actions pinned to full SHAs (or at least exact `@vX.Y.Z`
 tags), minimal top-level `permissions: contents: read`, secrets never echoed,
 `actions/checkout` without `persist-credentials` where possible. Optional but
 recommended: `step-security/harden-runner`, `woodruffw/zizmor` (workflow
 linter, supports config `.github/zizmor.yml`), CodeQL (`github/codeql-action`).
 
-**Release automation** — either Release Drafter (draft updated as PRs merge,
+**Release automation** - either Release Drafter (draft updated as PRs merge,
 good for manual release flow) or release-please (fully automated). Verify the
 config uses the schema of the action version you pin (release-drafter v7 uses
 `when:`/`semver-increment`, not the legacy `include-labels`/`version-resolver`),
 and every label referenced in categories exists. A draft that never fills in =
 broken labels, not a broken draft.
 
-**Labels** — every label referenced by Renovate/Dependabot/release tooling must
-exist. Create missing ones or drop the reference. Keep a tidy default set
+**Labels** - every label referenced by Renovate/Dependabot/release tooling must
+exist. Report missing ones and recommend creating them or dropping the reference.
+Keep a tidy default set
 (`bug`, `enhancement`, `documentation`, `dependencies`, `help wanted`, …).
 
-**Dependabot vs Renovate** — running both duplicates security PRs. Pick one:
+**Dependabot vs Renovate** - running both duplicates security PRs. Pick one:
 Renovate (recommended, one config file, broad managers) or Dependabot
 (Settings→Code security and analysis). If Renovate is the bot of record,
 suggest disabling Dependabot AllKnownVulnerabilities/advisory updates.
 
-**Community files** — PR and issue templates, `SECURITY.md` (reporting path),
+**Community files** - PR and issue templates, `SECURITY.md` (reporting path),
 `CONTRIBUTING.md`, `CODEOWNERS` (review requirements), `LICENSE`.
 
 ### 5. Branch protection / rulesets
@@ -148,7 +149,11 @@ only the maintainer can do).
 
 ## Configuration reference
 
-### Renovate — dependency updates
+The write commands in this section are maintainer-only examples. The skill may
+report or prepare them, but must never execute GitHub-side writes. Read-only
+inventory commands may be used for the audit.
+
+### Renovate - dependency updates
 
 - What: bot that opens PRs for outdated deps/lockfiles. Docs:
   https://docs.renovatebot.com/ · Repo:
@@ -181,7 +186,7 @@ only the maintainer can do).
   is a useful visibility toggle; semantic-commit style auto-matches conventional
   repos.
 
-### Codecov — coverage reporting/status checks
+### Codecov - coverage reporting/status checks
 
 - What: coverage upload + PR status checks + report comments. Docs:
   https://docs.codecov.com · Config reference:
@@ -216,12 +221,12 @@ only the maintainer can do).
   `python`+`rust`) legitimately use one status per component; `target: auto`
   without a threshold makes any decline red.
 
-### pre-commit — commit-time quality gates
+### pre-commit - commit-time quality gates
 
 - What: run linters/formatters on commit and in CI. Docs:
   https://pre-commit.com · Hooks: https://pre-commit.com/hooks.html ·
   Repo: https://github.com/pre-commit/pre-commit
-- Execution options: (a) pre-commit.ci App (https://pre-commit.ci —
+- Execution options: (a) pre-commit.ci App (https://pre-commit.ci -
   the `ci:` block in `.pre-commit-config.yaml` configures **only this**); (b)
   GH Actions step `pre-commit/action`
   (https://github.com/pre-commit/action) or `j178/prek-action`
@@ -254,7 +259,7 @@ autofix_prs`/`skip` in sync; if not, drop the `ci:` block (dead config).
   (https://github.com/step-security/harden-runner), audit workflows with
   `woodruffw/zizmor` (https://github.com/woodruffw/zizmor).
 
-### Release Drafter — draft changelog
+### Release Drafter - draft changelog
 
 - What: a GitHub Release **draft** that aggregates merged PRs. Repo:
   https://github.com/release-drafter/release-drafter ·
@@ -262,14 +267,15 @@ autofix_prs`/`skip` in sync; if not, drop the `ci:` block (dead config).
 - Workflow triggers: `push: branches: [main]` (living draft) and optionally
   `push: tags: ["v*"]` (refreshed at release time) + `workflow_dispatch`;
   permissions `contents: write` + `pull-requests: read`.
-- v7 config uses `when:`/`semver-increment`/`conventional` — match the schema to
+- v7 config uses `when:`/`semver-increment`/`conventional` - match the schema to
   the pinned action version. Only reference labels that exist (or pair with an
   autolabeler).
 
-### Labels — cross-cutting dependency of Renovate/Dependabot/release tooling
+### Labels - cross-cutting dependency of Renovate/Dependabot/release tooling
 
-- Create via Issues → **Labels** button, or
-  `gh label create <name> --color <hex> --description "..."`.
+- Maintainer-only example: create via Issues → **Labels** button, or
+  `gh label create <name> --color <hex> --description "..."`. Never run it from
+  this skill.
 - Verify: `gh label list --json name`; cross-reference every label referenced in
   `renovate.json`, release configs, stale/labeler configs.
 
@@ -286,24 +292,26 @@ autofix_prs`/`skip` in sync; if not, drop the `ci:` block (dead config).
 - `SECURITY.md`: https://docs.github.com/en/code-security/getting-started/adding-a-security-policy
 - `CODEOWNERS`, `CONTRIBUTING.md`, `LICENSE`, `AGENTS.md` for AI contributors.
 
-## Branch protection — best practice
+## Branch protection - best practice
 
 Prefer **rulesets** (newer API) over classic protected branches.
 
 Meaning of key settings:
 
-- `pull_request` — require N approvals, dismiss stale reviews, require code
+- `pull_request` - require N approvals, dismiss stale reviews, require code
   owner review (`CODEOWNERS` must exist), require resolving conversations;
   "last push approval" re-requires review after force-push-less updates.
-- `required_status_checks` — `strict` = branch must be up to date before merge;
+- `required_status_checks` - `strict` = branch must be up to date before merge;
   `contexts` = the **exact** check names from CI (verify against real check
   runs; missing names make the rule no-op). Include CI, CodeQL and Codecov.
-- `deletion` + `non_fast_forward` — nobody deletes the branch or force-pushes.
-- `required_signatures` — commits signed (GPG/SSH).
-- `required_linear_history` — squash-only, clean history (match your merge
+- `deletion` + `non_fast_forward` - nobody deletes the branch or force-pushes.
+- `required_signatures` - commits signed (GPG/SSH).
+- `required_linear_history` - squash-only, clean history (match your merge
   method on the repo).
 
-Create the rule via `gh api` (adjust owner/repo and check names):
+Maintainer-only example. The skill reports the recommendation and does not
+execute this GitHub-side write. A maintainer may adapt the command after
+checking the actual owner/repo and status-check names:
 
 ```bash
 gh api --method POST repos/{owner}/{repo}/rulesets \
@@ -333,7 +341,7 @@ required status checks
 `GITHUB-PROJECT-IMPROVEMENT.md`:
 
 ```markdown
-# GitHub Project Improvement — <owner>/<repo>
+# GitHub Project Improvement - <owner>/<repo>
 
 Date: <date> · Scope: <what was checked> · Tooling: <agent + skill version>
 
@@ -365,11 +373,12 @@ Date: <date> · Scope: <what was checked> · Tooling: <agent + skill version>
 
 ## Constraints
 
-- Read-only by default for settings/accounts; do not create remote labels or
-  change GitHub settings unless asked (fine-grained PATs usually cannot anyway).
+- Read-only for all GitHub-side state. Never create labels, change settings,
+  update branch protection, post comments, merge, or write through the API, even
+  when asked. Prepare recommendations and maintainer-only instructions instead.
 - Evidence everywhere: quote check runs, PR authors, file:line, missing labels.
 - Never touch git history, branch protection rules themselves, or secrets.
 - Distinguish what the audit can fix (repo files) from what only the
-  maintainer can (App grants, secrets, protection rules) — and say so.
+  maintainer can (App grants, secrets, protection rules) - and say so.
 - Where possible, verify _behavior_, not just file presence: a configured app
   that never fired is still broken.

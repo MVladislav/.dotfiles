@@ -1,18 +1,23 @@
 # GitHub Token for AI workflows
 
-A single token is used by three things:
+GitHub access for OpenCode and the repository's GitHub skills is read-only. The
+skills may research, review, prepare local changes, and draft replies, but they
+never write to GitHub. Keep the token used by these workflows read-only.
 
-| Consumer                                                | Where                                           | Variable       |
-| ------------------------------------------------------- | ----------------------------------------------- | -------------- |
-| opencode GitHub MCP (read issues/PRs)                   | `setup-ai` → `OPENCODE_CONFIG_MCP_GITHUB`       | `GITHUB_TOKEN` |
-| `gh` CLI (pr view, pr checkout, issue list)             | honors `GH_TOKEN`, falls back to `GITHUB_TOKEN` | `GITHUB_TOKEN` |
-| dotfiles update checks (`github_api` in `setup-helper`) | raises API rate limit to 5000/h                 | `GITHUB_TOKEN` |
+One read-only token is shared by these consumers:
 
-So **one variable, `GITHUB_TOKEN`, is enough for everything**.
+| Consumer                                                | Where                                     | Variable       |
+| ------------------------------------------------------- | ----------------------------------------- | -------------- |
+| opencode GitHub MCP (read issues/PRs)                   | `setup-ai` → `OPENCODE_CONFIG_MCP_GITHUB` | `GITHUB_TOKEN` |
+| `gh` CLI (PR view/checkout, issue list)                 | honors `GH_TOKEN`, then `GITHUB_TOKEN`    | `GITHUB_TOKEN` |
+| dotfiles update checks (`github_api` in `setup-helper`) | raises API rate limit to 5000/h           | `GITHUB_TOKEN` |
+
+`GITHUB_TOKEN` is sufficient when `GH_TOKEN` is unset. If `GH_TOKEN` is set,
+make sure it is also read-only because `gh` gives it precedence.
 
 ## 1. Create a token
 
-**Fastest: open this pre-filled link** — GitHub supports URL parameters that
+**Fastest: open this pre-filled link** - GitHub supports URL parameters that
 pre-select everything (name, expiration, and read-only repository permissions):
 
 <https://github.com/settings/personal-access-tokens/new?name=Personal+Access+(read+only)&description=Read-only+token+for+opencode+and+gh&expires_in=90&administration=read&contents=read&issues=read&pull_requests=read>
@@ -21,42 +26,43 @@ Then only:
 
 1. Pick **Resource owner** (your account).
 2. Pick **Repository access** → _All repositories_ or _Only select repositories_.
-   ⚠️ The **"Repositories" permission tab only appears** for those two options —
+   ⚠️ The **"Repositories" permission tab only appears** for those two options -
    with _Public repositories_ selected, GitHub hides repository permissions
    entirely.
 3. Verify the **"Repositories" tab** already shows `Metadata`, `Contents`,
-   `Issues`, `Pull requests` = **Read-only** — the URL pre-filled them.
+   `Issues`, `Pull requests` = **Read-only** - the URL pre-filled them.
 4. Click **Generate token**. Copy the token (`github_pat_...`), it is shown only once.
 
 **Manual way** (if you prefer clicking through): under **Permissions** the
-page uses a tabbed permission picker with two tabs — **"Repositories"** and
+page uses a tabbed permission picker with two tabs - **"Repositories"** and
 **"Account"** (plus "Organization" if the resource owner is an org). Note: the
 **"Repositories" tab only appears when Repository access is _All repositories_
-or _Only select repositories_** — with _Public repositories_ selected it is
+or _Only select repositories_** - with _Public repositories_ selected it is
 hidden. The empty state you see by default ("No account permissions added
 yet", "User permissions permit access to resources under your personal GitHub
-account") belongs to the **Account** tab — **leave it untouched**. Click the
+account") belongs to the **Account** tab - **leave it untouched**. Click the
 **"Repositories"** tab, then **"Add permissions"** (search box, top right),
 search for and select each of these, and set the access level to **Read-only**:
 
-- `Metadata` → Read-only (**always auto-included**, cannot be disabled — required)
-- `Administration` → Read-only _(needed by `gh dash` to read branch protection rules — see `SKILL-github.md`; requires admin access to the repos it is scoped to)_
+- `Metadata` → Read-only (**always auto-included**, cannot be disabled - required)
+- `Administration` → Read-only _(needed by `gh dash` to read branch protection rules - see `SKILL-github-repo-audit.md`; requires admin access to the repos it is scoped to)_
 - `Issues` → Read-only _(to list/read issues and author info)_
 - `Pull requests` → Read-only _(to read PRs, diffs, reviews)_
 - `Contents` → Read-only _(to read files/commits/branches via the MCP `get_file_contents`, `list_commits`, …)_
 
 > "Read-only" means exactly that: the AI can browse and review, but cannot
-> comment on or create PRs. If you later want AI to open/comment on PRs,
-> create a **separate** token with `Pull requests → Read and write` — never
-> widen this one.
+> comment on, create, edit, merge, or publish GitHub content. Skills can prepare
+> draft text and local changes for you to review and apply through your own
+> authorized workflow. Do not create or use a write-capable token for these
+> skill workflows.
 >
 > Note: fine-grained tokens show all MCP tools regardless of permissions
 > (GitHub API enforces), so you'll get clear `403 Insufficient permissions`
-> errors for anything the token can't do — that is expected.
+> errors for anything the token can't do - that is expected.
 
 ## 2. Store it
 
-The token must exist in the **shell environment** when opencode starts —
+The token must exist in the **shell environment** when opencode starts -
 opencode does not auto-load `.env` files for `{env:}` substitution. Your
 profiles already source a dedicated, gitignored secrets file:
 
@@ -80,22 +86,22 @@ curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
 ### Alternative: project `.env`
 
 A project-local `.env` (gitignored) works for `gh` and tools that read `.env`
-themselves, but **not** for opencode's `{env:GITHUB_TOKEN}` substitution — that
+themselves, but **not** for opencode's `{env:GITHUB_TOKEN}` substitution - that
 feature is still an open request (anomalyco/opencode#10458, #21187). If you use
 a project `.env`, you must also export it from your shell profile. Prefer
 `~/.profile-secrets`.
 
 ## 3. gh CLI
 
-`gh` picks up `GITHUB_TOKEN` automatically (precedence: `GH_TOKEN` →
-`GITHUB_TOKEN` → stored credentials), so no `gh auth login` is needed. Note
-that the environment variables **override** stored credentials, so while
-`GITHUB_TOKEN` is exported, gh always uses the fine-grained token.
+`gh` uses credentials in this order: `GH_TOKEN`, `GITHUB_TOKEN`, then stored
+credentials. For read-only skill work, export the read-only `GITHUB_TOKEN` and
+unset `GH_TOKEN` or set it to the same read-only token. Do not rely on a stored
+credential whose permissions have not been verified; it may be write-capable.
 
 ### Known limitation: `gh status`
 
 `gh status` reads `GET /notifications`, which fine-grained tokens **cannot
-access at all** — GitHub offers no fine-grained "notifications" permission
+access at all** - GitHub offers no fine-grained "notifications" permission
 (it is classic-token-only). No permission addition fixes this; the command
 keeps returning `HTTP 403: Resource not accessible by personal access token`.
 Everything needed for the AI workflow (`gh pr view/checkout/diff`,

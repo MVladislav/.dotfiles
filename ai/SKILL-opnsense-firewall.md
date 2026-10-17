@@ -5,7 +5,7 @@ license: MIT
 compatibility: opencode
 metadata:
   audience: network-admins
-  opencode/autoinvoke: "false"
+  opencode/autoinvoke: false
   workflow: opnsense
 ---
 

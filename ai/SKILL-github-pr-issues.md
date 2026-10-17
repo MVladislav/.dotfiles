@@ -1,6 +1,6 @@
 ---
 name: vm-github-pr-issues
-description: Work GitHub issues and pull requests day-to-day: list, read, and filter them, review a PR locally with AI, post comments or formal reviews, create branches and PRs. Use for any request to open, comment on, review, or label an issue or PR.
+description: Research and review GitHub issues and pull requests with read-only access, and make requested changes locally. Never write to GitHub; prepare drafts for the user to apply themselves.
 license: MIT
 compatibility: opencode
 metadata:
@@ -10,13 +10,14 @@ metadata:
 
 ## What I do
 
-Work with GitHub issues and pull requests from a local clone: browse issues and
-PRs (including author info), fetch a PR branch locally, review it with AI, post
-reviews/comments, and create new PRs. Uses the GitHub MCP server tools for
-reading and the `gh` CLI for actions that touch the local git state.
+Use authenticated read-only GitHub MCP tools or `gh` to identify repositories,
+browse issues and PRs, and review changes. Make local project changes when the
+user requests them. Never perform a write to GitHub, even when asked; prepare
+drafts and manual instructions for the user instead.
 
-Prerequisites: `GITHUB_TOKEN` set (see `GITHUB.md` in this skill folder), and
-`gh` installed.
+Use the credentials already configured for the active GitHub tools. Never ask
+the user to paste a token or expose one in output. For this dotfiles repository,
+see `GITHUB.md` in this skill folder for the `GITHUB_TOKEN` setup.
 
 ---
 
@@ -24,45 +25,60 @@ Prerequisites: `GITHUB_TOKEN` set (see `GITHUB.md` in this skill folder), and
 
 1. **Identify the repository**: run `gh repo view --json nameWithOwner -q .nameWithOwner` (or `git remote get-url origin`) to get `owner/repo`.
 
-2. **Browse issues / PRs** (read side — prefer MCP tools so results are structured):
+2. **Browse issues / PRs** (read side - prefer MCP tools so results are structured):
    - List: `list_repository_issues` / `list_repository_pull_requests` with the MCP server, or `gh issue list` / `gh pr list`.
    - Details: `get_issue` / `get_pull_request` (author login, created date, labels, state).
    - Search with `gh issue list --search "..."` / `gh pr list --search "..."` when scoping by text.
 
-3. **Fetch a PR to work on it** (always use `gh` for local git work):
-   - `gh pr checkout <number>` — downloads the PR branch and switches to it.
-   - `opencode pr <number>` — native alternative that fetches the PR branch and
-     immediately starts opencode on it (outside the TUI).
-   - Confirm state: `git status`, `git log --oneline -5` to see the PR's commits.
+3. **Fetch a PR locally only when requested**:
+   - First inspect `git status --short`, `git diff --cached`, and `git diff`.
+     Preserve staged and unstaged changes separately.
+   - `gh pr checkout <number>` switches the current checkout. If it is not
+     clean, do not switch branches in place; ask or use a separately authorized
+     worktree.
+   - Confirm the resulting branch and commits with `git status --short` and
+     `git log --oneline -5`.
+   - Use `gh pr checkout` for local checkout. If another installed OpenCode
+     integration offers PR checkout, verify its own documentation first.
 
-4. **Review the change**:
-   - `gh pr diff <number>` — full diff (or `git diff <base>..HEAD` for committed work).
-   - `gh pr view <number>` — title, body, author, base/head refs, mergeable state.
+4. **Review the change without submitting anything**:
+   - `gh pr diff <number>` - full diff (or `git diff <base>..HEAD` for committed work).
+   - `gh pr view <number>` - title, body, author, base/head refs, mergeable state.
    - Read the changed files and assess correctness, security, and tests.
    - If the review surfaces security concerns (secrets, injection, auth/authz
      problems, vulnerable dependencies), delegate a deep dive to the
-     `security-engineer` subagent via the Task tool
-     (`subagent_type: "security-engineer"`, it uses the `security-review`
-     skill, OWASP-based), then post its findings as review comments.
+     configured `security-engineer` agent through OpenCode V2's `subagent`
+     tool. Give it a bounded review task and the `security-review` skill. If it
+     is unavailable, report the concerns directly. Bring findings back to the
+     user; do not post them automatically.
 
-5. **Work with the author info**: PR/issue results include `author.login`; use
-   `gh api users/<login>` if profile details (name, bio) are needed.
+5. **Use available author information**: issue and PR results include the
+   author's login and other metadata. Use a read-only MCP user lookup if
+   available; otherwise omit profile details rather than adding an API call.
 
-6. **Comment or review**:
-   - General comment: `gh pr comment <number> --body "..."`.
-   - Formal review: `gh pr review <number> --approve` / `--comment` / `--request-changes` (optionally with `--body`).
-   - Issue comment: `gh issue comment <number> --body "..."`.
-   - For line-level suggestions prefer the MCP tools (`create_pull_request_review` with a threaded review payload) when available.
+6. **Prepare comments or reviews, never submit them**:
+   - Draft the requested comment or review body locally.
+   - If useful, show the user a manual command such as
+     `gh pr comment <number> --body "..."` or `gh pr review <number> --comment --body "..."`.
+     Label it for the user to run; never execute it or call an MCP write tool.
+   - A request to review is not a request to publish the review.
 
-7. **Create a new PR** (after implementing):
-   - Commit and push: `git push -u origin <branch>`.
-   - `gh pr create --title "..." --body "..."` (add `--fill` to reuse the commit/PR template).
-   - Show the result with the returned PR URL.
+7. **Prepare a PR, never create or push it**:
+   - Inspect staged and unstaged changes separately. Do not include pre-existing
+     staged work in a commit unless the user identifies it as part of the PR.
+   - Keep new AI edits unstaged for review. Use `vm-git-commit` if the user wants
+     local commit commands. Draft a PR title/body and list the manual steps the
+     user can perform after reviewing the changes.
+   - A direct request to create a PR does not grant this skill write access.
 
 ## Constraints
 
-- Never push to `main` directly; always work on a feature branch.
+- Preserve existing staged and unstaged changes. Never reset, clean, stage, or
+  commit unless the user explicitly requests the local Git action.
+- GitHub access is read-only for this skill. Never push, post a review/comment,
+  change labels, create/edit/close issues or PRs, merge, or write through the
+  GitHub API, even when asked. Prepare a draft or manual instructions instead.
 - Never modify the token or environment files.
-- If `gh` is not installed, stop and tell the user to install it
-  (`setup-ai -igh`); if `gh` reports an auth problem, tell the user to set
-  `GITHUB_TOKEN` (see `GITHUB.md`) — do not attempt to work around it.
+- If `gh` is not installed, report the blocker; in this dotfiles repository,
+  `setup-ai -igh` installs it. If authentication fails, direct the user to the
+  read-only token steps in `GITHUB.md`; do not suggest a write-capable login.
