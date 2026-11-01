@@ -7,8 +7,15 @@ fi
 if check_command_q docker; then
   alias docker-compose='docker compose'
   docker-swarm-compose() {
+    # Usage: docker-swarm-compose [-f <file> ...] [--env-file <file> ...]
+    #                            [never|always|changed] <STACK_NAME>
+    #                            [--prune] [--dry-run|--config] [--show-warnings]
     local COMPOSE_FILES=()
     local RESOLVE_IMAGE="never"
+    local ENV_FILES=()
+    local PRUNE=0
+    local DRY_RUN=0
+    local SHOW_WARNINGS=0
     local ARGS=()
 
     # 1) Parse flags and collect everything else into ARGS
@@ -23,9 +30,41 @@ if check_command_q docker; then
             return 1
           fi
           ;;
-        never | always)
-          RESOLVE_IMAGE="$1"
+        --env-file)
+          if [[ -n "${2:-}" && -f "$2" ]]; then
+            ENV_FILES+=("$2")
+            shift 2
+          else
+            echo "Error: Missing or invalid env file after $1" >&2
+            return 1
+          fi
+          ;;
+        --prune)
+          PRUNE=1
           shift
+          ;;
+        --dry-run | --config)
+          DRY_RUN=1
+          shift
+          ;;
+        --show-warnings)
+          SHOW_WARNINGS=1
+          shift
+          ;;
+        never | always | changed)
+          # Only treat as the resolve-image setting before the stack name.
+          if [[ ${#ARGS[@]} -eq 0 ]]; then
+            RESOLVE_IMAGE="$1"
+            shift
+          else
+            ARGS+=("$1")
+            shift
+          fi
+          ;;
+        -h | --help)
+          echo "Usage: docker-swarm-compose [-f <file> ...] [--env-file <file> ...] [never|always|changed] <STACK_NAME>" >&2
+          echo "       [--prune] [--dry-run|--config] [--show-warnings]" >&2
+          return 0
           ;;
         *)
           ARGS+=("$1")
@@ -34,46 +73,130 @@ if check_command_q docker; then
       esac
     done
 
-    # 2) Default compose file if none provided
+    # 2) Default compose file if none provided (prefer .yaml, fall back to .yml)
     if [[ "${#COMPOSE_FILES[@]}" -eq 0 ]]; then
-      COMPOSE_FILES=(docker-compose.yaml)
+      if [[ -f docker-compose.yaml ]]; then
+        COMPOSE_FILES=(docker-compose.yaml)
+      elif [[ -f docker-compose.yml ]]; then
+        COMPOSE_FILES=(docker-compose.yml)
+      else
+        COMPOSE_FILES=(docker-compose.yaml)
+      fi
     fi
 
-    # 3) Ensure we have at least a stack name
-    if [[ "${#ARGS[@]}" -lt 1 ]]; then
-      echo "Usage: docker-swarm-compose [-f <file> ...] [never|always] <STACK_NAME> [extra args...]" >&2
+    # 3) Validate compose files up front
+    for f in "${COMPOSE_FILES[@]}"; do
+      if [[ ! -f "$f" ]]; then
+        echo "Error: Compose file not found: $f" >&2
+        return 1
+      fi
+    done
+
+    # 4) Default env file from ENV_FILE when present
+    if [[ "${#ENV_FILES[@]}" -eq 0 && -n "${ENV_FILE:-}" && -f "$ENV_FILE" ]]; then
+      ENV_FILES=("$ENV_FILE")
+    fi
+    for f in "${ENV_FILES[@]}"; do
+      if [[ ! -f "$f" ]]; then
+        echo "Error: Env file not found: $f" >&2
+        return 1
+      fi
+    done
+
+    # 5) Stack name is required unless --dry-run
+    if [[ "$DRY_RUN" -eq 0 && "${#ARGS[@]}" -lt 1 ]]; then
+      echo "Usage: docker-swarm-compose [-f <file> ...] [--env-file <file> ...] [never|always|changed] <STACK_NAME>" >&2
+      echo "       [--prune] [--dry-run|--config] [--show-warnings]" >&2
       return 1
     fi
 
-    # 4) Re-assign positional params to what’s in ARGS
+    # Reject stray positionals instead of silently misusing them.
+    if [[ "${#ARGS[@]}" -gt 1 ]]; then
+      echo "Error: only one STACK_NAME is allowed (got: ${ARGS[*]})" >&2
+      return 1
+    fi
+
+    # 6) Re-assign positional params to what's in ARGS
     set -- "${ARGS[@]}"
 
-    # 5) Extract stack name & extra args
-    local STACK_NAME="$1"
-    shift
-    local EXTRA_ARGS=("$@")
+    # 7) Extract stack name (optional in dry-run)
+    local STACK_NAME="${1:-dry-run}"
 
-    echo "Deploying stack '$STACK_NAME' with files: ${COMPOSE_FILES[*]} :: [resolve=$RESOLVE_IMAGE]"
+    # 8) Swarm preflight: deploy needs an active manager (skip in dry-run)
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      local swarm_state
+      swarm_state="$(docker info --format '{{.Swarm.LocalNodeState}}' 2>/dev/null || true)"
+      if [[ "$swarm_state" != "active" ]]; then
+        echo "Error: Docker Swarm is not active on this node (state: ${swarm_state:-unknown})." >&2
+        echo "       Initialize or join a swarm before deploying." >&2
+        return 1
+      fi
+    fi
 
-    # 6) Build the '-f file' args for docker compose
+    if [[ "$DRY_RUN" -eq 0 ]]; then
+      echo "Deploying stack '$STACK_NAME' with files: ${COMPOSE_FILES[*]} :: [resolve=$RESOLVE_IMAGE]"
+    else
+      echo "Rendering config for files: ${COMPOSE_FILES[*]} :: [resolve=$RESOLVE_IMAGE]"
+    fi
+
+    # 9) Build the '-f file' args for docker compose
     local FILE_ARGS=()
     for f in "${COMPOSE_FILES[@]}"; do
       FILE_ARGS+=(-f "$f")
     done
 
-    # 7) Pipe the final config into docker stack deploy
-    docker compose "${FILE_ARGS[@]}" --compatibility config |
-      sed 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|' |
-      sed '1{/^name:/d}' |
-      sed 's/published: "\(.*\)"/published: \1/' |
-      sed 's|mode: "\([0-9]\+\)"|mode: \1|' |
-      docker stack deploy \
-      --resolve-image="$RESOLVE_IMAGE" \
-      --with-registry-auth \
-      --detach=false \
-      --compose-file - \
-      "$STACK_NAME" \
-      "${EXTRA_ARGS[@]}"
+    local ENV_ARGS=()
+    for f in "${ENV_FILES[@]}"; do
+      ENV_ARGS+=(--env-file "$f")
+    done
+
+    local DEPLOY_ARGS=(--resolve-image="$RESOLVE_IMAGE" --with-registry-auth --detach=false)
+    if [[ "$PRUNE" -eq 1 ]]; then
+      DEPLOY_ARGS+=(--prune)
+    fi
+    DEPLOY_ARGS+=(--compose-file - "$STACK_NAME")
+
+    local TMP_STDERR
+    TMP_STDERR="$(mktemp)" || return 1
+
+    # Single source of truth for the compose -> swarm sanitization. Both the
+    # dry-run (config) and deploy paths use this, so the conversions never
+    # drift apart.
+    local -a sanitize_sed=(
+      -e 's|cpus: \([0-9]\+\(\.[0-9]\+\)*\)|cpus: "\1"|'
+      -e '1{/^name:/d}'
+      -e '1{/^version:/d}'
+      -e 's/published: "\(.*\)"/published: \1/'
+      -e 's|mode: "\([0-9]\+\)"|mode: \1|'
+    )
+
+    local rc=0
+    if [[ "$DRY_RUN" -eq 1 ]]; then
+      (
+        set -o pipefail
+        docker compose "${ENV_ARGS[@]}" --compatibility "${FILE_ARGS[@]}" config 2>"$TMP_STDERR" |
+          sed "${sanitize_sed[@]}"
+      )
+      rc=$?
+    else
+      (
+        set -o pipefail
+        docker compose "${ENV_ARGS[@]}" --compatibility "${FILE_ARGS[@]}" config 2>"$TMP_STDERR" |
+          sed "${sanitize_sed[@]}" |
+          docker stack deploy "${DEPLOY_ARGS[@]}"
+      )
+      rc=$?
+    fi
+
+    # Filter known benign compose/swarm warnings; keep real errors.
+    if [[ "$SHOW_WARNINGS" -eq 0 ]]; then
+      grep -v -E 'level=warning.*(Swarm (services|mode|scheduler)|routing mesh|not supported outside Swarm mode|rolling updates in Swarm mode)|Ignoring unsupported options:' "$TMP_STDERR" >&2 || true
+    else
+      cat "$TMP_STDERR" >&2
+    fi
+
+    rm -f "$TMP_STDERR"
+    return "$rc"
   }
 
   docker-context() {
