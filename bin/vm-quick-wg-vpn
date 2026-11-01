@@ -1,233 +1,943 @@
 #!/usr/bin/env bash
-PATH=/usr/bin/:/usr/local/bin/:/bin:/usr/sbin/:/sbin:/snap/bin/
-set -euo pipefail
-trap 'echo "ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+set -Eeuo pipefail
 
-trap 'log "ERROR" "Unexpected error on line $LINENO (command: $BASH_COMMAND). Check WireGuard and UFW status."' ERR
+run_privileged() {
+  if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
 
+# *** Defaults ***
 ONLY_UFW=0
 EXTENDED_UFW=0
 ALLOW_ACCESS_PRIVATE=0
 SETUP_SYSTEMD=0
+VERBOSE=0
+PERSIST_SYSCTL=1
 
-# Default variables
-WG_CONF_PATH="./wg0.conf"               # Path to WireGuard config file
-WG_INTERFACE="wg0"                      # WireGuard interface name
-PRIVATE_NETWORK_SUBNET="192.168.0.0/16" # Private network subnet
-SERVICE_PORT_CAIDO="9999"               # Port for Caido service
-WG_MAIN_PATH=/etc/wireguard
+RESET_UFW=0
+DOWN=0
+SSH_SOURCE=""
+SSH_PORT="22"
+DEFAULT_IFACE_OVERRIDE=""
+
+WG_CONF_PATH="./wg0.conf"
+WG_CONF_PATH_EXPLICIT=0
+WG_INTERFACE="wg0"
+PRIVATE_NETWORK_SUBNET="192.168.0.0/16"
+SERVICE_PORT_CAIDO="9999"
+WG_MAIN_PATH="${WG_MAIN_PATH:-/etc/wireguard}"
+SYSCTL_CONF_PATH="${SYSCTL_CONF_PATH:-/etc/sysctl.d/99-vm-quick-wg-vpn.conf}"
+UFW_DEFAULTS_PATH="${UFW_DEFAULTS_PATH:-/etc/default/ufw}"
+
 WG_CONF_PATH_USE=""
+WG_QUICK_CONFIG=""
+DEFAULT_IFACE=""
+GATEWAY_IP=""
+WG_ENDPOINT_HOST=""
+WG_ENDPOINT_PORT=""
+WG_ENDPOINT_ADDRS=()
+VPN_DNS_SERVERS=()
+CLEANUP_DIRS=()
 
-# Get default interface and gateway IP
-DEFAULT_IFACE=$(ip route show default | grep -iE '(enp|eth|ens)' | awk '{print $5}' | head -n1)
-GATEWAY_IP=$(ip route show default | grep -iE '(enp|eth|ens)' | awk '{print $3}' | head -n1)
+# *** Main Flow ***
+main() {
+  local ssh_description=""
 
-# ******************************************************************************
+  validate_options
+  check_requirements
 
-# Logging function
+  if [[ $DOWN -eq 1 ]]; then
+    detect_default_network
+    if ip link show dev "$WG_INTERFACE" >/dev/null 2>&1; then
+      log "INFO" "Bringing down WireGuard interface $WG_INTERFACE."
+      if ! run_privileged wg-quick down "$WG_INTERFACE" >/dev/null 2>&1; then
+        log "WARN" "Could not bring down $WG_INTERFACE; continuing with the UFW reset."
+      fi
+    else
+      log "INFO" "WireGuard interface $WG_INTERFACE is not present."
+    fi
+    apply_ufw_baseline
+    return 0
+  fi
+
+  if [[ $RESET_UFW -eq 1 ]]; then
+    detect_default_network
+    apply_ufw_baseline
+    return 0
+  fi
+
+  log "INFO" "Starting WireGuard VPN setup."
+  detect_default_network
+  resolve_config_path
+  load_wireguard_endpoint
+  load_dns_servers
+
+  if [[ $ONLY_UFW -eq 0 ]]; then
+    move_wireguard_conf
+    setup_wireguard
+  fi
+
+  ensure_src_valid_mark
+  setup_kill_switch
+
+  if [[ $SETUP_SYSTEMD -eq 1 ]]; then
+    setup_systemd
+  fi
+
+  if [[ $SSH_SOURCE == "any" ]]; then
+    ssh_description="any source"
+  elif [[ -n $SSH_SOURCE ]]; then
+    ssh_description="source $SSH_SOURCE"
+  else
+    ssh_description="interface ${DEFAULT_IFACE:-unknown}"
+  fi
+  log "INFO" "VPN setup complete. Kill switch is active; SSH access is allowed from $ssh_description."
+}
+
+# *** Utility Functions ***
 log() {
   local level="$1"
   local message="$2"
-  echo "$(date '+%Y-%m-%d %H:%M:%S') [$level] $message"
+  local stamp
+  stamp=$(date '+%Y-%m-%d %H:%M:%S')
+  case "$level" in
+  ERROR | WARN) printf '%s [%s] %s\n' "$stamp" "$level" "$message" >&2 ;;
+  *) printf '%s [%s] %s\n' "$stamp" "$level" "$message" ;;
+  esac
 }
 
-# Exit with error message
 exit_with_error() {
   log "ERROR" "$1"
   exit 1
 }
 
-# Main function
-main() {
-  log "INFO" "Starting WireGuard VPN setup."
-  check_requirements
-  check_config_file_exists
-  [[ $ONLY_UFW -eq 0 ]] && move_wireguard_conf
-  [[ $ONLY_UFW -eq 0 ]] && setup_wireguard
-  setup_kill_switch
-
-  [[ $SETUP_SYSTEMD -eq 1 ]] && setup_systemd
-
-  log "INFO" "VPN setup complete. Kill switch is active, and SSH access is allowed on $DEFAULT_IFACE."
+# shellcheck disable=SC2329 # Invoked by the EXIT trap.
+cleanup() {
+  local dir
+  for dir in "${CLEANUP_DIRS[@]}"; do
+    rm -rf -- "$dir" 2>/dev/null || true
+  done
 }
 
-# ******************************************************************************
+is_ipv4() {
+  local ip="$1"
+  local octet
+  local -a octets=()
+  [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  IFS='.' read -r -a octets <<< "$ip"
+  for octet in "${octets[@]}"; do
+    (( 10#$octet >= 0 && 10#$octet <= 255 )) || return 1
+  done
+  return 0
+}
 
-# Verify required commands are available
+is_ipv6() {
+  local ip="$1"
+  local v4=""
+  local group=""
+  local count=0
+  local -a groups=()
+
+  [[ $ip == *:* ]] || return 1
+  [[ $ip =~ ^[0-9A-Fa-f:.]+$ ]] || return 1
+
+  # Dots are only valid in a trailing embedded IPv4 address. Replace it with
+  # two placeholder groups so the remaining group count is still checked.
+  if [[ $ip == *.* ]]; then
+    v4="${ip##*:}"
+    is_ipv4 "$v4" || return 1
+    ip="${ip%:*}:0:0"
+  fi
+
+  [[ $ip != *:::* ]] || return 1
+  if [[ $ip == *::* ]]; then
+    [[ ${ip#*::} != *::* ]] || return 1
+  fi
+
+  IFS=':' read -r -a groups <<< "$ip"
+  for group in "${groups[@]}"; do
+    [[ -n $group ]] || continue
+    [[ $group =~ ^[0-9A-Fa-f]{1,4}$ ]] || return 1
+    ((count += 1))
+  done
+
+  if [[ $ip == *::* ]]; then
+    ((count < 8))
+  else
+    ((count == 8))
+  fi
+}
+
+is_ip_cidr() {
+  local value="$1"
+  local ip="$value"
+  local prefix=""
+
+  # Reject malformed values with more than one prefix separator.
+  [[ $value == */*/* ]] && return 1
+
+  if [[ $value == */* ]]; then
+    ip="${value%%/*}"
+    prefix="${value##*/}"
+    [[ $prefix =~ ^[0-9]{1,3}$ ]] || return 1
+    if is_ipv4 "$ip"; then
+      (( 10#$prefix <= 32 )) || return 1
+    elif is_ipv6 "$ip"; then
+      (( 10#$prefix <= 128 )) || return 1
+    else
+      return 1
+    fi
+  fi
+  is_ipv4 "$ip" || is_ipv6 "$ip"
+}
+
+ipv6_enabled() {
+  local all=""
+  local default=""
+  [[ -r /proc/sys/net/ipv6/conf/all/disable_ipv6 ]] || return 1
+  all=$(< /proc/sys/net/ipv6/conf/all/disable_ipv6)
+  default="$all"
+  if [[ -r /proc/sys/net/ipv6/conf/default/disable_ipv6 ]]; then
+    default=$(< /proc/sys/net/ipv6/conf/default/disable_ipv6)
+  fi
+  [[ $all == 0 && $default == 0 ]]
+}
+
+# *** Validation and Discovery ***
+validate_options() {
+  if [[ ! $WG_INTERFACE =~ ^[A-Za-z0-9][A-Za-z0-9_=+.-]{0,14}$ ]]; then
+    exit_with_error "Invalid WireGuard interface name '$WG_INTERFACE'."
+  fi
+
+  if [[ ! $SSH_PORT =~ ^[1-9][0-9]*$ ]] || (( SSH_PORT > 65535 )); then
+    exit_with_error "Invalid SSH port '$SSH_PORT'."
+  fi
+
+  if [[ ! $SERVICE_PORT_CAIDO =~ ^[1-9][0-9]*$ ]] || (( SERVICE_PORT_CAIDO > 65535 )); then
+    exit_with_error "Invalid Caido port '$SERVICE_PORT_CAIDO'."
+  fi
+
+  if [[ -n $SSH_SOURCE && $SSH_SOURCE != "any" ]] && ! is_ip_cidr "$SSH_SOURCE"; then
+    exit_with_error "Invalid --ssh-source '$SSH_SOURCE'; expected an IP, a CIDR, or 'any'."
+  fi
+
+  if [[ -n $DEFAULT_IFACE_OVERRIDE && ! $DEFAULT_IFACE_OVERRIDE =~ ^[A-Za-z0-9][A-Za-z0-9_.:-]*$ ]]; then
+    exit_with_error "Invalid --default-iface '$DEFAULT_IFACE_OVERRIDE'."
+  fi
+
+  if ! is_ip_cidr "$PRIVATE_NETWORK_SUBNET"; then
+    exit_with_error "Invalid private subnet '$PRIVATE_NETWORK_SUBNET'."
+  fi
+
+  if [[ $RESET_UFW -eq 1 && $SETUP_SYSTEMD -eq 1 ]]; then
+    exit_with_error "--systemd cannot be combined with --reset-ufw or --cis-ufw."
+  fi
+}
+
 check_requirements() {
-  local cmds=("wg" "ip" "ufw")
-  [[ $ONLY_UFW -eq 1 ]] && cmds=("ip" "ufw")
+  local -a cmds=(ufw)
+  local cmd
+
+  if [[ ${EUID:-$(id -u)} -ne 0 ]]; then
+    cmds=(sudo "${cmds[@]}")
+  fi
+
+  if [[ $RESET_UFW -eq 1 ]]; then
+    cmds+=(ip)
+  else
+    cmds+=(ip sysctl getent)
+    if [[ $ONLY_UFW -eq 0 ]]; then
+      cmds+=(wg wg-quick)
+    fi
+    if [[ $SETUP_SYSTEMD -eq 1 ]]; then
+      cmds+=(systemctl)
+    fi
+  fi
+
   for cmd in "${cmds[@]}"; do
-    if ! command -v "$cmd" &>/dev/null; then
+    if ! command -v "$cmd" >/dev/null 2>&1; then
       exit_with_error "Command '$cmd' is not available. Please install it."
     fi
   done
 }
 
-# Check if WireGuard config file exists
-check_config_file_exists() {
-  if sudo test -f "$WG_MAIN_PATH/$WG_INTERFACE.conf"; then
-    WG_CONF_PATH_USE="$WG_MAIN_PATH/$WG_INTERFACE.conf"
-  elif test -f "$WG_CONF_PATH"; then
-    WG_CONF_PATH_USE="$WG_CONF_PATH"
+# Print the value following a field name in an ip route line (dev, via, ...).
+route_field() {
+  local field="$1"
+  awk -v field="$field" '{for (i = 1; i < NF; i++) if ($i == field) {print $(i + 1); exit}}'
+}
+
+detect_default_network() {
+  local route=""
+  local dev=""
+  local gateway=""
+
+  if [[ -n $DEFAULT_IFACE_OVERRIDE ]]; then
+    DEFAULT_IFACE="$DEFAULT_IFACE_OVERRIDE"
   else
+    # Prefer a non-WireGuard default route, otherwise a running tunnel would
+    # become the SSH management interface and lock us out after the reset.
+    while IFS= read -r route; do
+      dev=$(route_field dev <<< "$route")
+      [[ -n $dev ]] || continue
+      [[ $dev == "$WG_INTERFACE" || $dev == wg* ]] && continue
+      DEFAULT_IFACE="$dev"
+      GATEWAY_IP=$(route_field via <<< "$route")
+      break
+    done < <(ip -4 route show default 2>/dev/null || true)
+
+    if [[ -z $DEFAULT_IFACE ]]; then
+      route=$(ip -4 route get 1.1.1.1 2>/dev/null | head -n1) || true
+      dev=$(route_field dev <<< "$route")
+      if [[ -n $dev && $dev != "$WG_INTERFACE" && $dev != wg* ]]; then
+        DEFAULT_IFACE="$dev"
+        GATEWAY_IP=$(route_field via <<< "$route")
+      fi
+    fi
+  fi
+
+  # Fill in the gateway only when detection did not already provide it.
+  if [[ -z $GATEWAY_IP && -n $DEFAULT_IFACE ]]; then
+    gateway=$(ip -4 route show default dev "$DEFAULT_IFACE" 2>/dev/null | head -n1) || true
+    GATEWAY_IP=$(route_field via <<< "$gateway")
+  fi
+  if [[ -z $GATEWAY_IP ]]; then
+    route=$(ip -4 route get 1.1.1.1 2>/dev/null | head -n1) || true
+    dev=$(route_field dev <<< "$route")
+    if [[ -z $DEFAULT_IFACE || $dev == "$DEFAULT_IFACE" ]]; then
+      GATEWAY_IP=$(route_field via <<< "$route")
+    fi
+  fi
+
+  if [[ -n $DEFAULT_IFACE ]]; then
+    log "INFO" "Default interface: $DEFAULT_IFACE${GATEWAY_IP:+, gateway: $GATEWAY_IP}"
+  else
+    log "WARN" "Could not determine the default network interface."
+  fi
+}
+
+resolve_config_path() {
+  if [[ $WG_CONF_PATH_EXPLICIT -eq 1 ]]; then
+    [[ -f $WG_CONF_PATH ]] || exit_with_error "WireGuard config file not found: $WG_CONF_PATH"
+    WG_CONF_PATH_USE="$WG_CONF_PATH"
+  elif run_privileged test -f "$WG_MAIN_PATH/$WG_INTERFACE.conf"; then
+    WG_CONF_PATH_USE="$WG_MAIN_PATH/$WG_INTERFACE.conf"
+  elif [[ -f $WG_CONF_PATH ]]; then
+    WG_CONF_PATH_USE="$WG_CONF_PATH"
+  elif [[ $ONLY_UFW -eq 0 ]]; then
     exit_with_error "WireGuard config file not found in: $WG_CONF_PATH or $WG_MAIN_PATH/$WG_INTERFACE.conf"
+  else
+    WG_CONF_PATH_USE=""
   fi
 
-
-  log "INFO" "Configuration file found."
+  if [[ -n $WG_CONF_PATH_USE ]]; then
+    log "INFO" "Using WireGuard configuration: $WG_CONF_PATH_USE"
+  fi
 }
 
-# Move WireGuard config file into place
 move_wireguard_conf() {
-  if [[ -f $WG_CONF_PATH ]]; then
-    log "INFO" "Moving WireGuard config file to $WG_MAIN_PATH/"
-    sudo rm -f "$WG_MAIN_PATH/$WG_INTERFACE.conf"
-    sudo cp "$WG_CONF_PATH" "$WG_MAIN_PATH/$WG_INTERFACE.conf"
-    sudo chmod 600 "$WG_MAIN_PATH/$WG_INTERFACE.conf"
-    sudo chown root:root "$WG_MAIN_PATH/$WG_INTERFACE.conf"
+  local src="$WG_CONF_PATH_USE"
+  local dest="$WG_MAIN_PATH/$WG_INTERFACE.conf"
+  local src_real=""
+  local dest_real=""
+
+  [[ -n $src ]] || exit_with_error "No WireGuard configuration file to install."
+  src_real=$(run_privileged readlink -f "$src") || exit_with_error "Could not resolve '$src'."
+  dest_real=$(run_privileged readlink -f "$dest" 2>/dev/null) || true
+
+  if [[ -n $dest_real && $src_real == "$dest_real" ]]; then
+    log "INFO" "WireGuard configuration is already in $dest."
+    WG_CONF_PATH_USE="$dest"
+    return 0
   fi
+
+  log "INFO" "Installing WireGuard configuration in $dest."
+  if [[ ! -d $WG_MAIN_PATH ]]; then
+    run_privileged install -d -m 700 "$WG_MAIN_PATH" || exit_with_error "Could not create $WG_MAIN_PATH."
+  fi
+  run_privileged install -m 600 -o root -g root "$src" "$dest" || exit_with_error "Could not install '$src' to '$dest'."
+  WG_CONF_PATH_USE="$dest"
 }
 
-# Set up WireGuard interface
+# Print a WireGuard config with IPv6 entries removed from Address, AllowedIPs,
+# and DNS. The other lines are preserved verbatim. Used only when the kernel
+# has IPv6 disabled, because wg-quick fails on those entries in that case.
+strip_ipv6_config() {
+  local src="$1"
+  # shellcheck disable=SC2016
+  run_privileged awk '
+    {
+      line = $0
+      if (line ~ /^[[:space:]]*#/) { print line; next }
+      eq = index(line, "=")
+      if (eq == 0) { print line; next }
+      key = substr(line, 1, eq - 1)
+      val = substr(line, eq + 1)
+      sub(/#.*/, "", val)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", key)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", val)
+      k = tolower(key)
+      if (k != "address" && k != "allowedips" && k != "dns") { print line; next }
+      n = split(val, parts, /[[:space:]]*,[[:space:]]*/)
+      out = ""
+      for (i = 1; i <= n; i++) {
+        p = parts[i]
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", p)
+        if (p == "" || p ~ /:/) continue
+        out = (out == "" ? p : out ", " p)
+      }
+      if (out != "") print key " = " out
+      next
+    }
+  ' "$src"
+}
+
+# Create an IPv6-stripped copy for wg-quick when IPv6 is disabled.
+prepare_wireguard_config() {
+  local tmpdir=""
+  local target=""
+
+  WG_QUICK_CONFIG="$WG_CONF_PATH_USE"
+
+  if ipv6_enabled; then
+    return 0
+  fi
+
+  if ! run_privileged grep -qiE '^[[:space:]]*(Address|AllowedIPs|DNS)[[:space:]]*=.*:' "$WG_CONF_PATH_USE"; then
+    return 0
+  fi
+
+  log "WARN" "IPv6 is disabled but the WireGuard config contains IPv6 entries. Using an IPv6-stripped temporary copy."
+  tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/vm-quick-wg-vpn.XXXXXX") || exit_with_error "Could not create a temporary directory."
+  CLEANUP_DIRS+=("$tmpdir")
+  target="$tmpdir/$WG_INTERFACE.conf"
+
+  if ! strip_ipv6_config "$WG_CONF_PATH_USE" > "$target"; then
+    exit_with_error "Could not create the IPv6-stripped WireGuard config."
+  fi
+
+  chmod 600 "$target" || exit_with_error "Could not secure the temporary WireGuard config."
+  WG_QUICK_CONFIG="$target"
+}
+
 setup_wireguard() {
+  local output=""
+  local -a route_cmd=(ip route replace)
+
   log "INFO" "Setting up WireGuard interface $WG_INTERFACE."
 
-  # Add route for private network subnet
-  log "INFO" "Adding route for private network subnet $PRIVATE_NETWORK_SUBNET via $GATEWAY_IP."
-  sudo ip route replace "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP" >/dev/null
-
-  # Check if the WireGuard interface is already up
-  if ip link show "$WG_INTERFACE" | grep -iq "state UP"; then
-    log "INFO" "WireGuard interface $WG_INTERFACE is already running. Restarting it."
-    sudo wg-quick down "$WG_INTERFACE" >/dev/null
-    sleep 2
+  # Only add the LAN route when the matching firewall rule is requested.
+  if [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]]; then
+    if [[ $PRIVATE_NETWORK_SUBNET == *:* ]]; then
+      log "WARN" "Skipping the private subnet route: IPv6 gateway routing is not supported."
+    elif [[ -n $GATEWAY_IP ]]; then
+      log "INFO" "Adding route for private network subnet $PRIVATE_NETWORK_SUBNET via $GATEWAY_IP."
+      if ! run_privileged "${route_cmd[@]}" "$PRIVATE_NETWORK_SUBNET" via "$GATEWAY_IP" >/dev/null; then
+        log "WARN" "Could not add the private subnet route; continuing without it."
+      fi
+    else
+      log "WARN" "No gateway detected; skipping the private subnet route."
+    fi
   fi
 
+  if ip link show dev "$WG_INTERFACE" >/dev/null 2>&1; then
+    if run_privileged wg show "$WG_INTERFACE" >/dev/null 2>&1; then
+      log "INFO" "WireGuard interface $WG_INTERFACE already exists. Taking it down first."
+      if ! run_privileged wg-quick down "$WG_INTERFACE" >/dev/null 2>&1; then
+        exit_with_error "Failed to bring down the existing interface $WG_INTERFACE."
+      fi
+      sleep 2
+    else
+      log "WARN" "Removing stale link $WG_INTERFACE."
+      run_privileged ip link delete dev "$WG_INTERFACE" || exit_with_error "Failed to remove stale link $WG_INTERFACE."
+    fi
+  fi
+
+  prepare_wireguard_config
+
   log "INFO" "Bringing up WireGuard interface $WG_INTERFACE."
-  if ! sudo wg-quick up "$WG_INTERFACE" >/dev/null 2>&1; then
-    exit_with_error "Failed to start WireGuard interface $WG_INTERFACE."
+  if ! output=$(run_privileged wg-quick up "$WG_QUICK_CONFIG" 2>&1); then
+    log "ERROR" "Failed to start WireGuard interface $WG_INTERFACE."
+    [[ -n $output ]] && printf '%s\n' "$output" >&2
+    exit 1
+  fi
+
+  if [[ $VERBOSE -eq 1 && -n $output ]]; then
+    printf '%s\n' "$output"
   fi
 
   log "INFO" "WireGuard interface $WG_INTERFACE is up."
 }
 
-# Set up kill switch using UFW
-setup_kill_switch() {
-  log "INFO" "Configuring UFW kill switch."
+# *** Endpoint and DNS Discovery ***
+parse_endpoint() {
+  local endpoint="$1"
+  local host=""
+  local port=""
 
-  # Extract endpoint details
-  WG_ENDPOINT=$(sudo grep -iE "^Endpoint" "$WG_CONF_PATH_USE" | cut -d= -f2 | xargs)
-  WG_ENDPOINT_IP=${WG_ENDPOINT%%:*}
-  WG_PORT=${WG_ENDPOINT##*:}
-
-  if ! [[ $WG_ENDPOINT_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    WG_ENDPOINT_IP=$(getent ahosts "$WG_ENDPOINT_IP" | awk '/STREAM/ {print $1; exit}')
+  if [[ $endpoint =~ ^\[([^]]+)\]:([0-9]+)$ ]]; then
+    host="${BASH_REMATCH[1]}"
+    port="${BASH_REMATCH[2]}"
+  elif [[ $endpoint =~ ^(.+):([0-9]+)$ ]]; then
+    host="${BASH_REMATCH[1]}"
+    port="${BASH_REMATCH[2]}"
+    host="${host#\[}"
+    host="${host%\]}"
+  else
+    exit_with_error "Invalid WireGuard endpoint '$endpoint' (expected host:port or [ipv6]:port)."
   fi
 
-  [[ -z $WG_ENDPOINT_IP || -z $WG_PORT ]] && exit_with_error "Invalid Endpoint in WireGuard config, missing IP or PORT."
-
-  # Reset UFW and apply basic deny policies
-  sudo ufw disable >/dev/null
-  sudo ufw --force reset >/dev/null
-
-  sudo ufw default deny outgoing >/dev/null
-  sudo ufw default deny incoming >/dev/null
-  sudo ufw allow in on lo >/dev/null
-  sudo ufw allow out on lo >/dev/null
-  sudo ufw deny in from 127.0.0.0/8 >/dev/null
-
-  if ip a | grep -q 'inet6'; then
-    sudo ufw deny in from ::1 >/dev/null
-    sudo ufw deny out from ::1 >/dev/null
+  [[ -n $host ]] || exit_with_error "Invalid WireGuard endpoint '$endpoint': missing host."
+  if (( 10#$port < 1 || 10#$port > 65535 )); then
+    exit_with_error "Invalid WireGuard endpoint port in '$endpoint'."
   fi
 
-  # Allow UDP traffic to WireGuard endpoint IP and port
-  sudo ufw allow out to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp comment 'Allow connect to vpn service' >/dev/null
-  # sudo ufw allow out from any to "$WG_ENDPOINT_IP" port "$WG_PORT" proto udp
-
-  # Allow traffic on WireGuard interface
-  sudo ufw allow out on "$WG_INTERFACE" from any to any comment 'Allow access to www on vpn' >/dev/null
-
-  # Allow DNS requests through the VPN
-  local VPN_DNS
-  VPN_DNS=$(sudo grep -iE "^DNS" "$WG_CONF_PATH_USE" | cut -d= -f2 | cut -d, -f1 | xargs)
-  [[ -z $VPN_DNS ]] && VPN_DNS="9.9.9.9"
-  sudo ufw allow out on "$WG_INTERFACE" to "$VPN_DNS" port 53 proto udp comment 'Allow access to dns on vpn' >/dev/null
-
-  # Allow SSH access over default interface for management
-  sudo ufw allow in on "$DEFAULT_IFACE" to any port 22 proto tcp comment 'Allow access for ssh' >/dev/null
-  # Allow HTTPS access over default interface for management
-  [[ $EXTENDED_UFW -eq 1 ]] && sudo ufw allow in on "$DEFAULT_IFACE" to any port 443 proto tcp comment 'Allow access for https' >/dev/null
-  # Allow caido proxy access over default interface for pentest
-  [[ $EXTENDED_UFW -eq 1 ]] && sudo ufw allow in on "$DEFAULT_IFACE" to any port "$SERVICE_PORT_CAIDO" proto tcp comment 'Allow access for caido' >/dev/null
-
-  # Allow out to private subnet access over default interface
-  [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]] && sudo ufw allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" comment 'Allow access to private net' >/dev/null
-
-  sudo ufw --force enable 1>/dev/null
-  log "INFO" "Kill switch configured. All traffic is forced through VPN."
+  WG_ENDPOINT_HOST="$host"
+  WG_ENDPOINT_PORT="$port"
 }
 
-# ******************************************************************************
+resolve_endpoint() {
+  local host="$WG_ENDPOINT_HOST"
+  local addr=""
+  local resolved=""
 
+  WG_ENDPOINT_ADDRS=()
+
+  if is_ipv4 "$host"; then
+    WG_ENDPOINT_ADDRS+=("$host")
+    return 0
+  fi
+
+  if is_ipv6 "$host"; then
+    if ! ipv6_enabled; then
+      exit_with_error "WireGuard endpoint '$host' is IPv6 but IPv6 is disabled. Use an IPv4 endpoint or enable IPv6."
+    fi
+    WG_ENDPOINT_ADDRS+=("$host")
+    return 0
+  fi
+
+  resolved=$(getent ahosts "$host" 2>/dev/null | awk '{print $1}' | awk '!seen[$0]++') || true
+  if [[ -z $resolved ]]; then
+    exit_with_error "Could not resolve WireGuard endpoint host '$host'."
+  fi
+
+  while IFS= read -r addr; do
+    [[ -n $addr ]] || continue
+    if [[ $addr == *:* ]] && ! ipv6_enabled; then
+      continue
+    fi
+    WG_ENDPOINT_ADDRS+=("$addr")
+  done <<< "$resolved"
+
+  if [[ ${#WG_ENDPOINT_ADDRS[@]} -eq 0 ]]; then
+    exit_with_error "WireGuard endpoint '$host' only resolves to IPv6, but IPv6 is disabled. Use an IPv4 endpoint or enable IPv6."
+  fi
+
+  log "INFO" "Resolved endpoint '$host' to: ${WG_ENDPOINT_ADDRS[*]}"
+}
+
+# Print the values of a WireGuard option, one per line, with inline comments
+# stripped. Pass "1" as the third argument to stop at the first match.
+wg_option() {
+  local conf="$1"
+  local key="$2"
+  local first="${3:-0}"
+
+  # shellcheck disable=SC2016
+  run_privileged awk -v key="$key" -v first="$first" '
+    BEGIN { IGNORECASE = 1 }
+    $0 ~ "^[[:space:]]*" key "[[:space:]]*=" {
+      sub(/#.*/, "")
+      sub(/^[^=]*=/, "")
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "")
+      print
+      if (first) exit
+    }
+  ' "$conf" || true
+}
+
+load_wireguard_endpoint() {
+  local endpoint=""
+  local source="${WG_CONF_PATH_USE:-running interface $WG_INTERFACE}"
+
+  if [[ -n $WG_CONF_PATH_USE ]]; then
+    endpoint=$(wg_option "$WG_CONF_PATH_USE" Endpoint 1)
+  fi
+
+  if [[ -z $endpoint ]]; then
+    if ! command -v wg >/dev/null 2>&1; then
+      exit_with_error "No Endpoint found in $source and 'wg' is not installed. Pass -c <CONF>."
+    fi
+    endpoint=$(run_privileged wg show "$WG_INTERFACE" endpoints 2>/dev/null | awk 'NF >= 2 {print $2; exit}') || true
+  fi
+
+  [[ -n $endpoint ]] || exit_with_error "Could not determine the WireGuard endpoint from $source. Ensure it has an Endpoint line or the interface is running."
+
+  parse_endpoint "$endpoint"
+  resolve_endpoint
+}
+
+load_dns_servers() {
+  local dns_lines=""
+  local line=""
+  local server=""
+  local -a parts=()
+
+  VPN_DNS_SERVERS=()
+
+  if [[ -n $WG_CONF_PATH_USE ]]; then
+    dns_lines=$(wg_option "$WG_CONF_PATH_USE" DNS)
+  fi
+
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    IFS=',' read -r -a parts <<< "$line"
+    for server in "${parts[@]}"; do
+      server="${server//[[:space:]]/}"
+      [[ -n $server ]] || continue
+      if is_ipv4 "$server"; then
+        VPN_DNS_SERVERS+=("$server")
+      elif is_ipv6 "$server" && ipv6_enabled; then
+        VPN_DNS_SERVERS+=("$server")
+      fi
+    done
+  done <<< "$dns_lines"
+
+  if [[ ${#VPN_DNS_SERVERS[@]} -eq 0 ]]; then
+    VPN_DNS_SERVERS=("9.9.9.9")
+  fi
+}
+
+# *** Kernel Requirements ***
+ensure_src_valid_mark() {
+  local current=""
+  local sysctl_file="$SYSCTL_CONF_PATH"
+
+  current=$(sysctl -n net.ipv4.conf.all.src_valid_mark 2>/dev/null) || true
+
+  if [[ $current == 1 ]]; then
+    log "INFO" "net.ipv4.conf.all.src_valid_mark is already enabled."
+  else
+    log "INFO" "Enabling net.ipv4.conf.all.src_valid_mark=1 for WireGuard policy routing."
+    if ! run_privileged sysctl -q net.ipv4.conf.all.src_valid_mark=1; then
+      log "WARN" "Could not enable net.ipv4.conf.all.src_valid_mark. VPN return traffic may be dropped by rp_filter."
+    fi
+  fi
+
+  if [[ $PERSIST_SYSCTL -eq 0 ]]; then
+    return 0
+  fi
+
+  printf '%s\n' \
+    '# Managed by vm-quick-wg-vpn: WireGuard fwmark policy routing needs src_valid_mark.' \
+    'net.ipv4.conf.all.src_valid_mark=1' |
+    run_privileged tee "$sysctl_file" >/dev/null || exit_with_error "Could not write $sysctl_file."
+}
+
+# *** UFW Handling ***
+ufw_do() {
+  local output=""
+  if ! output=$(run_privileged ufw "$@" 2>&1); then
+    exit_with_error "UFW command failed: ufw $*: $output"
+  fi
+  if [[ $VERBOSE -eq 1 && -n $output ]]; then
+    log "INFO" "ufw $*: $output"
+  fi
+}
+
+# Keep UFW's IPv6 backend in sync with the kernel. Otherwise ufw enable can
+# fail when IPv6 is disabled, and an enabled IPv6 stack would bypass the
+# kill switch when UFW has IPV6=no.
+configure_ufw_ipv6() {
+  local want="no"
+  local current=""
+  local file="$UFW_DEFAULTS_PATH"
+
+  if ipv6_enabled; then
+    want="yes"
+  fi
+
+  # /etc/default/ufw is world-readable, so no sudo is needed for the read.
+  current=$(awk -F= '/^[[:space:]]*IPV6[[:space:]]*=/{gsub(/[[:space:]]/, "", $2); print $2; exit}' "$file" 2>/dev/null) || true
+  if [[ $current == "$want" ]]; then
+    return 0
+  fi
+
+  log "INFO" "Setting UFW IPV6=$want to match the kernel IPv6 state."
+  if grep -qE '^[[:space:]]*IPV6[[:space:]]*=' "$file"; then
+    run_privileged sed -i -E "s|^[[:space:]]*IPV6[[:space:]]*=.*|IPV6=$want|" "$file" || exit_with_error "Could not update IPV6 in $file."
+  else
+    printf 'IPV6=%s\n' "$want" | run_privileged tee -a "$file" >/dev/null || exit_with_error "Could not add IPV6 to $file."
+  fi
+}
+
+# UFW requires DEFAULT_FORWARD_POLICY to be a recognized policy. A previous
+# version of this script could leave it empty, causing even `ufw disable` to
+# fail with "Missing policy for 'forward'". Keep routed traffic deny-by-default;
+# UFW reports it as "disabled (routed)" when kernel IP forwarding is disabled.
+ensure_ufw_forward_policy() {
+  local file="$UFW_DEFAULTS_PATH"
+  local current=""
+
+  [[ -r $file ]] || exit_with_error "UFW defaults file is not readable: $file"
+  current=$(awk -F= '/^[[:space:]]*DEFAULT_FORWARD_POLICY[[:space:]]*=/ {
+    value = $2
+    gsub(/[[:space:]"]/, "", value)
+    print toupper(value)
+    exit
+  }' "$file")
+
+  if [[ $current == "DROP" ]]; then
+    return 0
+  fi
+
+  log "WARN" "Setting DEFAULT_FORWARD_POLICY=DROP in $file (was ${current:-unset})."
+  if grep -qE '^[[:space:]]*DEFAULT_FORWARD_POLICY[[:space:]]*=' "$file"; then
+    run_privileged sed -i -E 's|^[[:space:]]*DEFAULT_FORWARD_POLICY[[:space:]]*=.*|DEFAULT_FORWARD_POLICY="DROP"|' "$file" ||
+      exit_with_error "Could not set DEFAULT_FORWARD_POLICY in $file."
+  else
+    printf '\nDEFAULT_FORWARD_POLICY="DROP"\n' | run_privileged tee -a "$file" >/dev/null ||
+      exit_with_error "Could not add DEFAULT_FORWARD_POLICY to $file."
+  fi
+}
+
+# Rebuild UFW from scratch. No backup is kept: this tool owns the ruleset.
+# configure_ufw_ipv6 runs before reset (ufw enable fails with IPv6 disabled)
+# and after it, because reset rewrites the UFW defaults file.
+ufw_rebuild() {
+  ensure_ufw_forward_policy
+  configure_ufw_ipv6
+  ufw_do --force disable
+  ufw_do --force reset
+  configure_ufw_ipv6
+}
+
+# Allow loopback and reject traffic pretending to come from loopback.
+# $1: 1 to also deny outbound ::1 (kill switch), 0 for the CIS baseline.
+ufw_loopback_rules() {
+  local deny_v6_out="${1:-0}"
+
+  ufw_do allow in on lo
+  ufw_do allow out on lo
+  ufw_do deny in from 127.0.0.0/8
+  if ipv6_enabled; then
+    ufw_do deny in from ::1
+    if [[ $deny_v6_out -eq 1 ]]; then
+      ufw_do deny out from ::1
+    fi
+  fi
+}
+
+add_ssh_rules() {
+  if [[ $SSH_SOURCE == *:* ]] && ! ipv6_enabled; then
+    exit_with_error "--ssh-source '$SSH_SOURCE' is IPv6 but IPv6 is disabled."
+  fi
+
+  if [[ $SSH_SOURCE == "any" ]]; then
+    ufw_do allow "$SSH_PORT"/tcp comment 'Allow access for ssh'
+  elif [[ -n $SSH_SOURCE ]]; then
+    ufw_do allow from "$SSH_SOURCE" to any port "$SSH_PORT" proto tcp comment 'Allow access for ssh'
+  else
+    [[ -n $DEFAULT_IFACE ]] || exit_with_error "Cannot add the SSH rule without a default interface. Use --default-iface or --ssh-source."
+    ufw_do allow in on "$DEFAULT_IFACE" to any port "$SSH_PORT" proto tcp comment 'Allow access for ssh'
+  fi
+}
+
+# Reset UFW to deny-by-default and allow only the tunnel, its endpoint, DNS,
+# loopback, and management access. This is the VPN kill switch.
+setup_kill_switch() {
+  local addr=""
+  local server=""
+
+  log "INFO" "Configuring the UFW kill switch."
+
+  if [[ -z $DEFAULT_IFACE && -z $SSH_SOURCE ]]; then
+    exit_with_error "Cannot determine the default network interface. Use --default-iface or --ssh-source."
+  fi
+  if [[ $EXTENDED_UFW -eq 1 && -z $DEFAULT_IFACE ]]; then
+    exit_with_error "Cannot add the extended UFW rules without a default interface. Use --default-iface."
+  fi
+  if [[ $ALLOW_ACCESS_PRIVATE -eq 1 && -z $DEFAULT_IFACE ]]; then
+    exit_with_error "Cannot allow the private subnet without a default interface. Use --default-iface."
+  fi
+
+  ufw_rebuild
+
+  ufw_do default deny outgoing
+  ufw_do default deny incoming
+  ufw_loopback_rules 1
+
+  for addr in "${WG_ENDPOINT_ADDRS[@]}"; do
+    ufw_do allow out to "$addr" port "$WG_ENDPOINT_PORT" proto udp comment 'Allow connect to vpn service'
+  done
+
+  ufw_do allow out on "$WG_INTERFACE" from any to any comment 'Allow access to www on vpn'
+
+  for server in "${VPN_DNS_SERVERS[@]}"; do
+    ufw_do allow out on "$WG_INTERFACE" to "$server" port 53 proto udp comment 'Allow access to dns on vpn'
+    ufw_do allow out on "$WG_INTERFACE" to "$server" port 53 proto tcp comment 'Allow access to dns over tcp on vpn'
+  done
+
+  add_ssh_rules
+
+  if [[ $EXTENDED_UFW -eq 1 ]]; then
+    ufw_do allow in on "$DEFAULT_IFACE" to any port 443 proto tcp comment 'Allow access for https'
+    ufw_do allow in on "$DEFAULT_IFACE" to any port "$SERVICE_PORT_CAIDO" proto tcp comment 'Allow access for caido'
+  fi
+
+  if [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]]; then
+    if [[ $PRIVATE_NETWORK_SUBNET == *:* ]] && ! ipv6_enabled; then
+      log "WARN" "Skipping the IPv6 private subnet rule because IPv6 is disabled."
+    else
+      ufw_do allow out on "$DEFAULT_IFACE" to "$PRIVATE_NETWORK_SUBNET" comment 'Allow access to private net'
+    fi
+  fi
+
+  ufw_do --force enable
+  log "INFO" "Kill switch configured. All traffic is forced through the VPN."
+}
+
+# Apply the hardened CIS-style baseline used by --reset-ufw / --cis-ufw.
+# Routed traffic is left at UFW's default (disabled); outbound is denied by default.
+apply_ufw_baseline() {
+  log "INFO" "Applying the CIS-style UFW baseline."
+
+  if [[ -z $DEFAULT_IFACE && -z $SSH_SOURCE ]]; then
+    exit_with_error "Cannot determine the default network interface. Use --default-iface or --ssh-source."
+  fi
+
+  ufw_rebuild
+
+  run_privileged sysctl -q net.ipv4.conf.all.src_valid_mark=0 2>/dev/null || true
+  run_privileged rm -f "$SYSCTL_CONF_PATH"
+
+  ufw_do logging low
+  ufw_do default deny incoming
+  ufw_do default deny outgoing
+
+  add_ssh_rules
+  ufw_loopback_rules 0
+
+  ufw_do allow out from any to any
+
+  ufw_do --force enable
+  log "INFO" "CIS-style UFW baseline applied."
+  run_privileged ufw status verbose || true
+}
+
+# *** Systemd ***
 setup_systemd() {
-  local script_install_path='/opt/vm-quick-wg-vpn'
-  log "INFO" "Creating symlink from '$0' as '$script_install_path'"
-  sudo chmod 775 "$0"
-  sudo chown root:root "$0"
-  sudo ln -sf "$0" "$script_install_path"
+  local script_install_path="/opt/vm-quick-wg-vpn"
+  local script_path=""
+  local args_string=""
+  local arg=""
+  local -a service_args=(
+    -i "$WG_INTERFACE"
+    --ssh-port "$SSH_PORT"
+    -s "$PRIVATE_NETWORK_SUBNET"
+    -sc "$SERVICE_PORT_CAIDO"
+  )
 
-  log "INFO" "Creating systemd entry as 'vm-quick-wg-vpn.service'"
-  sudo tee /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<'EOF'
+  script_path=$(readlink -f "${BASH_SOURCE[0]}") || exit_with_error "Could not resolve the script path."
+
+  if [[ $ONLY_UFW -eq 1 ]]; then
+    service_args+=(-ou)
+  fi
+  if [[ $EXTENDED_UFW -eq 1 ]]; then
+    service_args+=(-eu)
+  fi
+  if [[ $ALLOW_ACCESS_PRIVATE -eq 1 ]]; then
+    service_args+=(-ap)
+  fi
+  if [[ -n $DEFAULT_IFACE_OVERRIDE ]]; then
+    service_args+=(--default-iface "$DEFAULT_IFACE_OVERRIDE")
+  fi
+  if [[ -n $SSH_SOURCE ]]; then
+    service_args+=(--ssh-source "$SSH_SOURCE")
+  fi
+  if [[ $PERSIST_SYSCTL -eq 0 ]]; then
+    service_args+=(--no-persist-sysctl)
+  fi
+
+  for arg in "${service_args[@]}"; do
+    if [[ ! $arg =~ ^[A-Za-z0-9_./,:+=@-]+$ ]]; then
+      exit_with_error "Refusing to write an unsafe systemd argument: '$arg'."
+    fi
+  done
+  printf -v args_string ' %s' "${service_args[@]}"
+
+  log "INFO" "Installing the script as $script_install_path."
+  run_privileged install -m 0755 "$script_path" "$script_install_path" || exit_with_error "Could not install $script_install_path."
+
+  log "INFO" "Creating systemd unit vm-quick-wg-vpn.service."
+  run_privileged tee /etc/systemd/system/vm-quick-wg-vpn.service >/dev/null <<EOF
 [Unit]
-Description=Run WG VPN Startup Script
-Requires=systemd-networkd.service
-After=network-online.target
+Description=WireGuard VPN with UFW kill switch
 Wants=network-online.target
+After=network-online.target
 
 [Service]
-ExecStart=/opt/vm-quick-wg-vpn
 Type=oneshot
 RemainAfterExit=yes
-User=root
+ExecStart=$script_install_path$args_string
 
 [Install]
-WantedBy=default.target
-
+WantedBy=multi-user.target
 EOF
 
-  log "INFO" "Enabling systemd service"
-  sudo systemctl daemon-reload
-  sudo systemctl enable vm-quick-wg-vpn.service
-  log "INFO" "Systemd service created."
-
-  # log "INFO" "Start systemd service"
-  # sudo systemctl start vm-quick-wg-vpn.service
+  run_privileged systemctl daemon-reload || exit_with_error "Could not reload systemd."
+  run_privileged systemctl enable vm-quick-wg-vpn.service >/dev/null || exit_with_error "Could not enable vm-quick-wg-vpn.service."
+  log "INFO" "Systemd service enabled."
 }
 
-# ******************************************************************************
-
+# *** Usage and Argument Parsing ***
 usage() {
-  echo "Usage: $0 [options]"
-  echo "Example:"
-  echo "  $0"
-  echo "  $0 -c NLFREE685133.conf"
-  echo "  $0 -ap -sd"
-  echo "  $0 -ou"
-  echo "Options:"
-  echo "  -h,  --help                 Show this help message and exit"
-  echo "  -ou, --only-ufw             Setup only ufw - skip wireguard configs"
-  echo "  -eu, --extended-ufw         Setup ufw with extended rules - caido, https ..."
-  echo "  -ap, --allow-private        Allow access private subnet (default: disabled)"
-  echo "  -sd, --systemd              Setup as systemd service (default: disabled)"
-  echo "  -c,  --conf <CONF_PATH>     Path to WireGuard .conf file (default: ./wg0.conf)"
-  echo "  -i,  --interface <IFACE>    Name of WireGuard interface (default: wg0)"
-  echo "  -s,  --subnet <SUBNET>      Private subnet for internal communication (default: 192.168.0.0/16)"
-  echo "  -sc, --caido <PORT>         Port for Caido service (default: 9999)"
+  cat <<EOF
+Usage: $0 [options]
+
+Examples:
+  $0
+  $0 -c NLFREE685133.conf
+  $0 -ap -sd
+  $0 -ou
+  $0 --reset-ufw --ssh-source 192.168.1.0/24
+
+WireGuard and kill switch:
+  -h,  --help                 Show this help message and exit
+  -ou, --only-ufw             Configure only the UFW kill switch (skip WireGuard changes)
+  -eu, --extended-ufw         Add HTTPS and Caido rules on the default interface
+  -ap, --allow-private        Allow outbound access to the private subnet (default: disabled)
+  -sd, --systemd              Install and enable the systemd unit (default: disabled)
+  -c,  --conf <CONF_PATH>     Path to the WireGuard .conf file (default: ./wg0.conf)
+  -i,  --interface <IFACE>    Name of the WireGuard interface (default: wg0)
+  -s,  --subnet <SUBNET>      Private subnet for internal communication (default: 192.168.0.0/16)
+  -sc, --caido <PORT>         Port for the Caido service (default: 9999)
+      --ssh-port <PORT>      SSH port to allow (default: 22)
+      --ssh-source <SRC>     SSH source IP/CIDR, or 'any' (default: default interface)
+      --default-iface <IF>   Override default network interface detection
+
+UFW reset mode (skips WireGuard setup):
+      --reset-ufw            Reset UFW and apply the CIS-style baseline
+      --cis-ufw              Alias for --reset-ufw
+      --down                 Bring WireGuard down, then reset UFW to the CIS-style baseline
+
+Kernel behavior:
+      --no-persist-sysctl    Do not persist net.ipv4.conf.all.src_valid_mark=1
+  -v,  --verbose              Show UFW command output
+
+The reset mode and the kill switch both rebuild UFW from scratch. No backup of
+the previous rules is kept.
+EOF
 }
 
-# Parse command-line arguments
+need_arg() {
+  [[ $# -ge 2 && -n $2 ]] || exit_with_error "Option '$1' requires a value."
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -247,24 +957,60 @@ parse_args() {
       ALLOW_ACCESS_PRIVATE=1
       shift
       ;;
+    -sd | --systemd)
+      SETUP_SYSTEMD=1
+      shift
+      ;;
     -c | --conf)
+      need_arg "$@"
       WG_CONF_PATH="$2"
+      WG_CONF_PATH_EXPLICIT=1
       shift 2
       ;;
     -i | --interface)
+      need_arg "$@"
       WG_INTERFACE="$2"
       shift 2
       ;;
     -s | --subnet)
+      need_arg "$@"
       PRIVATE_NETWORK_SUBNET="$2"
       shift 2
       ;;
     -sc | --caido)
+      need_arg "$@"
       SERVICE_PORT_CAIDO="$2"
       shift 2
       ;;
-    -sd | --systemd)
-      SETUP_SYSTEMD=1
+    --ssh-port)
+      need_arg "$@"
+      SSH_PORT="$2"
+      shift 2
+      ;;
+    --ssh-source)
+      need_arg "$@"
+      SSH_SOURCE="$2"
+      shift 2
+      ;;
+    --default-iface)
+      need_arg "$@"
+      DEFAULT_IFACE_OVERRIDE="$2"
+      shift 2
+      ;;
+    --reset-ufw | --cis-ufw)
+      RESET_UFW=1
+      shift
+      ;;
+    -d | --down)
+      DOWN=1
+      shift
+      ;;
+    --no-persist-sysctl)
+      PERSIST_SYSCTL=0
+      shift
+      ;;
+    -v | --verbose)
+      VERBOSE=1
       shift
       ;;
     *)
@@ -275,9 +1021,13 @@ parse_args() {
   done
 }
 
-# ******************************************************************************
+# *** Entrypoint ***
+# shellcheck disable=SC2154 # rc is assigned inside the trap before use.
+trap 'rc=$?; log "ERROR" "Unexpected error on line $LINENO (command: $BASH_COMMAND, exit $rc)."; exit "$rc"' ERR
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-# Parse arguments and run main script
 parse_args "$@"
 main
 exit 0
