@@ -200,7 +200,17 @@ skill cannot:
 
 If it only restates the skill's steps, it is duplication: it burns prompt
 context in every session (14 agents cost 17.6k chars before the trim) and creates
-a second place to update. Current agents: `security-engineer`, `github-workflow`.
+a second place to update. Current agents: `security-engineer`, `github-workflow`,
+`rea-investigator`.
+
+`rea-investigator` is the pattern to copy when a third-party tool already ships
+its own skill. `rea-investigator` loads the upstream `reverse-engineer-anything`
+skill for the procedure and adds only what a skill cannot express: a permission
+posture for running untrusted artifacts, workspace confinement, and a reporting
+contract that keeps decompiled bulk out of the parent session. Its system prompt
+deliberately does not restate the upstream workflow. Pair such an agent with an
+MCP snippet (step 7d) and an upstream skill source (step 7b), pin both to the
+same release, and update this list.
 
 To add one: a snippet in `ai/setup-ai-opencode.conf` plus its name in
 `OPENCODE_CONFIG_AGENTS_NAMES`, and optionally in `OPENCODE_CONFIG_AGENTS_DEFAULT`
