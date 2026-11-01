@@ -210,4 +210,83 @@ if check_command_q git; then
     }
     git diff HEAD FETCH_HEAD | git apply --3way
   }
+
+  vm_git_branch_summary() {
+    # Usage: vm_git_branch_summary [BASE_REF [OUTPUT_FILE]]
+    #   Summarize the current branch against BASE_REF (default: origin/main,
+    #   overridable via VM_GIT_BASE_REF) into OUTPUT_FILE (default: pr-diff.txt,
+    #   overridable via VM_GIT_SUMMARY_FILE). Pass "-" as OUTPUT_FILE to print
+    #   to stdout instead of writing a file.
+    check_command git || return 1
+
+    local base_ref="${1:-${VM_GIT_BASE_REF:-origin/main}}"
+    local output_file="${2:-${VM_GIT_SUMMARY_FILE:-pr-diff.txt}}"
+
+    git rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+      echo "[ERROR] Not inside a git work tree." >&2
+      return 1
+    }
+    git rev-parse --verify --quiet "$base_ref" >/dev/null 2>&1 || {
+      echo "[ERROR] Base ref '$base_ref' not found." >&2
+      return 1
+    }
+
+    local current_branch
+    current_branch="$(git branch --show-current)"
+    [[ -n "$current_branch" ]] || current_branch="HEAD (detached)"
+
+    # Build fully in memory first, so a failure never leaves a truncated file.
+    local summary
+    summary=$(
+      echo "======================================================================="
+      echo " BRANCH SUMMARY"
+      echo "======================================================================="
+      echo ""
+      echo "Base branch: $base_ref"
+      echo "Current branch: $current_branch"
+      echo "Generated at: $(date)"
+      echo ""
+
+      echo "======================================================================="
+      echo " 1. CHANGE SUMMARY"
+      echo "======================================================================="
+      git --no-pager diff --color=never --stat "$base_ref...HEAD"
+      echo ""
+
+      echo "======================================================================="
+      echo " 2. CHANGED FILES"
+      echo "======================================================================="
+      git --no-pager diff --color=never --name-status --find-renames "$base_ref...HEAD"
+      echo ""
+
+      echo "======================================================================="
+      echo " 3. COMMIT HISTORY"
+      echo "======================================================================="
+      git --no-pager log --color=never --oneline "$base_ref..HEAD"
+      echo ""
+
+      echo "======================================================================="
+      echo " 4. DETAILED CODE DIFF"
+      echo "======================================================================="
+      git --no-pager diff --color=never --no-ext-diff --unified=40 --find-renames "$base_ref...HEAD"
+      echo ""
+
+      echo "======================================================================="
+      echo " END OF BRANCH SUMMARY"
+      echo "======================================================================="
+    ) || {
+      echo "[ERROR] Failed to generate branch summary." >&2
+      return 1
+    }
+
+    if [[ "$output_file" == "-" ]]; then
+      printf '%s\n' "$summary"
+    else
+      printf '%s\n' "$summary" >"$output_file" || {
+        echo "[ERROR] Failed to write '$output_file'." >&2
+        return 1
+      }
+      echo "vm_git_branch_summary: wrote $output_file"
+    fi
+  }
 fi
