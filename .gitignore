@@ -153,3 +153,10 @@ ai/opnsense-companion/**
 !ai/opnsense-companion/ONBOARDING.md
 !ai/SKILL-docker-stack-ops.md
 !ai/SKILL-skill-authoring.md
+!ai/SKILL-vm-site-builder.md
+!ai/site-builder-companion/
+ai/site-builder-companion/**
+!ai/site-builder-companion/project-brief.md
+!ai/site-builder-companion/storage-auth-deployment.md
+!ai/site-builder-companion/design-and-iteration.md
+!ai/site-builder-companion/secure-delivery-checklist.md
