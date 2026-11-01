@@ -65,17 +65,17 @@ RUN_SETUP_FILEBROWSER=0
 RUN_SETUP_LLAMACPP=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_OPENCODE=v2.0.31
+VERSION_OPENCODE=v2.2.5
 VERSION_OPENCODE_REPO=https://github.com/anomalyco/opencode
-VERSION_HERDR=v0.9.3
+VERSION_HERDR=v0.9.5
 VERSION_HERDR_REPO=https://github.com/herdrdev/herdr
-VERSION_FILEBROWSER=v2.0.0-stable
+VERSION_FILEBROWSER=v2.0.2-stable
 VERSION_FILEBROWSER_REPO=https://github.com/gtsteffaniak/filebrowser
-VERSION_GH=v2.102.0
+VERSION_GH=v2.103.3
 VERSION_GH_REPO=https://github.com/cli/cli
 # llama.cpp now publishes stable semver releases; the rolling bNNNNN tags are
 # prereleases, so pin the release like every other tool here.
-VERSION_LLAMACPP=v0.6.0
+VERSION_LLAMACPP=v0.8.0
 VERSION_LLAMACPP_REPO=https://github.com/ggml-org/llama.cpp
 
 # CONFIG :: paths --------------------------------------------------------------
@@ -102,7 +102,7 @@ main() {
   # https://github.com/aliasrobotics/cai
   # https://hermes-agent.nousresearch.com/docs/getting-started/installation
 
-# llama.cpp config runs first: it generates OPENCODE_CONFIG_PROVIDER_LLAMACPP
+  # llama.cpp config runs first: it generates OPENCODE_CONFIG_PROVIDER_LLAMACPP
   # from the model the user just picked, which setup_opencode then merges.
   run_if $RUN_SETUP_LLAMACPP && setup_llamacpp
   run_if $RUN_SETUP_OPENCODE && setup_opencode
