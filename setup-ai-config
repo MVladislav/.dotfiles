@@ -217,6 +217,8 @@ setup_opencode() {
   local opencode_config
   opencode_config=$(jq -n --arg schema "https://opencode.ai/config.json" '{"$schema": $schema}')
   opencode_config=$(echo "$opencode_config" | jq '.update = "notify"')
+  opencode_config=$(echo "$opencode_config" | jq '.experimental.background_compaction = true')
+  opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_POLICIES" '.policies = $p')
 
   echo ""
   if [[ -n "$OPENCODE_CONFIG_MCP_COMBINED" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]]; then
@@ -256,8 +258,11 @@ setup_opencode() {
     [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_del=".lsp"
     [[ -n "$OPENCODE_CONFIG_PROVIDER_COMBINED" && "$OPENCODE_CONFIG_PROVIDER_COMBINED" != "CLEANUP" ]] &&
       merge_del="${merge_del:+$merge_del,}.providers,.provider"
-    local merge_filter='.[0] * .[1]'
-    [[ -n "$merge_del" ]] && merge_filter=".[0] * (.[1] | del($merge_del))"
+    local existing_filter='.'
+    [[ -n "$merge_del" ]] && existing_filter="del($merge_del)"
+    local merge_filter
+    merge_filter=".[0] as \$managed | .[1] as \$existing | (\$managed * (\$existing | $existing_filter))"
+    merge_filter+=" | .policies = (((\$existing.policies // []) | map(select(. as \$rule | ((\$managed.policies // []) | index(\$rule)) == null))) + (\$managed.policies // []))"
 
     print_notes "   🔧 merging selected configs into existing $config_file"
     if jq -s "$merge_filter" <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
