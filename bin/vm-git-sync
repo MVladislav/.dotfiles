@@ -1,45 +1,49 @@
 #!/usr/bin/env bash
 PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
 set -euo pipefail
+trap 'echo "vm-git-sync: ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
 #
-# git-tracked file sync between two checkouts of the same project
+# Sync files between two checkouts of the same Git project
 #
-# Copies only files the source repository tracks (git ls-files), so untracked
-# build output, local .env files and secrets never travel. Use it to push a
-# working checkout to a second location (dev -> prod share, backup, clone).
+# Copies tracked working-tree files, including unstaged changes. Use -u to also
+# copy untracked, non-ignored files. Pruning removes only stale Git-tracked files
+# and source-tracked files deleted from the working tree; local destination-only
+# files and nested Git repositories are preserved.
 #
 # Usage:
-#   vm-git-sync [-C] [-D] [-x PATTERN] <from-repo-root> <to-repo-root>
+#   vm-git-sync [-C] [-D] [-u] [-x PATTERN] <from-repo-root> <to-repo-root>
 #
 # Options:
-#   -C, --check           dry run, itemized, no confirmation
-#   -D, --prune           also delete destination files the source no longer tracks
-#   -x, --exclude PATTERN pathspec pattern, repeatable (e.g. 'data/', '*.env')
+#   -C, --check           dry run with summary and itemized changes, no confirmation
+#   -D, --prune           delete destination files missing from the source
+#   -u, --untracked       also copy untracked files not ignored by .gitignore
+#   -x, --exclude PATTERN git pathspec, repeatable (e.g. 'data/', '*.env')
 #   -h, --help            show help
 #
 # Notes:
-#   - both paths must be repository roots of the same project
-#   - submodule trees are skipped, they are separate repositories
-#   - a nested checkout only the destination tracks is never deleted
-#   - stage deletions in the source first: 'git add -A', otherwise rsync stops
-#   - empty directories left behind after a --prune are not removed
+#   - both paths must be repository roots with a shared root commit
+#   - submodule trees and destination-only nested Git repositories are protected
+#   - destination untracked files are never removed by --prune
+#   - empty directories left behind after pruning are not removed
 
 # *** Globals ***
 FROM_REPO=''
 TO_REPO=''
 PRUNE=0
 DRY_RUN=0
+INCLUDE_UNTRACKED=0
 EXCLUDES=()
 PATHSPECS=()
-DEST_PATHSPECS=()
 RSYNC_OPTS=()
 SUBMODULES=()
 DEST_GITLINKS=()
 TRACKED_COUNT=0
 STALE_COUNT=0
+UNTRACKED_COUNT=0
 SOURCE_LIST=''
-STALE_LIST=''
 TRANSFER_LIST=''
+DELETE_LIST=''
+UNTRACKED_LIST=''
 WORK_DIR=''
 
 # *** Utility Functions ***
@@ -59,16 +63,17 @@ count_entries() {
   tr -dc '\0' <"$1" | wc -c
 }
 
-# Remove the scratch directory holding the generated file lists
+# Remove the scratch directory holding generated path lists
 cleanup() {
-  [[ -n $WORK_DIR && -d $WORK_DIR ]] && rm -rf -- "$WORK_DIR"
-  return 0
+  if [[ -n "$WORK_DIR" && -d "$WORK_DIR" ]]; then
+    rm -rf -- "$WORK_DIR"
+  fi
 }
 
 # *** Validation Functions ***
 validate_dependencies() {
   local cmd
-  for cmd in git rsync comm sort sed tr wc realpath mktemp; do
+  for cmd in git rsync comm sort tr wc realpath mktemp cat rm dirname awk; do
     command -v "$cmd" >/dev/null 2>&1 || exit_with_error "'$cmd' is not installed"
   done
 }
@@ -78,34 +83,29 @@ validate_dependencies() {
 # At different depths the lists share no namespace, every destination file looks
 # stale and --prune would delete the lot.
 validate_repos() {
-  local path root
+  local path
+  local root
   for path in "$FROM_REPO" "$TO_REPO"; do
-    [[ -d $path ]] || exit_with_error "not a directory: $path"
+    [[ -d "$path" ]] || exit_with_error "not a directory: $path"
     root=$(git -C "$path" rev-parse --show-toplevel 2>/dev/null) ||
       exit_with_error "not a git repository: $path"
-    [[ $(resolve_path "$root") == "$(resolve_path "$path")" ]] ||
+    [[ "$(resolve_path "$root")" == "$(resolve_path "$path")" ]] ||
       exit_with_error "not a git repository root: $path (root is $root)"
   done
-  [[ $(resolve_path "$FROM_REPO") != "$(resolve_path "$TO_REPO")" ]] ||
+  [[ "$(resolve_path "$FROM_REPO")" != "$(resolve_path "$TO_REPO")" ]] ||
     exit_with_error "source and destination are the same directory"
 }
 
-# Two unrelated projects would sync cleanly and silently, their histories cannot
+# Two unrelated projects could otherwise sync cleanly and silently.
 validate_same_project() {
-  local id_from id_to
-  id_from=$(git -C "$FROM_REPO" rev-list --max-parents=0 HEAD 2>/dev/null | LC_ALL=C sort) ||
+  local roots_from
+  local roots_to
+  roots_from=$(git -C "$FROM_REPO" rev-list --max-parents=0 HEAD 2>/dev/null | LC_ALL=C sort) ||
     exit_with_error "source has no commits: $FROM_REPO"
-  id_to=$(git -C "$TO_REPO" rev-list --max-parents=0 HEAD 2>/dev/null | LC_ALL=C sort) ||
+  roots_to=$(git -C "$TO_REPO" rev-list --max-parents=0 HEAD 2>/dev/null | LC_ALL=C sort) ||
     exit_with_error "destination has no commits: $TO_REPO"
-  [[ -n $id_from && "$id_to" == "$id_from" ]] ||
+  [[ -n "$roots_from" && "$roots_to" == "$roots_from" ]] ||
     exit_with_error "different git projects: $FROM_REPO and $TO_REPO do not share a history"
-}
-
-# git ls-files reads the index, so an unstaged deletion stays in the list and
-# kills rsync mid-run with a bare exit 23
-check_source_index() {
-  [[ -z $(git -C "$FROM_REPO" ls-files --deleted) ]] ||
-    exit_with_error "unstaged deletions in $FROM_REPO, run 'git add -A' first"
 }
 
 # *** Build Functions ***
@@ -113,22 +113,31 @@ check_source_index() {
 # files: rsync recurses into every directory in its list, so without an exclude
 # the nested repository would be copied file by file, .git directory included.
 collect_submodules() {
+  local gitmodules="$FROM_REPO/.gitmodules"
+  local entry
   local path
-  while IFS= read -r path; do
-    [[ -n $path ]] && SUBMODULES+=("$path")
-  done < <(git -C "$FROM_REPO" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null |
-    sed 's/^[^[:space:]]*[[:space:]]//' || true)
+
+  [[ -f "$gitmodules" ]] || return 0
+  while IFS= read -r -d '' entry; do
+    path=${entry#*$'\n'}
+    if [[ -n "$path" ]]; then
+      SUBMODULES+=("$path")
+    fi
+  done < <(git config --null --file "$gitmodules" --get-regexp '\.path$' || true)
 }
 
-# Nested repositories the destination tracks and the source does not. --prune
-# deletes a stale path recursively, that would wipe a whole checkout sitting in
-# the destination, so they are kept out of the deletion set on purpose.
+# Destination gitlinks are independent checkouts, so exclude them from both
+# transfer and prune lists even when the source tracks an ordinary file there.
 collect_dest_gitlinks() {
+  local entry
+  local mode
   local path
-  while IFS= read -r path; do
-    [[ -n $path ]] && DEST_GITLINKS+=("$path")
-  done < <(git -C "$TO_REPO" ls-files -s -z | tr '\0' '\n' |
-    sed -n 's/^160000 [0-9a-f]* [0-9]*\t//p' || true)
+  while IFS= read -r -d '' entry; do
+    mode=${entry%% *}
+    [[ "$mode" == 160000 ]] || continue
+    path=${entry#*$'\t'}
+    DEST_GITLINKS+=("$path")
+  done < <(git -C "$TO_REPO" ls-files --stage -z)
 }
 
 # Turn the exclude patterns and the submodule paths into git pathspecs, so the
@@ -136,20 +145,20 @@ collect_dest_gitlinks() {
 # explicitly listed in --files-from is transferred even when --exclude matches it.
 # Plain patterns match a path and its whole tree, glob patterns are passed on.
 build_pathspecs() {
-  local pattern sub
+  local pattern
+  local sub
   PATHSPECS=()
-  DEST_PATHSPECS=()
   for pattern in "${EXCLUDES[@]}"; do
     pattern=${pattern#./}
     pattern=${pattern%/}
-    [[ -n $pattern ]] || exit_with_error "empty exclude pattern"
+    [[ -n "$pattern" ]] || exit_with_error "empty exclude pattern"
     add_pathspec "$pattern" PATHSPECS
   done
   for sub in "${SUBMODULES[@]}"; do
     add_pathspec "$sub" PATHSPECS
   done
   for sub in "${DEST_GITLINKS[@]}"; do
-    add_pathspec "$sub" DEST_PATHSPECS
+    add_pathspec "$sub" PATHSPECS
   done
 }
 
@@ -157,22 +166,23 @@ build_pathspecs() {
 add_pathspec() {
   local pattern="$1"
   local -n target="$2"
-  if [[ $pattern == *'*'* || $pattern == *'?'* || $pattern == *'['* ]]; then
-    target+=(":(exclude,glob)$pattern")
+  if [[ "$pattern" == *'*'* || "$pattern" == *'?'* || "$pattern" == *'['* ]]; then
+    target+=(":(exclude,glob)$pattern" ":(exclude,glob)$pattern/**")
+    if [[ "$pattern" != */* ]]; then
+      target+=(":(exclude,glob)**/$pattern" ":(exclude,glob)**/$pattern/**")
+    fi
   else
     target+=(":(exclude)$pattern" ":(exclude,glob)$pattern/**")
   fi
 }
 
-# Assemble the rsync option list: recursive, symlinks, times, checksum, stats,
-# create missing destination paths, and delete listed paths that are gone from
-# the source (--delete-missing-args only touches paths in the list).
+# Assemble the rsync option list for copying recursive file data, preserving
+# symlinks and times, checking content, and reporting transfer statistics.
 build_rsync_options() {
   local sub
-  RSYNC_OPTS=(-riltc --safe-links --stats --mkpath --delete-missing-args)
-  # rsync recurses into every directory in its list, a submodule tree would be
-  # copied file by file, .git directory included. Belt on top of the pathspec.
-  for sub in "${SUBMODULES[@]}"; do
+  RSYNC_OPTS=(-riltc --safe-links --stats --mkpath)
+  # Backstop the pathspec exclusions because rsync recurses on listed directories.
+  for sub in "${SUBMODULES[@]}" "${DEST_GITLINKS[@]}"; do
     RSYNC_OPTS+=("--exclude=$sub/")
   done
   if ((DRY_RUN)); then
@@ -180,107 +190,281 @@ build_rsync_options() {
   fi
 }
 
-# Write the NUL separated path list rsync consumes.
-# git ls-files -z and rsync --from0 --files-from stay paired for NUL safe names.
-# For --prune the destination-only paths are appended: listed but missing on the
-# source, so --delete-missing-args removes them. LC_ALL=C is required on both
-# sort and comm, without it comm reports "input is not in sorted order".
+# Build the NUL-separated rsync list from tracked working-tree files and, with
+# -u, untracked non-ignored files. Prune only destination paths Git tracks but
+# the source no longer tracks, plus source-tracked files deleted in its worktree.
 prepare_file_list() {
-  local -a pathspec=() dest_pathspec=()
+  local -a pathspec
+  local deleted_list
+  local delete_candidates
+  local unkept_candidates
+  local stale_list
+  local file
+  local destination_file
+
   SOURCE_LIST="$WORK_DIR/source.list"
-  STALE_LIST="$WORK_DIR/stale.list"
   TRANSFER_LIST="$WORK_DIR/transfer.list"
-  pathspec=("${PATHSPECS[@]+${PATHSPECS[@]}}")
-  dest_pathspec=("${PATHSPECS[@]+${PATHSPECS[@]}}" "${DEST_PATHSPECS[@]+${DEST_PATHSPECS[@]}}")
+  DELETE_LIST="$WORK_DIR/delete.list"
+  UNTRACKED_LIST="$WORK_DIR/untracked.list"
+  deleted_list="$WORK_DIR/deleted.list"
+  delete_candidates="$WORK_DIR/delete-candidates.list"
+  unkept_candidates="$WORK_DIR/unkept-candidates.list"
+  stale_list="$WORK_DIR/stale.list"
+  pathspec=("${PATHSPECS[@]}")
 
-  git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" >"$SOURCE_LIST"
+  # Keep tracked files present in the working tree; separate unstaged deletions.
+  {
+    while IFS= read -r -d '' file; do
+      if [[ -e "$FROM_REPO/$file" || -L "$FROM_REPO/$file" ]]; then
+        printf '%s\0' "$file"
+      fi
+    done < <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}")
+  } >"$SOURCE_LIST"
   TRACKED_COUNT=$(count_entries "$SOURCE_LIST")
+  git -C "$FROM_REPO" ls-files --deleted -z "${pathspec[@]}" >"$deleted_list"
 
-  # Excluded paths are filtered on both sides, so they never enter the stale set
-  LC_ALL=C comm -z -23 \
-    <(git -C "$TO_REPO" ls-files -z "${dest_pathspec[@]}" | LC_ALL=C sort -z) \
-    <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) >"$STALE_LIST"
-  STALE_COUNT=$(count_entries "$STALE_LIST")
-
-  if ((PRUNE)); then
-    cat "$SOURCE_LIST" "$STALE_LIST" >"$TRANSFER_LIST"
+  if ((INCLUDE_UNTRACKED)); then
+    git -C "$FROM_REPO" ls-files --others --exclude-standard -z "${pathspec[@]}" >"$UNTRACKED_LIST"
   else
-    TRANSFER_LIST="$SOURCE_LIST"
+    : >"$UNTRACKED_LIST"
+  fi
+  UNTRACKED_COUNT=$(count_entries "$UNTRACKED_LIST")
+
+  # Destination-tracked paths absent from the source index. Do not prune other
+  # destination files: they may be local data (for example .env or generated files).
+  LC_ALL=C comm -z -23 \
+    <(git -C "$TO_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) \
+    <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) >"$stale_list"
+
+  cat "$SOURCE_LIST" "$UNTRACKED_LIST" | LC_ALL=C sort -z -u >"$TRANSFER_LIST"
+  cat "$deleted_list" "$stale_list" | LC_ALL=C sort -z -u >"$delete_candidates"
+  LC_ALL=C comm -z -23 "$delete_candidates" "$TRANSFER_LIST" >"$unkept_candidates"
+
+  # The destination index can keep listing a stale path after its working-tree
+  # file has been removed. Count and process only deletion candidates that exist.
+  : >"$DELETE_LIST"
+  while IFS= read -r -d '' file; do
+    destination_file="$TO_REPO/$file"
+    if [[ -f "$destination_file" || -L "$destination_file" ]]; then
+      printf '%s\0' "$file" >>"$DELETE_LIST"
+    fi
+  done <"$unkept_candidates"
+  STALE_COUNT=$(count_entries "$DELETE_LIST")
+}
+
+# Remove only paths identified from Git's tracked-file lists. Do not recurse or
+# delete other destination-only data. Removing files directly also works when
+# the corresponding source parent directory has disappeared.
+delete_destination_paths() {
+  local file
+  local destination_file
+  local destination_root
+  local destination_parent
+  local deleted_count=0
+  ((PRUNE)) || return 0
+  destination_root=$(resolve_path "$TO_REPO")
+
+  while IFS= read -r -d '' file; do
+    destination_file="$TO_REPO/$file"
+    if [[ -f "$destination_file" || -L "$destination_file" ]]; then
+      destination_parent=$(resolve_path "$(dirname -- "$destination_file")")
+      [[ "$destination_parent" == "$destination_root" ||
+        "$destination_parent" == "$destination_root/"* ]] ||
+        exit_with_error "refusing to delete outside destination: $file"
+      rm -f -- "$destination_file"
+      ((deleted_count += 1))
+    fi
+  done <"$DELETE_LIST"
+
+  echo "vm-git-sync: deleted $deleted_count stale path(s)"
+}
+
+# Show a compact summary before prompting
+show_summary() {
+  local staged_count
+  local modified_count
+  local shown=0
+  local untracked_shown=0
+  local file
+
+  echo "from          : $FROM_REPO"
+  echo "to            : $TO_REPO"
+  echo "tracked       : $TRACKED_COUNT"
+
+  staged_count=$(git -C "$FROM_REPO" diff --name-only --cached -z | tr -dc '\0' | wc -c)
+  modified_count=$(git -C "$FROM_REPO" diff --name-only -z | tr -dc '\0' | wc -c)
+  if ((staged_count > 0)); then
+    echo "staged        : $staged_count"
+  fi
+  if ((modified_count > 0)); then
+    echo "modified      : $modified_count"
+  fi
+
+  if ((INCLUDE_UNTRACKED)); then
+    echo "untracked     : $UNTRACKED_COUNT"
+    while IFS= read -r -d '' file && ((untracked_shown < 10)); do
+      echo "  untracked   : $file"
+      ((++untracked_shown))
+    done <"$UNTRACKED_LIST"
+    if ((UNTRACKED_COUNT > untracked_shown)); then
+      echo "  ...         : $((UNTRACKED_COUNT - untracked_shown)) more untracked file(s)"
+    fi
+  fi
+  if ((PRUNE)); then
+    if ((DRY_RUN)); then
+      echo "prune         : would delete stale paths ($STALE_COUNT)"
+    else
+      echo "prune         : delete stale paths ($STALE_COUNT)"
+    fi
+    while IFS= read -r -d '' file && ((shown < 5)); do
+      if ((DRY_RUN)); then
+        echo "  would delete: $file"
+      else
+        echo "  delete      : $file"
+      fi
+      ((++shown))
+    done <"$DELETE_LIST"
+    if ((STALE_COUNT > shown)); then
+      echo "  ...         : $((STALE_COUNT - shown)) more"
+    fi
+  else
+    echo "prune         : off ($STALE_COUNT stale/deleted paths preserved)"
+  fi
+  if ((${#SUBMODULES[@]} > 0)); then
+    echo "submodules    : ${#SUBMODULES[@]} skipped"
+  fi
+  if ((${#DEST_GITLINKS[@]} > 0)); then
+    echo "dest gitlinks : ${#DEST_GITLINKS[@]} protected"
+  fi
+  if ((${#EXCLUDES[@]} > 0)); then
+    echo "exclude       : ${#EXCLUDES[@]} pattern(s)"
   fi
 }
 
-# Show direction and counts, then ask once. Cheap on purpose, use --check first
-# when you want the exact change list.
-confirm_sync() {
-  local reply sub
-  echo "from          : $FROM_REPO"
-  echo "to            : $TO_REPO"
-  echo "tracked paths : $TRACKED_COUNT"
-  if ((PRUNE)); then
-    echo "stale paths   : $STALE_COUNT (will be deleted)"
-  else
-    echo "stale paths   : $STALE_COUNT (kept, use --prune to delete)"
-  fi
-  if ((${#SUBMODULES[@]} > 0)); then
-    for sub in "${SUBMODULES[@]}"; do
-      echo "submodule     : $sub (skipped)"
-    done
-  fi
-  for sub in "${DEST_GITLINKS[@]}"; do
-    # a submodule on both sides is already reported as skipped above
-    [[ " ${SUBMODULES[*]-} " == *" $sub "* ]] && continue
-    echo "submodule     : $sub (destination only, kept)"
-  done
-  local pattern
-  for pattern in "${EXCLUDES[@]}"; do
-    echo "excluded      : $pattern"
-  done
+# Print only changed itemized entries from rsync's dry-run output, not unchanged
+# files or the verbose transfer statistics.
+show_rsync_plan() {
+  local plan="$1"
+  local counts
+  local changes
+  local change_count
+  local creates
+  local updates
 
-  # EOF or anything but yes aborts, the sync never runs unattended by accident
-  printf 'Proceed? [y/N] '
-  read -r reply || reply=N
-  [[ $reply == [yY]* ]] || exit_with_error "aborted"
+  counts=$(awk '
+    {
+      code = substr($0, 1, 11)
+      if (code == ">f+++++++++") {
+        creates++
+      } else if (substr(code, 1, 2) == ">f") {
+        updates++
+      }
+    }
+    END { printf "%d %d\n", creates, updates }
+  ' <<<"$plan")
+  read -r creates updates <<<"$counts"
+
+  changes=$(awk '
+    /^\*deleting/ { print; next }
+    {
+      code = substr($0, 1, 11)
+      if (code ~ /^[<>ch][fdLDS]/ ||
+          (code ~ /^\.[fdLDS]/ && substr(code, 3) ~ /[^. ]/)) {
+        print
+      }
+    }
+  ' <<<"$plan")
+
+  if ((creates > 0)); then
+    echo "create        : $creates"
+  fi
+  if ((updates > 0)); then
+    echo "update        : $updates"
+  fi
+  if [[ -z "$changes" ]]; then
+    echo "no copy changes"
+    return 0
+  fi
+
+  echo "copy changes:"
+  change_count=$(printf '%s\n' "$changes" | wc -l)
+  printf '%s\n' "$changes" | awk 'NR <= 30'
+  if ((change_count > 30)); then
+    echo "... ($((change_count - 30)) more change(s))"
+  fi
 }
 
 run_rsync() {
-  rsync "${RSYNC_OPTS[@]}" --from0 "--files-from=$TRANSFER_LIST" "$FROM_REPO/" "$TO_REPO/"
+  local -a rsync_cmd=(rsync)
+  rsync_cmd+=("${RSYNC_OPTS[@]}" --from0 "--files-from=$TRANSFER_LIST"
+    "$FROM_REPO/" "$TO_REPO/")
+  local plan
+  local exit_code
+
+  if ((DRY_RUN)); then
+    show_summary
+    echo "---"
+    if plan=$("${rsync_cmd[@]}" 2>&1); then
+      show_rsync_plan "$plan"
+    else
+      exit_code=$?
+      printf '%s\n' "$plan" >&2
+      return "$exit_code"
+    fi
+  else
+    "${rsync_cmd[@]}"
+  fi
+}
+
+# Show direction and counts, then ask once
+confirm_sync() {
+  local reply
+  show_summary
+  printf 'Proceed? [y/N] '
+  read -r reply || reply=N
+  [[ "$reply" == [yY]* ]] || exit_with_error "aborted"
 }
 
 # *** Main Flow ***
+# Copies tracked files from the working tree, including unstaged modifications
 main() {
   validate_dependencies
   validate_repos
   validate_same_project
-  check_source_index
   collect_submodules
   collect_dest_gitlinks
   build_pathspecs
   build_rsync_options
+  WORK_DIR=$(mktemp -d)
+  trap cleanup EXIT
   prepare_file_list
   if ((DRY_RUN)); then
     run_rsync
+    echo "vm-git-sync: OK $FROM_REPO -> $TO_REPO (dry-run)"
   else
     confirm_sync
     run_rsync
+    delete_destination_paths
+    echo "vm-git-sync: OK $FROM_REPO -> $TO_REPO"
   fi
-  echo "vm-git-sync: OK $FROM_REPO -> $TO_REPO"
 }
 
 # *** Usage and Argument Parsing ***
 usage() {
-  echo "Usage: vm-git-sync [-C] [-D] [-x PATTERN] <from-repo-root> <to-repo-root>"
+  echo "Usage: vm-git-sync [-C] [-D] [-u] [-x PATTERN] <from-repo-root> <to-repo-root>"
   echo ""
-  echo "Copy only git-tracked files from one checkout of a project to another."
+  echo "Copy files from one checkout of a project to another."
   echo ""
   echo "Options:"
-  echo "  -C, --check           dry run with itemized changes, no confirmation"
-  echo "  -D, --prune           delete destination files the source no longer tracks"
+  echo "  -C, --check           dry run with summary and changed paths, no confirmation"
+  echo "  -D, --prune           delete stale tracked files from the destination"
+  echo "  -u, --untracked       also copy untracked files not ignored by .gitignore"
   echo "  -x, --exclude PATTERN git pathspec, repeatable (e.g. 'data/', '*.env', 'secrets/*')"
   echo "                        relative to the repository root, matches the whole tree"
   echo "  -h, --help            show this help message and exit"
   echo ""
   echo "Example:"
-  echo "  vm-git-sync -C ~/projects/test ~/projects/prods"
+  echo "  vm-git-sync -u -C ~/projects/test ~/projects/prods"
 }
 
 parse_args() {
@@ -297,8 +481,12 @@ parse_args() {
       -D | --prune)
         PRUNE=1
         ;;
+      -u | --untracked)
+        INCLUDE_UNTRACKED=1
+        ;;
       -x | --exclude)
         (($# >= 2)) || exit_with_error "$1 needs a pattern"
+        [[ -n "$2" ]] || exit_with_error "$1 needs a non-empty pattern"
         EXCLUDES+=("$2")
         shift
         ;;
@@ -325,9 +513,5 @@ parse_args() {
 }
 
 # *** Entrypoint ***
-WORK_DIR=$(mktemp -d)
-trap cleanup EXIT
-trap 'echo "vm-git-sync: ERROR: Unexpected error on line $LINENO (command: $BASH_COMMAND)." >&2' ERR
-
 parse_args "$@"
 main
