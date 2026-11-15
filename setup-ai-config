@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-PATH="/usr/bin/:/usr/local/bin/:/bin/:/usr/sbin/:/sbin/:/snap/bin/:$HOME/.local/bin"
 set -euo pipefail
 
 # CONFIG/SETUP :: sourced by setup-ai
 # Configuration functions, the fzf selectors, and the helpers they share.
 # Functions only - this file is never executed on its own.
 
-# **********************************************************************************
+# ********************************************************************************
 
 # HELPERS :: is there a real GPU backend in this build? --------------------------
 # 'llama-server --list-devices' lists only what was compiled in. A CPU-only
@@ -73,11 +72,16 @@ llamacpp_select_bind() {
   done
   sorted=$(printf '%s\n' "$fzf_list" | sort -t'|' -k1,1)
 
+  local rc=0
   sel=$(fzf_pick "$sorted" "$defaults" \
     'PUBLIC = routable from the internet; the API key is the only thing in front of it' \
     'Which addresses may reach the API? ' \
-    "cat '$preview_dir'/\$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null")
+    "cat '$preview_dir'/\$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null") || rc=$?
   rm -rf "$preview_dir"
+  if [[ $rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
   [[ -z "$sel" ]] && {
     echo "$current"
     return 0
@@ -122,18 +126,11 @@ llamacpp_client_host() {
   esac
 }
 
-# HELPERS :: classify an address for the picker -----------------------------------
 # HELPERS :: CORS allow-list -------------------------------------------------------
-# CORS is enforced by browsers only, so it never affects curl, opencode or the
-# HTTP SDKs - it just stops a page in your browser from reading replies.
-#
-# NOTE: llama.cpp implements only three cases, despite the help text claiming a
-# comma-separated list (tools/server/server-http.cpp):
-#   "*"        -> reflect whatever Origin arrives
-#   "localhost"-> reflect the Origin only when it is a localhost origin
-#   anything else -> emit that string VERBATIM as Access-Control-Allow-Origin
-# So a comma-joined value is NOT parsed; it becomes one literal header that no
-# browser origin matches, silently blocking every browser. Emit exactly one.
+# Only browsers enforce CORS. llama.cpp treats the value as a single origin:
+# "*" reflects any Origin, "localhost" reflects localhost origins, anything else
+# is sent verbatim. A comma-joined list therefore blocks every browser, so emit
+# exactly one value.
 llamacpp_cors_origins() {
   if [[ -n "$LLAMACPP_CORS_ORIGINS" ]]; then
     printf '%s' "$LLAMACPP_CORS_ORIGINS"
@@ -148,6 +145,7 @@ llamacpp_cors_origins() {
   esac
 }
 
+# HELPERS :: classify an address for the picker ----------------------------------
 llamacpp_ip_scope() {
   case "$1" in
   0.0.0.0 | :: | '[::]') echo "wildcard" ;;
@@ -196,7 +194,6 @@ llamacpp_cpu_simd() {
 }
 
 # SETUP :: opencode ------------------------------------------------------------
-# NOTE: ~~runs inside 'install_opencode'~~
 setup_opencode() {
   print_section "⚙️ OPENCODE :: configuring opencode"
   print_info2 "🔗 OPENCODE :: config directory at $LN_OPENCODE"
@@ -218,7 +215,7 @@ setup_opencode() {
   opencode_config=$(jq -n --arg schema "https://opencode.ai/config.json" '{"$schema": $schema}')
   opencode_config=$(echo "$opencode_config" | jq '.update = "notify"')
   opencode_config=$(echo "$opencode_config" | jq '.experimental.background_compaction = true')
-  opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_POLICIES" '.policies = $p')
+  opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_PERMISSIONS" '.permissions = $p')
 
   echo ""
   if [[ -n "$OPENCODE_CONFIG_MCP_COMBINED" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]]; then
@@ -262,7 +259,9 @@ setup_opencode() {
     [[ -n "$merge_del" ]] && existing_filter="del($merge_del)"
     local merge_filter
     merge_filter=".[0] as \$managed | .[1] as \$existing | (\$managed * (\$existing | $existing_filter))"
-    merge_filter+=" | .policies = (((\$existing.policies // []) | map(select(. as \$rule | ((\$managed.policies // []) | index(\$rule)) == null))) + (\$managed.policies // []))"
+    merge_filter+=" | .permissions = (((\$existing.permissions // []) | map(select(. as \$rule | ((\$managed.permissions // []) | index(\$rule)) == null))) + (\$managed.permissions // []))"
+    merge_filter+=" | .policies = ((.policies // []) | map(select(.resource | startswith(\"shell:git\") | not)))"
+    merge_filter+=" | if ((.policies // []) | length) == 0 then del(.policies) else . end"
 
     print_notes "   🔧 merging selected configs into existing $config_file"
     if jq -s "$merge_filter" <(echo "$opencode_config") "$config_file" > "${config_file}.tmp" \
@@ -330,9 +329,15 @@ select_opencode_section() {
   done
 
   local selections
+  local rc=0
   selections=$(fzf_pick "$fzf_list" "${default_ref:-}" 'TAB: toggle, ENTER: confirm' \
     "Select ${label} (none = cleanup): " \
-    'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json 2>/dev/null')
+    'jq . '"$preview_dir"'/{}.json 2>/dev/null || cat '"$preview_dir"'/{}.json 2>/dev/null') || rc=$?
+  if [[ $rc -eq 130 ]]; then
+    rm -rf "$preview_dir"
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
   rm -rf "$preview_dir"
 
   [[ -z "$selections" ]] && {
@@ -386,9 +391,14 @@ select_opencode_lsp() {
   done
 
   local selections
+  local rc=0
   selections=$(fzf_pick "$fzf_list" "${OPENCODE_CONFIG_LSP_DEFAULT:-}" \
     'TAB: toggle, ENTER: confirm - unselected servers are disabled' \
-    'Select LSP servers (ALL = everything): ')
+    'Select LSP servers (ALL = everything): ') || rc=$?
+  if [[ $rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
   [[ -z "$selections" ]] && {
     print_notes "   ⏭️  No LSP selected, LSP stays off"
     OPENCODE_CONFIG_LSP_COMBINED=""
@@ -413,14 +423,9 @@ select_opencode_lsp() {
 }
 
 # HELPERS :: prune skill dirs that are no longer wanted ------------------------
-# ~/.config/opencode/skills accumulates silently: a skill dropped from
-# OPENCODE_SKILL_NAMES, unselected in the fzf picker, or renamed in the symlink
-# block above leaves its directory behind and stays advertised. This reconciles
-# the directory against what the current run wants.
-#
+# Drop skill directories left behind by a deselected or renamed entry. Keys are
+# the flattened leaf names, not the "label/[path/]name" selection strings.
 # Args: <skills_dir> <prune_upstream:0|1> [upstream names to keep...]
-# Keys are the LEAF dir names the installer flattens to (step in
-# setup_opencode_skills), not the "label/[path/]name" selection strings.
 reconcile_opencode_skills() {
   local skills_dir="$1" prune_upstream="$2"
   shift 2
@@ -510,7 +515,6 @@ setup_opencode_skills() {
   create_symlink "${PWD}/ai/opnsense-companion/ONBOARDING.md" "$skills_dir/vm-opnsense-firewall/ONBOARDING.md"
   create_symlink "${PWD}/ai/GITHUB.md" "$skills_dir/vm-github-pr-issues/GITHUB.md"
 
-
   local skills_to_install=()
   if [[ ${#OPENCODE_SKILL_NAMES[@]} -eq 0 ]]; then
     print_notes "   ⏭️  No upstream skills available, fetch skipped"
@@ -554,14 +558,22 @@ setup_opencode_skills() {
     done
 
     local selections
+    local rc=0
     selections=$(fzf_pick "$fzf_list" "${OPENCODE_SKILLS_DEFAULT:-}" \
       'TAB: toggle, ENTER: confirm - none = remove installed skills' \
       'Select skills to fetch: ' \
-      "$preview_cmd")
+      "$preview_cmd") || rc=$?
+    if [[ $rc -eq 130 ]]; then
+      rm -rf "$preview_dir"
+      print_notes "   ⛔ Cancelled by user, aborting setup"
+      exit 130
+    fi
     rm -rf "$preview_dir"
 
     if [[ -z "$selections" ]]; then
-      :
+      # Nothing chosen: do NOT prune upstream skills, just leave them as-is.
+      prune_upstream=0
+      print_notes "   ⏭️  No skills selected, leaving installed skills untouched"
     elif echo "$selections" | grep -qx 'none'; then
       print_notes "   🧹 Cleanup mode: removing installed skills"
     else
@@ -697,25 +709,20 @@ setup_opencode_skills() {
 }
 
 # SETUP :: herdr ---------------------------------------------------------------
-# NOTE: runs inside 'install_herdr'
 setup_herdr() {
   print_section "HERDR :: config"
-  print_info2 "🔗 HERDR :: linking configs-single/herdr.toml -> $LN_HERDR"
-  create_symlink "${PWD}/configs-single/herdr.toml" "$LN_HERDR"
+  link_config "HERDR" "${PWD}/configs-single/herdr.toml" "$LN_HERDR"
   print_section_end "✅ HERDR :: config ready."
 }
 
 # SETUP :: gh-dash ---------------------------------------------------------------
-# NOTE: runs inside 'install_gh_dash'
 setup_ghdash() {
   print_section "GH-DASH :: config"
-  print_info2 "🔗 GH-DASH :: linking configs-single/gh-dash.yml -> $LN_GHDASH"
-  create_symlink "${PWD}/configs-single/gh-dash.yml" "$LN_GHDASH"
+  link_config "GH-DASH" "${PWD}/configs-single/gh-dash.yml" "$LN_GHDASH"
   print_section_end "✅ GH-DASH :: config ready."
 }
 
 # SETUP :: filebrowser -----------------------------------------------------------
-# NOTE: runs inside 'install_filebrowser'
 setup_filebrowser() {
   print_section "FILEBROWSER :: config"
   print_info2 "🔗 FILEBROWSER :: config dir at $LN_FILEBROWSER (config.yaml + filebrowser.db)"
@@ -771,6 +778,18 @@ llamacpp_parse_model() {
   IFS='|' read -r LLAMACPP_M_ID LLAMACPP_M_DISPLAY LLAMACPP_M_REPO LLAMACPP_M_QUANT \
     LLAMACPP_M_SIZE_GIB LLAMACPP_M_KV_KIB LLAMACPP_M_CTX_MAX LLAMACPP_M_REASONING \
     LLAMACPP_M_TIER <<<"$1"
+}
+
+# HELPERS :: client-visible model id --------------------------------------------
+# Router mode names models after the preset section; add @<quant> only when the
+# catalog has several weight tiers for the same id.
+llamacpp_model_id() {
+  local id="$1" quant="$2" j same=0
+  for j in "${!LLAMACPP_MODELS[@]}"; do
+    [[ "${LLAMACPP_MODELS[$j]%%|*}" == "$id" ]] && same=$((same + 1))
+  done
+  ((same > 1)) && id="${id}@${quant}"
+  printf '%s' "$id"
 }
 
 # HELPERS :: memory / disk facts used to size and gate the model choice ---------
@@ -868,8 +887,12 @@ setup_llamacpp() {
   esac
 
   # -- model + weight quantisation ----------------------------------------------
-  local idx
-  idx=$(llamacpp_select_model) || idx=""
+  local idx rc=0
+  idx=$(llamacpp_select_model) || rc=$?
+  if [[ $rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
   if [[ -z "$idx" ]]; then
     print_notes "   ⚠️  no model selected - skipping llama.cpp config"
     print_section_end "⚠️  LLAMACPP :: skipped."
@@ -908,7 +931,13 @@ setup_llamacpp() {
 
   # -- prediction ----------------------------------------------------------------
   local spec_type="$LLAMACPP_SPEC_TYPE" spec_draft="$LLAMACPP_SPEC_DRAFT"
-  spec_type=$(llamacpp_select_spec "$spec_type" "$spec_draft") || spec_type="none"
+  local spec_rc=0
+  spec_type=$(llamacpp_select_spec "$spec_type" "$spec_draft") || spec_rc=$?
+  if [[ $spec_rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
+  [[ $spec_rc -ne 0 ]] && spec_type="none"
   [[ "$spec_type" == "draft-"* && -z "$spec_draft" ]] && spec_type="none"
 
   # -- who may reach the API -----------------------------------------------------
@@ -941,13 +970,7 @@ setup_llamacpp() {
   # which is suffixed with the quant when a model has several weight tiers.
   llamacpp_parse_model "${LLAMACPP_MODELS[$idx]}"
   local example_id="$LLAMACPP_M_ID"
-  if [[ "$LLAMACPP_ROUTER" == "1" ]]; then
-    local same=0 j
-    for j in "${!LLAMACPP_MODELS[@]}"; do
-      [[ "${LLAMACPP_MODELS[$j]%%|*}" == "$LLAMACPP_M_ID" ]] && same=$((same + 1))
-    done
-    ((same > 1)) && example_id="${LLAMACPP_M_ID}@${LLAMACPP_M_QUANT}"
-  fi
+  [[ "$LLAMACPP_ROUTER" == "1" ]] && example_id=$(llamacpp_model_id "$LLAMACPP_M_ID" "$LLAMACPP_M_QUANT")
 
   print_notes ""
   print_notes "   ▶️ try it:"
@@ -1034,12 +1057,16 @@ llamacpp_select_model() {
   local default_line=""
   [[ -n "$defaults" ]] && default_line="$defaults | $(echo "$fzf_list" | awk -F'|' -v i="$defaults" '$1==i{print $2}' | sed 's/^ *//')"
 
-  local selections
+  local selections rc=0
   selections=$(fzf_pick "$fzf_list" "$default_line" \
     'TAB: toggle, ENTER: confirm - weights = quantisation tier, lower bits = smaller/faster' \
     'Select model + weight quantisation: ' \
-    "cat '$preview_dir'/$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null")
+    "cat '$preview_dir'/$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null") || rc=$?
   rm -rf "$preview_dir"
+  if [[ $rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
   [[ -z "$selections" ]] && return 0
   echo "$selections" | head -n1 | cut -d'|' -f1 | tr -d ' '
 }
@@ -1061,9 +1088,13 @@ llamacpp_select_reasoning_preserve() {
 # fzf is missing and when the user aborts, so a cancelled prompt never discards
 # an earlier choice. Args: list, default value, header, prompt.
 llamacpp_pick_one() {
-  local list="$1" default="$2" header="$3" prompt="$4" sel=""
+  local list="$1" default="$2" header="$3" prompt="$4" sel="" rc=0
   if command -v fzf >/dev/null 2>&1; then
-    sel=$(fzf_pick "$list" "$default" "$header" "$prompt")
+    sel=$(fzf_pick "$list" "$default" "$header" "$prompt") || rc=$?
+    if [[ $rc -eq 130 ]]; then
+      print_notes "   ⛔ Cancelled by user, aborting setup"
+      exit 130
+    fi
   fi
   if [[ -z "$sel" ]]; then
     echo "$default"
@@ -1260,15 +1291,9 @@ llamacpp_write_preset() {
     for i in "${!LLAMACPP_MODELS[@]}"; do
       entry="${LLAMACPP_MODELS[$i]}"
       llamacpp_parse_model "$entry"
-      id="$LLAMACPP_M_ID"
+      id=$(llamacpp_model_id "$LLAMACPP_M_ID" "$LLAMACPP_M_QUANT")
       quant="$LLAMACPP_M_QUANT"
       tier="$LLAMACPP_M_TIER"
-      # multiple tiers for the same id -> qualify the model name with the quant
-      local same=0 j
-      for j in "${!LLAMACPP_MODELS[@]}"; do
-        [[ "${LLAMACPP_MODELS[$j]%%|*}" == "$id" ]] && same=$((same + 1))
-      done
-      ((same > 1)) && id="${id}@${quant}"
       model_line="$LLAMACPP_M_REPO:$quant"
       echo "[$id]"
       echo "; $LLAMACPP_M_DISPLAY [$tier] $(llamacpp_human_mib "$(llamacpp_gib_to_mib "$LLAMACPP_M_SIZE_GIB")")"
@@ -1295,8 +1320,7 @@ llamacpp_install_service() {
     return 0
   fi
 
-  create_symlink "${PWD}/configs-single/llamacpp.service" "$UNIT_LLAMACPP"
-  print_notes "   🔗 LLAMACPP :: linked configs-single/llamacpp.service -> $UNIT_LLAMACPP"
+  link_config "LLAMACPP" "${PWD}/configs-single/llamacpp.service" "$UNIT_LLAMACPP"
 
   # A --user unit only starts at boot when lingering is enabled.
   if [[ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]]; then
@@ -1356,17 +1380,11 @@ llamacpp_generate_opencode_provider() {
   fi
 
   # router: every catalog model is addressable; id mirrors the preset section
-  local models="{}" i entry id quant same j
+  local models="{}" i entry id
   for i in "${!LLAMACPP_MODELS[@]}"; do
     entry="${LLAMACPP_MODELS[$i]}"
     llamacpp_parse_model "$entry"
-    id="$LLAMACPP_M_ID"
-    quant="$LLAMACPP_M_QUANT"
-    same=0
-    for j in "${!LLAMACPP_MODELS[@]}"; do
-      [[ "${LLAMACPP_MODELS[$j]%%|*}" == "$id" ]] && same=$((same + 1))
-    done
-    ((same > 1)) && id="${id}@${quant}"
+    id=$(llamacpp_model_id "$LLAMACPP_M_ID" "$LLAMACPP_M_QUANT")
     local r=false
     [[ "$LLAMACPP_M_REASONING" == "1" ]] && r=true
     models=$(jq -nc \

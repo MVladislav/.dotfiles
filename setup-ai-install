@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-PATH="/usr/bin/:/usr/local/bin/:/bin/:/usr/sbin/:/sbin/:/snap/bin/:$HOME/.local/bin"
 set -euo pipefail
 
 # CONFIG/INSTALL :: sourced by setup-ai
 # Installer functions for every tool setup-ai manages.
 # Functions only - this file is never executed on its own.
 
-# **********************************************************************************
+# ********************************************************************************
 
 # SERVICE :: install opencode --------------------------------------------------
 # v2 ships on npm (@opencode/cli-linux-x64), not as a GitHub release asset: the
@@ -27,8 +26,6 @@ install_opencode() {
   chmod +x "$USER_LOCAL_PREFIX_BIN/opencode"
   print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
   print_info2 "✅ OPENCODE :: opencode installed!"
-
-  # setup_opencode
 }
 
 # SERVICE :: install herdr --------------------------------------------------
@@ -40,7 +37,6 @@ install_herdr() {
   chmod +x "$USER_LOCAL_PREFIX_BIN/herdr"
   print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/herdr" --version)'"
   print_info2 "✅ HERDR :: herdr installed!"
-
 }
 
 # SERVICE :: install gh (GitHub CLI) -------------------------------------------
@@ -71,19 +67,24 @@ install_gh_dash() {
   fi
   print_notes "   💡 start it with: gh dash (token via gh auth / GITHUB_TOKEN, see ai/GITHUB.md)"
   print_info2 "✅ GH-DASH :: gh-dash installed!"
-
 }
 
 # SERVICE :: install filebrowser -----------------------------------------------
 install_filebrowser() {
   print_info2 "\n🚀 FILEBROWSER :: install filebrowser (Quantum fork)..."
-  print_notes "   💡 current installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  print_notes "   💡 current installed version :: '$(filebrowser_version)'"
   mkdir -p "$USER_LOCAL_PREFIX_BIN"
   curl -fsSLo "$USER_LOCAL_PREFIX_BIN/filebrowser" "$VERSION_FILEBROWSER_REPO/releases/download/$VERSION_FILEBROWSER/linux-amd64-filebrowser"
   chmod +x "$USER_LOCAL_PREFIX_BIN/filebrowser"
-  print_notes "   💡 new installed version :: '$("$USER_LOCAL_PREFIX_BIN/filebrowser" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true)'"
+  print_notes "   💡 new installed version :: '$(filebrowser_version)'"
   print_info2 "✅ FILEBROWSER :: filebrowser installed!"
+}
 
+# HELPERS :: filebrowser version -----------------------------------------------
+filebrowser_version() {
+  local bin="$USER_LOCAL_PREFIX_BIN/filebrowser"
+  [[ -x "$bin" ]] || return 0
+  "$bin" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true
 }
 
 # SERVICE :: install llama.cpp -------------------------------------------------
@@ -94,20 +95,14 @@ install_llamacpp() {
   print_notes "   💡 current installed version :: '$(llamacpp_binary_version)'"
   rm -rf "$DEPS_INSTALL_PATH/llama.cpp" 1>/dev/null
 
-  # -- dependencies -----------------------------------------------------------
-  # packages_tools stay installed (runtime needs them), packages_build is
-  # removed again afterwards.
-  # pkg-config is REQUIRED, not optional: with -DGGML_BLAS=ON, CMake's FindBLAS
-  # leaves BLAS_INCLUDE_DIRS empty on Debian/Ubuntu (kitware#20268), and
-  # ggml/src/ggml-blas/CMakeLists.txt then does find_package(PkgConfig REQUIRED)
-  # to locate the library. Without it the configure step dies with
-  # "Could NOT find PkgConfig (missing: PKG_CONFIG_EXECUTABLE)".
+  # packages_tools stay installed (runtime needs them); packages_build is removed
+  # afterwards. pkg-config is REQUIRED: with GGML_BLAS=ON, CMake's FindBLAS needs
+  # it to locate OpenBLAS on Debian/Ubuntu (kitware#20268).
   local packages_tools=(libopenblas-dev)
-    # shellcheck disable=SC2034
+  # shellcheck disable=SC2034
   local packages_build=(git cmake build-essential pkg-config)
   if [[ $RUN_INSTALL_LLAMACPP_VULKAN -eq 1 ]]; then
     # Vulkan backend (AMD via RADV, Intel, NVIDIA); drivers stay installed
-    # shellcheck disable=SC2034
     packages_tools+=(mesa-vulkan-drivers vulkan-tools libvulkan-dev glslang-tools)
   fi
   install_dependencies_needs packages_tools[@] packages_build[@]
@@ -248,11 +243,8 @@ llamacpp_detect_cuda_archs() {
 }
 
 # HELPERS :: llama-server version, never blank ----------------------------------
-# Two traps this avoids:
-#  - llama.cpp prints its version banner on STDERR, not stdout, so "2>/dev/null"
-#    hides it and yields an empty string.
-#  - a binary that cannot start (missing shared library) also fails on stderr.
-# Capture both streams, then tell the two apart.
+# llama.cpp prints its banner on stderr, so capture both streams and tell a
+# version apart from a loader error.
 llamacpp_binary_version() {
   local bin="$USER_LOCAL_PREFIX_BIN/llama-server"
   if [[ ! -x "$bin" ]]; then

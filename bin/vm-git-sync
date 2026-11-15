@@ -180,7 +180,7 @@ add_pathspec() {
 # symlinks and times, checking content, and reporting transfer statistics.
 build_rsync_options() {
   local sub
-  RSYNC_OPTS=(-riltc --safe-links --stats --mkpath)
+  RSYNC_OPTS=(-riltc --safe-links --stats --mkpath --ignore-missing-args)
   # Backstop the pathspec exclusions because rsync recurses on listed directories.
   for sub in "${SUBMODULES[@]}" "${DEST_GITLINKS[@]}"; do
     RSYNC_OPTS+=("--exclude=$sub/")
@@ -206,50 +206,63 @@ prepare_file_list() {
   TRANSFER_LIST="$WORK_DIR/transfer.list"
   DELETE_LIST="$WORK_DIR/delete.list"
   UNTRACKED_LIST="$WORK_DIR/untracked.list"
-  deleted_list="$WORK_DIR/deleted.list"
-  delete_candidates="$WORK_DIR/delete-candidates.list"
-  unkept_candidates="$WORK_DIR/unkept-candidates.list"
-  stale_list="$WORK_DIR/stale.list"
   pathspec=("${PATHSPECS[@]}")
 
-  # Keep tracked files present in the working tree; separate unstaged deletions.
-  {
-    while IFS= read -r -d '' file; do
-      if [[ -e "$FROM_REPO/$file" || -L "$FROM_REPO/$file" ]]; then
-        printf '%s\0' "$file"
-      fi
-    done < <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}")
-  } >"$SOURCE_LIST"
+  # The fast path trusts the index. Check worktree existence only when pruning,
+  # where deleted source files must be distinguished from files to copy.
+  if ((PRUNE)); then
+    deleted_list="$WORK_DIR/deleted.list"
+    {
+      while IFS= read -r -d '' file; do
+        if [[ -e "$FROM_REPO/$file" || -L "$FROM_REPO/$file" ]]; then
+          printf '%s\0' "$file"
+        fi
+      done < <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}")
+    } >"$SOURCE_LIST"
+    git -C "$FROM_REPO" ls-files --deleted -z "${pathspec[@]}" >"$deleted_list"
+  else
+    git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" >"$SOURCE_LIST"
+  fi
   TRACKED_COUNT=$(count_entries "$SOURCE_LIST")
-  git -C "$FROM_REPO" ls-files --deleted -z "${pathspec[@]}" >"$deleted_list"
 
   if ((INCLUDE_UNTRACKED)); then
     git -C "$FROM_REPO" ls-files --others --exclude-standard -z "${pathspec[@]}" >"$UNTRACKED_LIST"
+    UNTRACKED_COUNT=$(count_entries "$UNTRACKED_LIST")
   else
     : >"$UNTRACKED_LIST"
+    UNTRACKED_COUNT=0
   fi
-  UNTRACKED_COUNT=$(count_entries "$UNTRACKED_LIST")
 
-  # Destination-tracked paths absent from the source index. Do not prune other
-  # destination files: they may be local data (for example .env or generated files).
-  LC_ALL=C comm -z -23 \
-    <(git -C "$TO_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) \
-    <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) >"$stale_list"
+  if ((INCLUDE_UNTRACKED || PRUNE)); then
+    cat "$SOURCE_LIST" "$UNTRACKED_LIST" | LC_ALL=C sort -z -u >"$TRANSFER_LIST"
+  else
+    TRANSFER_LIST="$SOURCE_LIST"
+  fi
 
-  cat "$SOURCE_LIST" "$UNTRACKED_LIST" | LC_ALL=C sort -z -u >"$TRANSFER_LIST"
-  cat "$deleted_list" "$stale_list" | LC_ALL=C sort -z -u >"$delete_candidates"
-  LC_ALL=C comm -z -23 "$delete_candidates" "$TRANSFER_LIST" >"$unkept_candidates"
-
-  # The destination index can keep listing a stale path after its working-tree
-  # file has been removed. Count and process only deletion candidates that exist.
   : >"$DELETE_LIST"
-  while IFS= read -r -d '' file; do
-    destination_file="$TO_REPO/$file"
-    if [[ -f "$destination_file" || -L "$destination_file" ]]; then
-      printf '%s\0' "$file" >>"$DELETE_LIST"
-    fi
-  done <"$unkept_candidates"
-  STALE_COUNT=$(count_entries "$DELETE_LIST")
+  STALE_COUNT=0
+  if ((PRUNE)); then
+    delete_candidates="$WORK_DIR/delete-candidates.list"
+    unkept_candidates="$WORK_DIR/unkept-candidates.list"
+    stale_list="$WORK_DIR/stale.list"
+
+    # Compare only Git-tracked paths. Never prune unrelated destination data.
+    LC_ALL=C comm -z -23 \
+      <(git -C "$TO_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) \
+      <(git -C "$FROM_REPO" ls-files -z "${pathspec[@]}" | LC_ALL=C sort -z) >"$stale_list"
+    cat "$deleted_list" "$stale_list" | LC_ALL=C sort -z -u >"$delete_candidates"
+    LC_ALL=C comm -z -23 "$delete_candidates" "$TRANSFER_LIST" >"$unkept_candidates"
+
+    # Destination index entries may outlive deleted files; keep only existing paths.
+    : >"$DELETE_LIST"
+    while IFS= read -r -d '' file; do
+      destination_file="$TO_REPO/$file"
+      if [[ -f "$destination_file" || -L "$destination_file" ]]; then
+        printf '%s\0' "$file" >>"$DELETE_LIST"
+      fi
+    done <"$unkept_candidates"
+    STALE_COUNT=$(count_entries "$DELETE_LIST")
+  fi
 }
 
 # Remove only paths identified from Git's tracked-file lists. Do not recurse or
@@ -281,8 +294,6 @@ delete_destination_paths() {
 
 # Show a compact summary before prompting
 show_summary() {
-  local staged_count
-  local modified_count
   local shown=0
   local untracked_shown=0
   local file
@@ -290,15 +301,6 @@ show_summary() {
   echo "from          : $FROM_REPO"
   echo "to            : $TO_REPO"
   echo "tracked       : $TRACKED_COUNT"
-
-  staged_count=$(git -C "$FROM_REPO" diff --name-only --cached -z | tr -dc '\0' | wc -c)
-  modified_count=$(git -C "$FROM_REPO" diff --name-only -z | tr -dc '\0' | wc -c)
-  if ((staged_count > 0)); then
-    echo "staged        : $staged_count"
-  fi
-  if ((modified_count > 0)); then
-    echo "modified      : $modified_count"
-  fi
 
   if ((INCLUDE_UNTRACKED)); then
     echo "untracked     : $UNTRACKED_COUNT"
@@ -328,7 +330,7 @@ show_summary() {
       echo "  ...         : $((STALE_COUNT - shown)) more"
     fi
   else
-    echo "prune         : off ($STALE_COUNT stale/deleted paths preserved)"
+    echo "prune         : off (destination-only files preserved)"
   fi
   if ((${#SUBMODULES[@]} > 0)); then
     echo "submodules    : ${#SUBMODULES[@]} skipped"
@@ -398,21 +400,33 @@ run_rsync() {
   local -a rsync_cmd=(rsync)
   rsync_cmd+=("${RSYNC_OPTS[@]}" --from0 "--files-from=$TRANSFER_LIST"
     "$FROM_REPO/" "$TO_REPO/")
-  local plan
+  local output
   local exit_code
 
   if ((DRY_RUN)); then
     show_summary
     echo "---"
-    if plan=$("${rsync_cmd[@]}" 2>&1); then
-      show_rsync_plan "$plan"
+  fi
+
+  if output=$("${rsync_cmd[@]}" 2>&1); then
+    :
+  else
+    exit_code=$?
+    if ((exit_code == 24 && !PRUNE)); then
+      output=$(printf '%s\n' "$output" | awk '
+        index($0, "file has vanished:") == 0 && $0 !~ /^rsync warning:/
+      ')
+      echo "vm-git-sync: skipped source paths that vanished; prune is disabled" >&2
     else
-      exit_code=$?
-      printf '%s\n' "$plan" >&2
+      printf '%s\n' "$output" >&2
       return "$exit_code"
     fi
-  else
-    "${rsync_cmd[@]}"
+  fi
+
+  if ((DRY_RUN)); then
+    show_rsync_plan "$output"
+  elif [[ -n $output ]]; then
+    printf '%s\n' "$output"
   fi
 }
 

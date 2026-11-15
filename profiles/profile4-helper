@@ -42,6 +42,15 @@ vm_update_clean_all() {
   print_separator
   update_and_clean "flatpak [user]" "flatpak -y --user update" "flatpak --user uninstall --unused"
   print_separator
+  if command -v rustup >/dev/null 2>&1; then
+    echo -e "${BPURPLE}Updating rustup...${NC}"
+    if rustup update; then
+      echo -e "${BPURPLE}rustup update completed.${NC}"
+    else
+      echo -e "${BRED}rustup update failed.${NC}" >&2
+    fi
+    print_separator
+  fi
 
   echo -e "You could also run additional updates:"
   echo -e "  - run ${BPURPLE}'vm_up_py_pip'${NC} to update Python pip installs by user."

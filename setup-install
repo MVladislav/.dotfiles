@@ -1,0 +1,805 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# CONFIG/INSTALL :: sourced by setup
+# Installer functions for every tool setup manages.
+# Functions only - this file is never executed on its own.
+
+# ******************************************************************************
+
+# DEPS :: additional -----------------------------------------------------------
+install_dependencies_additional() {
+  print_info2 "\n🚀 DEPS :: installing additional base services"
+
+  if ! command -v fzf &>/dev/null; then
+    print_notes "   📦 installing fzf (needed for package selection)..."
+    apt_install "   ⏳ installing fzf..." fzf || return 1
+  fi
+
+  local tools=(
+    "curl:URL retrieval tool"
+    "git:Version control system"
+    "git-delta:Git diff viewer"
+    "pigz:Parallel gzip"
+    "jq:JSON processor"
+    "rsync:File synchronization"
+    "wl-clipboard:Wayland clipboard tools"
+    "eza:Modern ls replacement"
+    "bat:Cat with syntax highlighting"
+    "ripgrep:Fast text search"
+    "fd-find:Find alternative"
+  )
+
+  local selections rc
+  selections=$(fzf_multi_select "Select packages > " "📦 select packages (Tab to toggle, Enter to confirm):" select-all "${tools[@]}") || {
+    rc=$?
+    [[ $rc -eq 130 ]] && { print_notes "   💡 selection cancelled, skipping"; sudo_drop; return 0; }
+    return "$rc"
+  }
+
+  local -a pkgs=()
+  if [[ -n "$selections" ]]; then
+    mapfile -t pkgs <<< "$selections"
+    print_notes "   📦 installing: ${pkgs[*]}"
+    apt_install "   ⏳ installing packages, this can take a minute..." "${pkgs[@]}" || return 1
+  else
+    print_notes "   💡 no packages selected, skipping"
+  fi
+
+  if [[ " ${pkgs[*]} " == *" rsync "* ]]; then
+    print_notes "   ⚙️ disabling rsync systemd service..."
+    $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
+    $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
+  fi
+
+  sudo_drop
+  print_info2 "✅ DEPS :: base services installed!"
+}
+
+# DEPS :: dev ------------------------------------------------------------------
+install_dependencies_dev() {
+  print_info2 "\n🚀 DEPS :: installing dev dependencies"
+
+  require_cmds fzf || return 1
+
+  local tools=(
+    "node:Node.js runtime (snap)"
+    "rustup:Rust toolchain manager (snap)"
+    "go:Go programming language (snap)"
+    "shellcheck:Shell script analyzer (snap)"
+    "httpie:HTTPie API client (snap)"
+    "python-dev:Python dev tools (pip, venv) (apt)"
+    "lazygit:Git TUI (go install)"
+    "uv-prek:uv + prek package tools (pip)"
+  )
+
+  local selections rc
+  selections=$(fzf_multi_select "Select dev tools > " "📦 select dev packages (Tab to toggle, Enter to confirm):" "" "${tools[@]}") || {
+    rc=$?
+    [[ $rc -eq 130 ]] && { print_notes "   💡 selection cancelled, skipping"; return 0; }
+    return "$rc"
+  }
+
+  [[ -z "$selections" ]] && { print_notes "   💡 no dev packages selected, skipping"; return 0; }
+
+  # Keep the run order identical to the menu. fzf returns matches in score
+  # order once a query is typed, which would otherwise make the log jump.
+  local -a selections_arr=()
+  local tool name
+  for tool in "${tools[@]}"; do
+    name="${tool%%:*}"
+    if grep -Fxq -- "$name" <<< "$selections"; then
+      selections_arr+=("$name")
+    fi
+  done
+  print_notes "   📋 selected (${#selections_arr[@]}) :: ${selections_arr[*]}"
+
+  local sel
+  local -a apt_pkgs=()
+
+  print_notes ""
+  print_notes "   ⚙️  phase 1 :: install packages"
+  for sel in "${selections_arr[@]}"; do
+    case "$sel" in
+      node)       print_notes "   📦 node       :: snap (classic)";        snap_install node --classic ;;
+      rustup)     print_notes "   📦 rustup     :: snap (classic)";        snap_install rustup --classic ;;
+      go)         print_notes "   📦 go         :: snap (classic)";        snap_install go --classic ;;
+      shellcheck) print_notes "   📦 shellcheck :: snap";                 snap_install shellcheck ;;
+      httpie)     print_notes "   📦 httpie     :: snap";                 snap_install httpie ;;
+      python-dev) print_notes "   📦 python-dev :: apt (pip, venv, dev)"; apt_pkgs+=(python3-pip python3-venv python3-dev) ;;
+    esac
+  done
+
+  if ((${#apt_pkgs[@]} > 0)); then
+    apt_install "   ⏳ installing ${apt_pkgs[*]} (sudo may ask for your password)..." "${apt_pkgs[@]}" || return 1
+  fi
+
+  sudo_drop
+
+  print_notes ""
+  print_notes "   ⚙️  phase 2 :: configure tools"
+  for sel in "${selections_arr[@]}"; do
+    case "$sel" in
+      rustup)
+        print_notes "   ⚙️ rustup     :: install or update the 'stable' toolchain"
+        run_quiet rustup update stable
+        run_quiet rustup default stable
+        ;;
+      lazygit)
+        if ! command -v go &>/dev/null; then
+          print_error "   ❌ lazygit    :: 'go' not found - select 'go' or install it manually"
+        else
+          print_notes "   ⚙️ lazygit    :: go install github.com/jesseduffield/lazygit@latest"
+          run_quiet go install github.com/jesseduffield/lazygit@latest
+        fi
+        ;;
+      uv-prek)
+        if ! command -v python3 &>/dev/null; then
+          print_error "   ❌ uv-prek    :: 'python3' not found - select 'python-dev' or install it manually"
+        else
+          print_notes "   ⚙️ uv-prek    :: create $HOME/.venv (with upgraded pip) and install uv + prek"
+          run_quiet python3 -m venv --upgrade-deps "$HOME/.venv"
+          run_quiet "$HOME/.venv/bin/python" -m pip install uv prek
+        fi
+        ;;
+    esac
+  done
+
+  # cargo install impala    # https://github.com/pythops/impala
+  # cargo install wiremix   # https://github.com/tsowell/wiremix
+
+  local go_bin lazygit_version shellcheck_version
+  go_bin="$(go env GOPATH 2>/dev/null || true)/bin/lazygit"
+
+  print_notes ""
+  print_notes "   🧾 versions"
+  for sel in "${selections_arr[@]}"; do
+    case "$sel" in
+      node)       print_notes "      node       :: $(installed_version node --version)" ;;
+      rustup)     print_notes "      rustc      :: $(installed_version rustc --version)" ;;
+      go)         print_notes "      go         :: $(installed_version go version)" ;;
+      shellcheck)
+        # `shellcheck --version` starts with a tagline, so read its version field.
+        shellcheck_version=$(shellcheck --version 2>/dev/null | sed -n 's/^version: //p')
+        print_notes "      shellcheck :: ${shellcheck_version:-not installed}"
+        ;;
+      httpie)     print_notes "      httpie     :: $(installed_version httpie --version)" ;;
+      python-dev) print_notes "      python3    :: $(installed_version python3 --version)" ;;
+      lazygit)
+        lazygit_version=$(installed_version "$go_bin" --version)
+        print_notes "      lazygit    :: ${lazygit_version##*version=}"
+        ;;
+      uv-prek)
+        print_notes "      uv         :: $(installed_version "$HOME/.venv/bin/uv" --version)"
+        print_notes "      prek       :: $(installed_version "$HOME/.venv/bin/prek" --version)"
+        ;;
+    esac
+  done
+
+  print_info2 "✅ DEPS :: dev dependencies installed!"
+}
+
+# ******************************************************************************
+
+# SERVICE :: install ghostty ---------------------------------------------------
+install_ghostty() {
+  print_info2 "\n🚀 GHOSTTY :: install ghostty..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
+
+  local packages_tools=(libgtk4-layer-shell0)
+  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  local zig_command=zig
+  if ! command -v zig >/dev/null 2>&1; then
+    print_notes "   📦 downloading zig binary..."
+    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_URL"
+    mkdir -p "$DEPS_INSTALL_PATH/zig"
+    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
+    zig_command="$DEPS_INSTALL_PATH/zig/zig"
+  fi
+
+  print_notes "   📦 cloning ghostty..."
+  clone_repo "$VERSION_GHOSTTY_REPO" "$DEPS_INSTALL_PATH/ghostty" "$VERSION_GHOSTTY"
+  pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+
+  print_notes "   🔧 building and installing ghostty..."
+  sed -i -e "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" -e "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
+  "$zig_command" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
+  refresh_desktop_caches "" "$USER_LOCAL_PREFIX/share/applications"
+
+  if command -v gsettings &>/dev/null; then
+    print_notes "   ⚙️ switching default keybind to open terminal ('<Ctrl><Alt>T')"
+    local keybindings keybinding_entry
+    keybinding_entry="'/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/'"
+    keybindings=$(gsettings get org.gnome.settings-daemon.plugins.media-keys custom-keybindings)
+    if [[ $keybindings != *"$keybinding_entry"* ]]; then
+      if [[ $keybindings == "[]" || $keybindings == "@as []" ]]; then
+        keybindings="[$keybinding_entry]"
+      else
+        keybindings="${keybindings%]}, $keybinding_entry]"
+      fi
+      gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$keybindings"
+    fi
+    gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
+  fi
+
+  print_notes "   💡 for 'xterm compatibility', use vm_xterm_cp_local (sudo) or vm_xterm_cp_ssh (SSH)"
+
+  install_dependencies_needs_rm
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
+  print_info2 "✅ GHOSTTY :: ghostty installed!"
+}
+
+# SERVICE :: install nvim ------------------------------------------------------
+install_nvim() {
+  print_info2 "\n🚀 NVIM :: install nvim..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
+
+  local packages_tools=(python3-venv)
+  local packages_build=(git curl ninja-build gettext cmake build-essential)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   📦 cloning nvim..."
+  clone_repo "$VERSION_NVIM_REPO" "$DEPS_INSTALL_PATH/nvim" "$VERSION_NVIM"
+  pushd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+
+  print_notes "   🔧 building and installing nvim..."
+  # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
+  make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
+  make install 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
+
+  install_dependencies_needs_rm
+  print_notes "   💡 install 'node' for Mason plugin support"
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
+  print_info2 "✅ NVIM :: nvim installed!"
+}
+
+# SERVICE :: install zsh -------------------------------------------------------
+install_zsh() {
+  print_info2 "\n🚀 ZSH :: install zsh..."
+  print_notes "   💡 current installed version :: '$(installed_version zsh --version)'"
+
+  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
+    local packages_tools=()
+    local packages_build=(gcc make autoconf yodl texinfo libncurses-dev)
+    install_dependencies_needs packages_tools[@] packages_build[@]
+
+    print_notes "   📦 cloning zsh..."
+    clone_repo "$VERSION_ZSH_REPO" "$DEPS_INSTALL_PATH/zsh" "$VERSION_ZSH"
+    pushd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+
+    print_notes "   🔧 building and installing zsh..."
+    ./Util/preconfig 1>/dev/null
+    ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+    make 1>/dev/null
+    make install 1>/dev/null
+    popd 1>/dev/null
+    rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
+  else
+    print_notes "   📦 installing zsh..."
+    apt_install "   ⏳ installing zsh..." zsh || return 1
+  fi
+  sudo_drop
+
+  local zsh_install_bin_path
+  zsh_install_bin_path=$(command -v zsh || echo "/usr/bin/zsh")
+
+  if [[ "$(basename "$SHELL")" != "zsh" ]]; then
+    print_info2 "🚀 ZSH :: setting zsh as default shell for user '$USER'"
+    $RUN_WITH_SUDO chsh -s "$zsh_install_bin_path" "$USER" || {
+      print_error "  ❌ failed to change default shell to ZSH. Run 'sudo chsh -s \"$(command -v zsh)\" \"$USER\"' manually."
+    }
+    sudo_drop
+  fi
+
+  [[ $INSTALL_SOURCE_FROM == 'source' ]] && install_dependencies_needs_rm
+
+  print_notes "   💡 new installed version :: '$(installed_version zsh --version)'"
+  print_info2 "✅ ZSH :: zsh installed!"
+}
+
+# SERVICE :: install tmux ------------------------------------------------------
+install_tmux() {
+  print_info2 "\n🚀 TMUX :: install tmux..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
+
+  local packages_tools=(libevent-dev)
+  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   📦 cloning tmux..."
+  clone_repo "$VERSION_TMUX_REPO" "$DEPS_INSTALL_PATH/tmux" "$VERSION_TMUX"
+  pushd "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+  bash ./autogen.sh 1>/dev/null
+
+  print_notes "   🔧 building and installing tmux..."
+  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
+  make 1>/dev/null
+  make install 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
+
+  install_dependencies_needs_rm
+
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
+  print_info2 "✅ TMUX :: tmux installed!"
+}
+
+# ******************************************************************************
+
+# SERVICE :: install btop ------------------------------------------------------
+install_btop() {
+  print_info2 "\n🚀 BTOP :: install btop..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
+
+  local packages_tools=()
+  local packages_build=(git build-essential cmake libdrm-dev pkg-config)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  print_notes "   📦 cloning btop..."
+  clone_repo "$VERSION_BTOP_REPO" "$DEPS_INSTALL_PATH/btop" "$VERSION_BTOP"
+  pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+
+  local rsmi_static='false'
+  local rocm_dir='lib/rocm_smi_lib'
+  local rocm_project='rocm-smi-lib' # amdsmi
+  local rocm_src="$DEPS_INSTALL_PATH/rocm-systems"
+  if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
+    print_notes "   📦 cloning and building rocm..."
+    rm -rf "$rocm_dir" "$rocm_src" 1>/dev/null
+    mkdir -p lib
+    git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_REPO" "$rocm_src"
+    mv "$rocm_src/projects/$rocm_project" "$rocm_dir"
+    rm -rf "$rocm_src" 1>/dev/null
+    mkdir -p "$rocm_dir/build"
+    pushd "$rocm_dir/build" 1>/dev/null
+    cmake .. 1>/dev/null           # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
+    make -j "$(nproc)" 1>/dev/null # amd_smi
+    popd 1>/dev/null
+    rsmi_static='true'
+  fi
+
+  print_notes "   🔧 building and installing btop..."
+  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$rsmi_static" ROCM_DIR="$rocm_dir" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
+  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
+
+  local -a caps=(cap_perfmon cap_dac_read_search)
+  local caps_label="CPU watts"
+  if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
+    caps+=(cap_sys_admin)
+    caps_label="GPU and CPU watts"
+  fi
+  local caps_csv
+  printf -v caps_csv '%s,' "${caps[@]}"
+  print_notes "   ⚙️ configuring btop with setcap for $caps_label access without sudo"
+  $RUN_WITH_SUDO setcap "${caps_csv%,}+ep" "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
+  sudo_drop
+
+  install_dependencies_needs_rm
+
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
+  print_info2 "✅ BTOP :: btop installed!"
+}
+
+# SERVICE :: install hunk ------------------------------------------------------
+install_hunk() {
+  print_info2 "\n🚀 HUNK :: install hunk..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
+  download_github_binary "$VERSION_HUNK_REPO" 'hunkdiff-linux-x64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
+  print_info2 "✅ HUNK :: hunk installed!"
+}
+
+# SERVICE :: install GitHub CLI ------------------------------------------------
+install_gh() {
+  print_info2 "\n🚀 GH :: install GitHub CLI..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/gh" --version)'"
+  download_github_binary "$VERSION_GH_REPO" 'gh_.*_linux_amd64\.tar\.gz'
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/gh" --version)'"
+  print_info2 "✅ GH :: GitHub CLI installed!"
+}
+
+# SERVICE :: install input (Work Louder) ---------------------------------------
+install_input_linux() {
+  print_info2 "\n🚀 INPUT :: install Work Louder Input (AppImage, user-based)..."
+  require_cmds curl || return 1
+
+  local asset_name="input-${VERSION_INPUT_LINUX#v}.AppImage"
+  local asset_url="$VERSION_INPUT_LINUX_REPO/releases/download/$VERSION_INPUT_LINUX/$asset_name"
+  local target="$USER_LOCAL_PREFIX_BIN/input-linux.AppImage"
+  local tmp_asset="$DEPS_INSTALL_PATH/$asset_name"
+  local tmp_icon_dir="$DEPS_INSTALL_PATH/input-icon"
+  local icon_name="input"
+  local icon_src="$tmp_icon_dir/squashfs-root/usr/share/icons/hicolor/512x512/apps/$icon_name.png"
+  local desktop_file="$LN_INPUT_LINUX_APPLICATIONS/input-linux.desktop"
+
+  local current_version="not installed"
+  [[ -x "$target" ]] && current_version="present (pinned: $VERSION_INPUT_LINUX)"
+  print_notes "   💡 current installed version :: '$current_version'"
+
+  print_notes "   ⬇️ downloading $asset_name..."
+  mkdir -p "$DEPS_INSTALL_PATH" "$USER_LOCAL_PREFIX_BIN"
+  curl -fsSL "$asset_url" -o "$tmp_asset"
+  [[ -s "$tmp_asset" ]] || { print_error "❌ INPUT :: download produced empty file."; rm -f "$tmp_asset"; return 1; }
+  install -Dm755 "$tmp_asset" "$target"
+  rm -f "$tmp_asset"
+  print_notes "   ✅ installed $target"
+
+  print_notes "   📌 extracting icon..."
+  rm -rf "$tmp_icon_dir"
+  mkdir -p "$tmp_icon_dir"
+  pushd "$tmp_icon_dir" >/dev/null
+  "$target" --appimage-extract "usr/share/icons/hicolor/512x512/apps/$icon_name.png" >/dev/null 2>&1 || true
+  popd >/dev/null
+  if [[ -f "$icon_src" ]]; then
+    install -Dm644 "$icon_src" "$LN_INPUT_LINUX_ICONS/512x512/apps/$icon_name.png"
+    print_notes "   ✅ icon installed ($LN_INPUT_LINUX_ICONS/512x512/apps/$icon_name.png)"
+  else
+    print_notes "   ⚠️ could not extract icon from the AppImage"
+  fi
+  rm -rf "$tmp_icon_dir"
+
+  print_notes "   📌 installing desktop entry -> $desktop_file"
+  mkdir -p "$LN_INPUT_LINUX_APPLICATIONS"
+  {
+    printf '%s\n' "[Desktop Entry]"
+    printf 'Name=%s\n' "Input (Work Louder)"
+    printf 'Comment=%s\n' "Configure Work Louder devices"
+    printf 'Exec=%s\n' "$target"
+    printf 'Icon=%s\n' "$icon_name"
+    printf '%s\n' "Type=Application"
+    printf '%s\n' "Terminal=false"
+    printf '%s\n' "Categories=Utility;"
+  } >"$desktop_file"
+  if command -v desktop-file-validate >/dev/null 2>&1; then
+    desktop-file-validate "$desktop_file" || print_notes "   ⚠️ desktop-file-validate reported issues for $desktop_file"
+  fi
+
+  # System-wide udev rules for Work Louder devices (requires sudo).
+  install_udev_rules "${PWD}/configs-single/70-worklouder.rules" "$LN_INPUT_LINUX_UDEV" \
+    --subsystem-match=hidraw --subsystem-match=tty
+
+  # Refresh caches so the menu and icon theme pick up the new files.
+  refresh_desktop_caches "$LN_INPUT_LINUX_ICONS" "$LN_INPUT_LINUX_APPLICATIONS"
+
+  # Soft dependency hint: AppImages need FUSE at runtime.
+  if ! command -v fusermount3 >/dev/null 2>&1 && ! command -v fusermount >/dev/null 2>&1; then
+    print_notes "   💡 FUSE not detected. If the AppImage fails to start, install fuse3 (e.g. 'sudo apt install fuse3')."
+  fi
+
+  print_notes "   💡 new installed version :: '$VERSION_INPUT_LINUX'"
+  print_notes "   💡 launch from app menu or run: $target"
+  print_info2 "✅ INPUT :: Work Louder Input installed!"
+}
+
+# SERVICE :: install openlogi -------------------------------------------------
+install_openlogi() {
+  print_info2 "\n🚀 OPENLOGI :: install openlogi..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/openlogi" --version)'"
+  # rustup installs its shims outside this script's fixed PATH.
+  export PATH="$HOME/.cargo/bin:$PATH"
+
+  require_cmds cargo rustc git || {
+    print_error "❌ OPENLOGI :: 'cargo' or 'rustc' not found. Install a stable Rust toolchain first, e.g. './setup -idev' (rustup) or https://rustup.rs"
+    return 1
+  }
+
+  local rustc_version rustc_major rustc_minor
+  rustc_version=$(rustc --version | awk '{print $2}')
+  IFS=. read -r rustc_major rustc_minor _ <<< "$rustc_version"
+  if ((rustc_major < 1 || (rustc_major == 1 && rustc_minor < 99))); then
+    print_error "❌ OPENLOGI :: rustc >= 1.99 required (found $rustc_version). Update with 'rustup update stable'."
+    return 1
+  fi
+
+  local packages_tools=(libxkbcommon0 libxkbcommon-x11-0 libxcb1 libvulkan1 libwayland-client0 libfontconfig1 libgl1)
+  local packages_build=(build-essential clang pkg-config libudev-dev libfontconfig1-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libssl-dev libzstd-dev)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  local openlogi_dir="$DEPS_INSTALL_PATH/openlogi"
+  if [[ -d "$openlogi_dir/.git" ]]; then
+    print_notes "   ♻️ reusing existing checkout at $openlogi_dir..."
+    git -C "$openlogi_dir" fetch -q --tags origin || print_notes "   ⚠️ could not fetch updates, building the existing checkout"
+    if [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
+      git -C "$openlogi_dir" checkout -q "$VERSION_OPENLOGI"
+      git -C "$openlogi_dir" reset -q --hard "$VERSION_OPENLOGI"
+    fi
+  else
+    print_notes "   📦 cloning openlogi..."
+    clone_repo "$VERSION_OPENLOGI_REPO" "$openlogi_dir" "$VERSION_OPENLOGI"
+  fi
+  pushd "$openlogi_dir" 1>/dev/null
+
+  # Upstream release settings (fat LTO, codegen-units=1, opt-level 3, 4 jobs)
+  # peak above 7 GiB. Local builds use cheaper defaults; override with
+  # OPENLOGI_BUILD_JOBS / _LTO / _CODEGEN_UNITS / _OPT_LEVEL.
+  local build_jobs="${OPENLOGI_BUILD_JOBS:-1}"
+  local build_lto="${OPENLOGI_LTO:-false}"
+  local build_codegen_units="${OPENLOGI_CODEGEN_UNITS:-16}"
+  local build_opt_level="${OPENLOGI_OPT_LEVEL:-1}"
+  # openlogi-desktop alone needs ~5 GiB; skip it on low-memory hosts unless
+  # OPENLOGI_BUILD_DESKTOP=1.
+  local build_desktop="${OPENLOGI_BUILD_DESKTOP:-auto}"
+  if [[ $build_desktop == 'auto' ]]; then
+    local mem_available_mib
+    mem_available_mib=$(awk '/^MemAvailable:/ {m=$2} /^SwapFree:/ {s=$2} END {printf "%d", (m+s)/1024}' /proc/meminfo)
+    if ((mem_available_mib < 6144)); then
+      build_desktop=0
+      print_notes "   ⚠️ only ${mem_available_mib} MiB RAM+swap free: skipping openlogi-desktop (needs ~5 GiB; force with OPENLOGI_BUILD_DESKTOP=1)"
+    else
+      build_desktop=1
+    fi
+  fi
+
+  local build_crates=(openlogi openlogi-overlay openlogi-agent)
+  [[ $build_desktop == 1 ]] && build_crates+=(openlogi-desktop)
+  local build_args=()
+  local build_crate
+  for build_crate in "${build_crates[@]}"; do
+    build_args+=(-p "$build_crate")
+  done
+
+  print_notes "   🔧 building and installing openlogi (crates: ${build_crates[*]}, cargo jobs: $build_jobs, LTO: $build_lto, codegen units: $build_codegen_units, opt-level: $build_opt_level)..."
+  if ! run_quiet_hint "⏳ building ${#build_crates[@]} release binaries, this can take several minutes..." \
+    env CARGO_PROFILE_RELEASE_LTO="$build_lto" \
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS="$build_codegen_units" \
+      CARGO_PROFILE_RELEASE_OPT_LEVEL="$build_opt_level" \
+      cargo build --release --locked -j "$build_jobs" "${build_args[@]}"; then
+    print_error "❌ OPENLOGI :: build failed."
+    popd 1>/dev/null
+    rm -rf "$openlogi_dir" 1>/dev/null
+    install_dependencies_needs_rm || true
+    return 1
+  fi
+
+  local build_dir="$openlogi_dir/target/release"
+  local binary
+  print_notes "   📌 installing binaries to $USER_LOCAL_PREFIX_BIN..."
+  for binary in "${build_crates[@]}"; do
+    install -Dm755 "$build_dir/$binary" "$USER_LOCAL_PREFIX_BIN/$binary"
+  done
+
+  if [[ $build_desktop == 1 ]]; then
+    print_notes "   📌 installing desktop entry and icons..."
+    mkdir -p "$LN_OPENLOGI_APPLICATIONS"
+    sed "s|^Exec=openlogi-desktop$|Exec=${USER_LOCAL_PREFIX_BIN}/openlogi-desktop|" \
+      "$DEPS_INSTALL_PATH/openlogi/packaging/linux/desktop/openlogi.desktop" >"$LN_OPENLOGI_APPLICATIONS/openlogi.desktop"
+    chmod 644 "$LN_OPENLOGI_APPLICATIONS/openlogi.desktop"
+    install -Dm644 "$DEPS_INSTALL_PATH/openlogi/design/icon/openlogi.png" \
+      "$LN_OPENLOGI_ICONS/1024x1024/apps/openlogi.png"
+    local size
+    for size in 512 256 128 64 48 32 16; do
+      install -Dm644 "$DEPS_INSTALL_PATH/openlogi/design/icon/openlogi-${size}.png" \
+        "$LN_OPENLOGI_ICONS/${size}x${size}/apps/openlogi.png"
+    done
+  else
+    print_notes "   ⏭️ skipping desktop entry and icons (openlogi-desktop not built)"
+  fi
+
+  print_notes "   📌 installing systemd user unit -> $LN_OPENLOGI_AGENT"
+  mkdir -p "$(dirname "$LN_OPENLOGI_AGENT")"
+  sed "s|^ExecStart=/usr/bin/openlogi-agent$|ExecStart=${USER_LOCAL_PREFIX_BIN}/openlogi-agent|" \
+    "$DEPS_INSTALL_PATH/openlogi/packaging/linux/systemd/openlogi-agent.service" >"$LN_OPENLOGI_AGENT"
+
+  refresh_desktop_caches "$LN_OPENLOGI_ICONS" "$LN_OPENLOGI_APPLICATIONS"
+
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload || true
+    if systemctl --user enable --now openlogi-agent.service; then
+      print_notes "   ⚙️ enabled and started openlogi-agent.service for the current user"
+    else
+      print_error "   ❌ could not start openlogi-agent.service; run 'systemctl --user enable --now openlogi-agent.service' manually"
+    fi
+  fi
+
+  local openlogi_rules_src="$DEPS_INSTALL_PATH/openlogi/packaging/linux/udev/70-openlogi.rules"
+  install_udev_rules "$openlogi_rules_src" "$LN_OPENLOGI_UDEV" \
+    --subsystem-match=hidraw \
+    --trigger --subsystem-match=input \
+    --trigger --subsystem-match=misc --attr-match=name=uinput
+
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/openlogi" 1>/dev/null
+
+  install_dependencies_needs_rm
+
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/openlogi" --version)'"
+  print_info2 "✅ OPENLOGI :: openlogi installed!"
+}
+
+# SERVICE :: install android emulator ------------------------------------------
+install_android_emulator() {
+  export VM_ANDROID_PATH="${VM_ANDROID_PATH:-"$HOME/.android"}"
+  export ANDROID_HOME="${ANDROID_HOME:-"$VM_ANDROID_PATH/Sdk"}"
+  export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-"$ANDROID_HOME"}"
+  mkdir -p "$ANDROID_HOME"
+
+  require_cmds fzf curl unzip || return 1
+  require_cmds java || {
+    print_error "❌ ANDROID :: 'java' not found. Install 'openjdk-26-jre-headless' first."
+    return 1
+  }
+
+  if [[ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]]; then
+    print_info2 "📦 downloading Android command-line tools..."
+    # https://developer.android.com/studio#command-line-tools-only
+    # - https://dl.google.com/android/repository/commandlinetools-<os>-<version>_latest.zip
+    run_quiet_hint "⏳ downloading ~150 MB (commandlinetools), this can take a few minutes..." \
+      curl -fsSL "$ANDROID_HOME/cmdline-tools.zip" \
+      https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+
+    unzip -q "$ANDROID_HOME/cmdline-tools.zip" -d "$ANDROID_HOME/cmdline-tools"
+    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
+    rm "$ANDROID_HOME/cmdline-tools.zip"
+  fi
+
+  local sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+  local avdmanager="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+  local emulator="$ANDROID_HOME/emulator/emulator"
+
+  yes | "$sdkmanager" --licenses >/dev/null || true
+
+  # "$sdkmanager" --uninstall emulator
+  "$sdkmanager" --update
+
+  local rc build_tools images devices
+  local selected_build_tool selected_image selected_device
+
+  print_info2 "📋 available build-tools:"
+  build_tools=$("$sdkmanager" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort -ur) || true
+  selected_build_tool=$(fzf_select "$build_tools" "Select build-tools version:" "Select build-tools version: ") || {
+    rc=$?
+    [[ $rc -eq 130 ]] && { print_notes "   💡 selection cancelled, skipping"; return 0; }
+    return "$rc"
+  }
+  [[ -n "$selected_build_tool" ]] || { print_notes "   💡 no build-tools selected, skipping"; return 0; }
+  "$sdkmanager" "$selected_build_tool"
+
+  print_info2 "📋 available system images:"
+  images=$("$sdkmanager" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -ur) || true
+  selected_image=$(fzf_select "$images" "Select system image:" "Select system image: " "x86_64 api !store") || {
+    rc=$?
+    [[ $rc -eq 130 ]] && { print_notes "   💡 selection cancelled, skipping"; return 0; }
+    return "$rc"
+  }
+  [[ -n "$selected_image" ]] || { print_notes "   💡 no system image selected, skipping"; return 0; }
+
+  print_info2 "📦 installing: $selected_image ..."
+  "$sdkmanager" "platform-tools" "emulator" "$selected_image"
+
+  devices=$("$avdmanager" list devices | grep 'id:' | awk -F'"' '{print $2}' | grep 'pixel_' | sort -ur) || true
+  selected_device=$(fzf_select "$devices" "Select device profile:" "Select device profile: " "pro") || {
+    rc=$?
+    [[ $rc -eq 130 ]] && { print_notes "   💡 selection cancelled, skipping"; return 0; }
+    return "$rc"
+  }
+  [[ -n "$selected_device" ]] || { print_notes "   💡 no device profile selected, skipping"; return 0; }
+
+  local selected_image_name avd_name
+  selected_image_name=$(basename "$selected_image" | tr ';:' '_' | tr -d '[:punct:]')
+  avd_name="${selected_image_name}_$(basename "$selected_device")_$(date +%s)"
+  print_info2 "📱 creating AVD: $avd_name ..."
+  "$avdmanager" create avd -n "$avd_name" -k "$selected_image" -d "$selected_device" --force
+
+  print_info2 "✅ available AVDs:"
+  "$emulator" -list-avds
+}
+
+# ******************************************************************************
+
+# CODE :: install extensions ---------------------------------------------------
+install_code_ext() {
+  if command -v code >/dev/null 2>&1; then
+    print_info2 "\n📦 CODE :: installing VS Code extensions"
+
+    # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
+    # "github.copilot" "github.copilot-chat"
+    # "ms-python.debugpy" "ms-python.mypy-type-checker" "ms-python.vscode-pylance" "ms-python.vscode-python-envs"
+    # "astral-sh.ty" "donjayamanne.githistory"
+    local -a vs_code_exts=(
+      "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf"
+      "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
+      "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
+      "ms-python.python" "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
+      "redhat.vscode-xml" "redhat.vscode-yaml" "samuelcolvin.jinjahtml" "silofy.hackthebox"
+      "streetsidesoftware.code-spell-checker" "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml"
+      "timonwong.shellcheck" "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
+    )
+
+    local vs_code_ext
+    for vs_code_ext in "${vs_code_exts[@]}"; do
+      print_info2 "  📌 installing extension '$vs_code_ext'"
+      code --force --install-extension "$vs_code_ext" 1>/dev/null || true
+    done
+  else
+    print_error "❌ CODE :: code not found, extension install skipped!"
+  fi
+}
+
+# FONTS :: install -------------------------------------------------------------
+install_fonts() {
+  print_info2 "\n📦 FONTS :: downloading fonts"
+
+  # shellcheck disable=SC2034
+  local packages_tools=()
+  # shellcheck disable=SC2034
+  local packages_build=(curl file unzip)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  local -a fonts_urls=(
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/NerdFontsSymbolsOnly.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/FiraCode.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/Hack.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/UbuntuMono.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
+    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
+    "https://github.com/fonsecapeter/brass_mono/releases/download/v1.101/BrassMono.zip"
+  )
+  local fonts_dir="$USER_LOCAL_PREFIX/share/fonts"
+  local url file_name temp_file repo_name repo_dir archive_type
+
+  for url in "${fonts_urls[@]}"; do
+    file_name=$(basename "$url")
+    temp_file="$DEPS_INSTALL_PATH/$file_name"
+
+    print_info2 "  ⬇️ downloading $file_name..."
+    curl -fsL -o "$temp_file" "$url" || {
+      print_error "  ❌ failed to download $file_name"
+      return 1
+    }
+
+    if [[ "$url" =~ github.com/([^/]+)/([^/]+) ]]; then
+      repo_name="${BASH_REMATCH[2]}"
+    else
+      repo_name="custom-font"
+    fi
+
+    repo_dir="$fonts_dir/$repo_name"
+    mkdir -p "$repo_dir"
+
+    archive_type=$(file --mime-type -b "$temp_file")
+
+    print_info2 "  📦 extracting $file_name..."
+    case "$archive_type" in
+    application/x-xz) # .tar.xz
+      tar -xf "$temp_file" -C "$repo_dir" || {
+        print_error "  ❌ failed to extract $file_name"
+        return 1
+      }
+      ;;
+    application/zip) # .zip
+      unzip -qo "$temp_file" -d "$repo_dir" || {
+        print_error "  ❌ failed to extract $file_name"
+        return 1
+      }
+      ;;
+    *)
+      print_error "  ❌ unsupported archive type: $archive_type for $file_name"
+      return 1
+      ;;
+    esac
+
+    rm -f "$temp_file"
+  done
+
+  install_dependencies_needs_rm
+
+  if command -v fc-cache >/dev/null 2>&1; then
+    print_info2 "  🔧 refreshing font cache..."
+    fc-cache -f "$fonts_dir" 1>/dev/null || true
+  fi
+
+  print_info2 "✅ FONTS :: all fonts downloaded and extracted"
+}

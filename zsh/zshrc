@@ -1,16 +1,6 @@
 # ~/.zshrc
 
 # ---------------------------------------------------------------------------
-# Path configuration
-# ---------------------------------------------------------------------------
-# Ensure ~/.local/bin is in PATH (used by tmux and locally installed tools)
-# if [ -d "$HOME/.local/bin" ]; then
-#   if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-#     export PATH="$HOME/.local/bin:$PATH"
-#   fi
-# fi
-
-# ---------------------------------------------------------------------------
 # History settings
 # ---------------------------------------------------------------------------
 HISTFILE="$HOME/.zsh_history"     # Path where shell history is stored

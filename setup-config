@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# CONFIG/SETUP :: sourced by setup
+# Setup functions that point the machine at this repository's config.
+# Functions only - this file is never executed on its own.
+
+# ******************************************************************************
+
+# SETUP :: bin -----------------------------------------------------------------
+setup_bin() {
+  print_section "BIN :: config"
+  link_config "BIN" "${PWD}/bin" "$LN_VM_BIN"
+  print_section_end "✅ BIN :: config ready."
+}
+
+# SETUP :: ghostty -------------------------------------------------------------
+setup_ghostty() {
+  print_section "GHOSTTY :: config"
+  link_config "GHOSTTY" "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY}/config"
+  print_section_end "✅ GHOSTTY :: config ready."
+}
+
+# SETUP :: nvim ----------------------------------------------------------------
+setup_nvim() {
+  print_section "NVIM :: config"
+  link_config "NVIM" "${PWD}/nvim" "${LN_NVIM}"
+  print_section_end "✅ NVIM :: config ready."
+}
+
+# SETUP :: zed -----------------------------------------------------------------
+setup_zed() {
+  print_section "ZED :: config"
+  link_config "ZED" "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
+  link_config "ZED" "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
+  link_config "ZED" "${PWD}/zed/snippets" "${LN_ZED}/snippets"
+  link_config "ZED" "${PWD}/zed/codebook.toml" "${LN_ZED_CODEBOOK}/codebook.toml"
+  print_section_end "✅ ZED :: config ready."
+}
+
+# SETUP :: profiles ------------------------------------------------------------
+setup_profiles() {
+  print_section "PROFILES :: config"
+  link_config "PROFILES" "${PWD}/profiles/profile-append" "$LN_PROFILES_01"
+  link_config "PROFILES" "${PWD}/profiles/profile-sec" "$LN_PROFILES_02"
+
+  local profile_secrets="${HOME}/.profile-secrets"
+  print_info2 "🔧 PROFILES :: creating secrets file at $profile_secrets (mode 600)"
+  touch "$profile_secrets"
+  chmod 600 "$profile_secrets"
+
+  local -a profile_files=("${HOME}/.zshenv" "${HOME}/.bashrc")
+  # shellcheck disable=SC2016
+  local -a lines_to_add=(
+    "source \"$LN_PROFILES_01\""
+    "source \"$LN_PROFILES_02\""
+    "source \"$profile_secrets\""
+  )
+
+  local profile_file line
+  for profile_file in "${profile_files[@]}"; do
+    print_info2 "⚙️ PROFILES :: updating ${profile_file}"
+    touch "${profile_file}" 1>/dev/null
+    for line in "${lines_to_add[@]}"; do
+      grep -Fxq "$line" "$profile_file" || echo "$line" >>"$profile_file"
+    done
+  done
+
+  print_section_end "✅ PROFILES :: config ready."
+}
+
+# SETUP :: gitconfig -----------------------------------------------------------
+setup_gitconfig() {
+  setup_lazygit
+
+  print_section "GIT :: config"
+  print_info2 "🚀 GIT :: setting up git..."
+
+  local -a ssh_keys
+  local git_user_name git_user_email git_signing_key signing_key_path_expanded
+  local git_name_default git_email_default git_signing_key_default git_input rc
+
+  # Saved values become the prompt defaults, so a re-run is ENTER ENTER.
+  git_name_default=$(git config --global --get user.name 2>/dev/null || true)
+  git_email_default=$(git config --global --get user.email 2>/dev/null || true)
+  git_signing_key_default=$(git config --global --get user.signingkey 2>/dev/null || true)
+
+  link_config "GITHOOKS" "${PWD}/git/commit-msg" "$LN_GIT_HOOK_COMMIT_MSG"
+  link_config "GITHOOKS" "${PWD}/git/pre-commit" "$LN_GIT_HOOK_PRE_COMMIT"
+
+  print_info2 "⚙️ GITCONFIG :: starting global Git configuration..."
+
+  print_read "  ✏️ enter your Git user.name${git_name_default:+ [${git_name_default}]}: "
+  read -r git_input || true
+  git_user_name="${git_input:-$git_name_default}"
+
+  # Re-ask on a malformed address instead of silently dropping the identity.
+  while :; do
+    print_read "  ✏️ enter your Git user.email${git_email_default:+ [${git_email_default}]}: "
+    git_input=""
+    rc=0
+    read -r git_input || rc=$?
+    git_user_email="${git_input:-$git_email_default}"
+    [[ -z "$git_user_email" ]] && break
+    [[ $git_user_email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] && break
+    if [[ $rc -ne 0 ]]; then
+      git_user_email="" # EOF on a bad value: fall through to the skip path
+      break
+    fi
+    print_error "  ❌ that doesn't look like a valid email. Please try again."
+  done
+
+  if [[ -z "$git_user_name" || -z "$git_user_email" ]]; then
+    print_info2 "⚠️ GIT :: no user/email provided, skipping setup"
+    return 0
+  fi
+
+  print_info2 "  🔍 scanning $HOME/.ssh for available public keys"
+  mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub" 2>/dev/null)
+
+  if [[ ${#ssh_keys[@]} -gt 0 ]]; then
+    # Keys first, 'none' last; the cursor starts on 'none' so ENTER disables
+    # signing and ESC skips without changing anything.
+    local -a signing_key_choices=()
+    local ssh_key signing_key_expanded="" signing_key_none="none | disable commit signing"
+    [[ -n "$git_signing_key_default" ]] && signing_key_expanded="${git_signing_key_default/#\~/$HOME}"
+    if [[ -n "$signing_key_expanded" ]]; then
+      for ssh_key in "${ssh_keys[@]}"; do
+        [[ "$ssh_key" == "$signing_key_expanded" ]] && signing_key_choices+=("$ssh_key")
+      done
+      print_info2 "  💡 current signing key: $git_signing_key_default (cursor starts on 'none', move up to keep it)"
+    fi
+    for ssh_key in "${ssh_keys[@]}"; do
+      [[ "$ssh_key" == "$signing_key_expanded" ]] && continue
+      signing_key_choices+=("$ssh_key")
+    done
+    signing_key_choices+=("$signing_key_none")
+    git_signing_key="$(printf '%s\n' "${signing_key_choices[@]}" |
+      fzf --sync --bind "start:pos(${#signing_key_choices[@]})" \
+        --prompt='Select signing key (ENTER on none = off, ESC = skip): ')" || true
+    [[ "$git_signing_key" == "$signing_key_none" ]] && git_signing_key=""
+  else
+    print_info2 "  ⚠️ no SSH public keys found in $HOME/.ssh."
+    print_read "  ✏️ enter path to Git signing key ('none' to skip)${git_signing_key_default:+ [${git_signing_key_default}]}: "
+    git_input=""
+    read -e -r git_input || true
+    git_signing_key="${git_input:-$git_signing_key_default}"
+    case "$git_signing_key" in none | -) git_signing_key="" ;; esac
+  fi
+
+  if [[ -n "$git_signing_key" ]]; then
+    git_signing_key="$(echo "$git_signing_key" | xargs)"
+    signing_key_path_expanded="${git_signing_key/#\~/$HOME}"
+    if [[ ! -f "$signing_key_path_expanded" ]]; then
+      print_error "  ❌ file '$git_signing_key' does not exist"
+      return 1
+    fi
+  fi
+
+  print_info2 "  📋 copying git/.gitconfig to ${HOME}/.gitconfig"
+  if [[ -f "${HOME}/.gitconfig" ]]; then
+    cp "${HOME}/.gitconfig" "${HOME}/.gitconfig-$(date '+%Y%m%d-%H%M%S')"
+  fi
+  copy_config "${PWD}/git/.gitconfig" "${HOME}/.gitconfig"
+
+  print_info2 "  ⚙️ applying git configuration"
+  git config --global user.name "$git_user_name"
+  git config --global user.email "$git_user_email"
+
+  if [[ -n "$git_signing_key" ]]; then
+    git config --global user.signingkey "$git_signing_key"
+    git config --global commit.gpgsign true
+    print_info2 "  ✅ GPG signing enabled using key: '$git_signing_key'"
+  else
+    git config --global --unset user.signingkey 2>/dev/null || true
+    git config --global commit.gpgsign false
+    print_info2 "  💡 GPG signing disabled"
+  fi
+
+  print_section_end "✅ GIT :: config ready."
+}
+
+# SETUP :: lazygit -------------------------------------------------------------
+setup_lazygit() {
+  print_section "LAZYGIT :: config"
+  link_config "LAZYGIT" "${PWD}/git/lazygit.yml" "$LN_LAZYGIT"
+  print_section_end "✅ LAZYGIT :: config ready."
+}
+
+# ******************************************************************************
+
+# UPDATE :: submodule pins -----------------------------------------------------
+run_submodule_bump() {
+  print_section "GIT :: submodule pin bump"
+  print_info2 "📦 GIT :: following the upstream branch of every submodule"
+  git submodule update -q --init --remote
+  print_notes "   💡 '.gitmodules' sets 'ignore = all', so 'git status' stays quiet: review with"
+  print_notes "      'git diff --submodule=log' and record a bump with 'git add <submodule-path>'"
+  print_notes "      ('git add -A' and 'git commit -a' deliberately skip moved submodules)"
+  print_section_end "✅ GIT :: submodule pins updated."
+}
+
+# SETUP :: zsh -----------------------------------------------------------------
+setup_zsh() {
+  print_section "ZSH :: config"
+  print_info2 "📦 ZSH :: loading git submodules"
+  git submodule update -q --init --remote \
+    zsh/themes/spaceship \
+    zsh/plugins/zsh-autosuggestions \
+    zsh/plugins/zsh-syntax-highlighting \
+    zsh/plugins/zsh-history-substring-search
+
+  link_config "ZSH" "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
+  link_config "ZSH" "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
+  link_config "ZSH" "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
+  link_config "ZSH" "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
+  link_config "ZSH" "${PWD}/zsh/zshrc" "$LN_ZSHRC"
+  print_section_end "✅ ZSH :: config ready."
+}
+
+# SETUP :: tmux ----------------------------------------------------------------
+setup_tmux() {
+  print_section "TMUX :: config"
+  link_config "TMUX" "${PWD}/tmux/tmux" "$LN_TMUX"
+  link_config "TMUX" "${PWD}/tmux/tmux.conf" "$LN_TMUX_CONF"
+
+  print_info2 "📦 TMUX :: loading git submodules"
+  git submodule update -q --init --remote tmux/tmux/plugins/tpm
+  if command -v tmux >/dev/null 2>&1; then
+    print_info2 "🔧 TMUX :: running tpm to install plugins"
+    PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX}/plugins/tpm/bin/install_plugins" 1>/dev/null
+  fi
+
+  print_section_end "✅ TMUX :: config ready."
+}
+
+# SETUP :: btop ----------------------------------------------------------------
+setup_btop() {
+  print_section "BTOP :: config"
+  print_info2 "🔧 BTOP :: copying configs-single/btop.conf -> $LN_BTOP"
+  copy_config "${PWD}/configs-single/btop.conf" "$LN_BTOP"
+  print_section_end "✅ BTOP :: config ready."
+}
+
+# SETUP :: hunk ----------------------------------------------------------------
+setup_hunk() {
+  print_section "HUNK :: config"
+  print_info2 "🔧 HUNK :: setting hunk as git pager"
+  git config --global core.pager "hunk pager"
+
+  link_config "HUNK" "${PWD}/configs-single/hunk.toml" "$LN_HUNK"
+  print_section_end "✅ HUNK :: config ready."
+}
+
+# SETUP :: openlogi ------------------------------------------------------------
+setup_openlogi() {
+  print_section "OPENLOGI :: config"
+  if [[ -f "$LN_OPENLOGI_CONFIG" ]]; then
+    print_notes "   💡 keeping existing $LN_OPENLOGI_CONFIG (managed by the OpenLogi GUI)"
+  else
+    print_info2 "🔧 OPENLOGI :: seeding configs-single/openlogi.toml -> $LN_OPENLOGI_CONFIG"
+    copy_config "${PWD}/configs-single/openlogi.toml" "$LN_OPENLOGI_CONFIG"
+    chmod 600 "$LN_OPENLOGI_CONFIG"
+  fi
+  print_section_end "✅ OPENLOGI :: config ready."
+}
+
+# SETUP :: code ----------------------------------------------------------------
+setup_code() {
+  print_section "CODE :: config"
+  link_config "CODE" "${PWD}/code/keybindings.json" "$LN_VS_CODE/keybindings.json"
+  link_config "CODE" "${PWD}/code/settings.json" "$LN_VS_CODE/settings.json"
+  link_config "CODE" "${PWD}/code/snippets" "$LN_VS_CODE/snippets"
+  print_section_end "✅ CODE :: config ready."
+}

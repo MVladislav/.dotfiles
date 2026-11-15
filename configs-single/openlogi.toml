@@ -1,0 +1,91 @@
+# OpenLogi shared config (schema 11).
+#
+# Seeded once by `./setup -solog`; after that the OpenLogi GUI owns this file.
+# The schema is strict: an unknown, malformed, or out-of-range value stops the
+# whole file from loading. Device entries are keyed per unit, so let the GUI
+# probe the hardware first, then copy the exact key it wrote (`unit:`, `serial:`,
+# `receiver:`, or `camera:`) into the commented blocks below.
+
+schema_version = 11
+
+[app_settings]
+# Start the background agent at login; setup installs the matching systemd user
+# unit. Everything HID++-side (DPI, SmartShift, thumb wheel, gestures) needs it.
+launch_at_login = true
+# This install is built and updated by ./setup, so keep the update poller off and
+# skip the first-run "check for updates?" prompt.
+check_for_updates = false
+auto_install_updates = false
+update_prompt_seen = true
+# The evdev grab that button remapping needs on Linux. Pure HID++ features work
+# without it, but smooth scrolling and per-button bindings do not.
+capture_mouse_events = true
+# Eased wheel motion for a traditional wheel such as the MX Master 3S.
+# Opinionated: the upstream default is off.
+smooth_scroll = true
+# Wireless-device feedback: low battery, and Caps/Num/Scroll Lock overlays.
+low_battery_notifications = true
+lock_key_notifications = true
+# Both sensitivities accept 1-100; 14 is 1x. Raise them for faster scrolling.
+# vertical_scroll_sensitivity = 14
+# thumbwheel_sensitivity = 14
+
+# --- MX Master 3S -----------------------------------------------------------
+# [devices."unit:xxxxxxxx"]
+# custom_name = "MX Master 3S"
+# dpi = 1000
+# dpi_presets = [800, 1200, 1600]
+# scroll_resolution = "high"    # high = HiRes wheel reports
+# smooth_wheel = true
+# thumbwheel_sensitivity = 14   # 1-100; 14 is 1x
+# invert_scroll = false
+#
+# [devices."unit:xxxxxxxx".bindings]
+# Back = "BrowserBack"
+# Forward = "BrowserForward"
+# DpiToggle = { short = "CycleDpiPresets", long = "ToggleSmartShift" }
+# ThumbwheelScrollUp = "HorizontalScrollRight"
+# ThumbwheelScrollDown = "HorizontalScrollLeft"
+#
+# [devices."unit:xxxxxxxx".bindings.GestureButton]
+# Up = "VolumeUp"
+# Down = "VolumeDown"
+# Left = "PreviousDesktop"
+# Right = "NextDesktop"
+# Click = "ShowDesktop"
+#
+# SmartShift lives in `[devices."unit:xxxxxxxx".smartshift]` and needs all three
+# of `mode` ("ratchet" or "free"), `auto_disengage` (8-254, 255 = always
+# ratchet) and `tunable_torque` (1-100) together. Set it in the GUI first.
+#
+# Momentum/glide is optional and every key but `enabled` has a default. Upstream
+# validates the glide only on macOS, so treat these as a starting point.
+# [devices."unit:xxxxxxxx".momentum_scrolling]
+# enabled = true
+# pixels_per_notch = 28
+# glide_shape = "smooth"   # sharp, linear, smooth, or floaty
+# max_glide_speed = 8000
+# glide_ms = 400
+# repeat_boost = 135
+
+# --- MX Keys S --------------------------------------------------------------
+# [devices."unit:xxxxxxxx"]
+# custom_name = "MX Keys S"
+# fn_lock = false                           # false keeps the media keys on the F row
+# keep_os_layout = true
+# host_switch_targets = ["unit:xxxxxxxx"]   # also switch this mouse on Easy-Switch
+# disabled_keys = ["caps_lock"]             # firmware-level disable
+#
+# [keyboard.bindings]                       # device-agnostic F-key remap
+# f1 = "Screenshot"
+
+# --- Brio 4K ----------------------------------------------------------------
+# Camera entries take raw UVC control values; read them off the GUI once, then
+# copy the table here. A serial-less camera is keyed by model, so the key looks
+# like "camera:046d:085e".
+# [devices."camera:vvvv:pppp"]
+# custom_name = "Brio 4K"
+# camera_controls = { brightness = 128, contrast = 32, saturation = 32 }
+#
+# [devices."camera:vvvv:pppp".camera_profiles.lowlight]
+# brightness = 160

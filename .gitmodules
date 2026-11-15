@@ -2,24 +2,24 @@
   path = tmux/tmux/plugins/tpm
   url = https://github.com/tmux-plugins/tpm
   branch = master
-  ignore = dirty
+  ignore = all
 [submodule "zsh/themes/spaceship"]
   path = zsh/themes/spaceship
   url = https://github.com/denysdovhan/spaceship-prompt.git
   branch = master
-  ignore = dirty
+  ignore = all
 [submodule "zsh/plugins/zsh-autosuggestions"]
   path = zsh/plugins/zsh-autosuggestions
   url = https://github.com/zsh-users/zsh-autosuggestions.git
   branch = master
-  ignore = dirty
+  ignore = all
 [submodule "zsh/plugins/zsh-syntax-highlighting"]
   path = zsh/plugins/zsh-syntax-highlighting
   url = https://github.com/zsh-users/zsh-syntax-highlighting.git
   branch = master
-  ignore = dirty
+  ignore = all
 [submodule "zsh/plugins/zsh-history-substring-search"]
   path = zsh/plugins/zsh-history-substring-search
   url = https://github.com/zsh-users/zsh-history-substring-search.git
   branch = master
-  ignore = dirty
+  ignore = all

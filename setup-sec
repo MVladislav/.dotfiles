@@ -26,7 +26,7 @@ source "./setup-helper"
 
 VM_SEC_OPT="${VM_SEC_OPT:-"${HOME}/opt"}"
 
-# CONFS :: variables -----------------------------------------------------------
+# CONFIG :: variables ----------------------------------------------------------
 VM_SEC_LISTS_SECLISTS="${VM_SEC_OPT}/sec/SecLists"
 VM_SEC_LISTS_PAYLOADS="${VM_SEC_OPT}/sec/PayloadsAllTheThings"
 VM_SEC_LISTS_NUCLEI="${VM_SEC_OPT}/sec/NucleiTmp"
@@ -50,6 +50,8 @@ RUN_LOAD_TEMPLATES=0
 RUN_LOAD_NMAP_SCRIPTS=0
 RUN_LOAD_EXT_BROWSER=0
 
+RUN_UPDATE_CHECK=0
+
 VERSION_HASHCAT_G="https://github.com/hashcat/hashcat.git"
 VERSION_HASHCAT="v7.1.2"
 VERSION_TIO_G=https://github.com/tio/tio.git
@@ -63,23 +65,55 @@ JTR_ROCM_FOLDER="/opt/rocm"
 
 # ******************************************************************************
 
+# HELPER :: install Go tool at pinned commit date -------------------------------
+# Args: $1 "owner/repo[/cmd]", $2 (optional) Go version (default: latest).
+go_github_commit_date_and_download() {
+  local spec="$1"
+  local version="${2:-latest}"
+  local owner repo addition
+  IFS='/' read -r owner repo addition <<<"$spec"
+
+  local last_commit
+  last_commit=$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq -r '.[0].commit.committer.date')
+  echo 'LAST COMMIT' "[${repo}] ::" "$last_commit"
+
+  local package_path="${owner}/${repo}"
+  [[ -n "$addition" ]] && package_path="${package_path}/${addition}"
+  print_notes "   📥 installing '${package_path}'"
+  go install "github.com/${package_path}@${version}" 1>/dev/null
+}
+
+# HELPER :: remove build deps on failure ---------------------------------------
+# shellcheck disable=SC2329 # invoked via the EXIT trap in main
+cleanup_build_deps() {
+  [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -eq 0 ]] || install_dependencies_needs_rm || true
+}
+
 main() {
-  [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+  trap cleanup_build_deps EXIT
 
-  [[ $RUN_INSTALL_TOOLS -eq 1 ]] && install_tools
-  [[ $RUN_INSTALL_TOOLS_REVERSE -eq 1 ]] && install_tools_reverse
-  [[ $RUN_INSTALL_TOOLS_VULN_SCAN -eq 1 ]] && install_tools_vuln_scan
-  [[ $RUN_INSTALL_TOOLS_HARD_SCAN -eq 1 ]] && install_tools_hard_scan
+  if [[ $RUN_UPDATE_CHECK -eq 1 ]]; then
+    run_update_check
+    print_info2 "\n✅ Update check finished!"
+    exit 0
+  fi
 
-  [[ $RUN_INSTALL_ROCM -eq 1 ]] && install_rocm
-  [[ $RUN_INSTALL_JOHN -eq 1 ]] && install_john
-  [[ $RUN_INSTALL_HASHCAT -eq 1 ]] && install_hashcat
-  [[ $RUN_INSTALL_TIO -eq 1 ]] && install_tio
+  sudo_drop
 
-  [[ $RUN_LOAD_LISTS -eq 1 ]] && load_lists
-  [[ $RUN_LOAD_TEMPLATES -eq 1 ]] && load_templates
-  [[ $RUN_LOAD_NMAP_SCRIPTS -eq 1 ]] && load_nmap_scripts
-  [[ $RUN_LOAD_EXT_BROWSER -eq 1 ]] && load_ext_browser
+  run_if $RUN_INSTALL_TOOLS && install_tools
+  run_if $RUN_INSTALL_TOOLS_REVERSE && install_tools_reverse
+  run_if $RUN_INSTALL_TOOLS_VULN_SCAN && install_tools_vuln_scan
+  run_if $RUN_INSTALL_TOOLS_HARD_SCAN && install_tools_hard_scan
+
+  run_if $RUN_INSTALL_ROCM && install_rocm
+  run_if $RUN_INSTALL_JOHN && install_john
+  run_if $RUN_INSTALL_HASHCAT && install_hashcat
+  run_if $RUN_INSTALL_TIO && install_tio
+
+  run_if $RUN_LOAD_LISTS && load_lists
+  run_if $RUN_LOAD_TEMPLATES && load_templates
+  run_if $RUN_LOAD_NMAP_SCRIPTS && load_nmap_scripts
+  run_if $RUN_LOAD_EXT_BROWSER && load_ext_browser
 
   print_info2 "\n✅ All finished!"
 }
@@ -100,15 +134,6 @@ install_tools() {
   cargo install monolith 1>/dev/null # save web page as a single HTML file :: https://github.com/Y2Z/monolith
   print_notes "   📥 installing 'rustscan'"
   cargo install rustscan 1>/dev/null # modern port scanner :: https://github.com/bee-san/RustScan
-
-  go_github_commit_date_and_download() {
-    IFS='/' read -r owner repo addition <<<"$1"
-    echo 'LAST COMMIT' "[${repo}] ::" "$(curl -s "https://api.github.com/repos/${owner}/${repo}/commits" | jq '.[0].commit.committer.date')"
-    local package_path="${owner}/${repo}"
-    if [ -n "$addition" ]; then package_path="${package_path}/${addition}"; fi
-    print_notes "   📥 installing '${package_path}'"
-    go install "github.com/${package_path}@${2:-latest}" 1>/dev/null
-  }
 
   ### GO Tools ###
   go_github_commit_date_and_download 'charmbracelet/gum'
@@ -395,7 +420,7 @@ load_nmap_scripts() {
   print_info2 "🚀 NMAP :: Scripts cloning done!"
 }
 
-# SOURCE :: load nmap scripts --------------------------------------------------
+# SOURCE :: load browser extensions --------------------------------------------
 load_ext_browser() {
   print_info2 "\n🚀 EXT :: Clone browser extensions..."
 
@@ -408,22 +433,49 @@ load_ext_browser() {
 
 # ******************************************************************************
 
-# Function to show usage information
-usage() {
-  print_info "📑 Usage: $0 [options]"
-  print_info "   Options:"
-  print_info "     -h,         --help                      Show this help message and exit"
-  print_info "     -irocm,     --install-rocm              Install RCOM"
-  print_info "     -ijohn,     --install-john-the-ripper   Install John the Ripper"
-  print_info "     -ihashcat,  --install-hashcat           Install HastCat"
-  print_info "     -itio,      --install-tio               Install tio"
-  print_info "     -itools,    --install-additional-tools  Install additional tools"
-  print_info "     -llists,    --load-lists                Load/Clone lists"
-  print_info "     -ltemps,    --load-templates            Download Templates"
-  print_info "     -lnmap,     --load-nmap-scripts         Load/Clone more NMAP scripts"
+# UPDATE :: check newer tags ---------------------------------------------------
+run_update_check() {
+  echo
+  check_for_newer_tag "$VERSION_HASHCAT_G" "$VERSION_HASHCAT"
+  check_for_newer_tag "$VERSION_TIO_G" "$VERSION_TIO"
+  check_for_newer_tag "$VERSION_JTR_G" "$VERSION_JTR"
 }
 
-# Function to parse command-line arguments
+# CLI :: usage -----------------------------------------------------------------
+usage() {
+  print_info "\n📖 Usage: $0 [options]"
+  print_info "   Install security tooling and wordlists (install-only, no config symlinks)"
+  print_info ""
+  print_info "   🎯 Examples:"
+  print_info "     $0 -itools -llists                      Install CLI tools + clone wordlists"
+  print_info "     $0 -ijohn -ihashcat -itio               Build password tools from source"
+  print_info "     $0 -itools-reverse                      Install reverse-engineering tools"
+  print_info "     $0 -upc                                 Check installed tools for newer versions"
+  print_info ""
+  print_info "   ⚙️ Install flags:"
+  print_info "     -itools         --install-additional-tools       jq, nmap, cargo and Go tooling"
+  print_info "     -itools-reverse --install-tools-reverse          Reverse-engineering tooling"
+  print_info "     -itools-vuln    --install-tools-vulnerability    grype, trivy"
+  print_info "     -itools-hard    --install-tools-hardening        syft, cnspec, dockle, maldet"
+  print_info "     -irocm          --install-rocm                   AMD ROCm (work in progress)"
+  print_info "     -ijohn          --install-john-the-ripper        John the Ripper"
+  print_info "     -ihashcat       --install-hashcat                Hashcat"
+  print_info "     -itio           --install-tio                    tio"
+  print_info ""
+  print_info "   📚 Load flags:"
+  print_info "     -llists         --load-lists                     Clone SecLists, PayloadsAllTheThings, nuclei"
+  print_info "     -ltemps         --load-templates                 Download trivy/grype HTML templates"
+  print_info "     -lnmap          --load-nmap-scripts              Clone extra Nmap scripts"
+  print_info "     -lext           --load-ext-browser               Clone browser extensions"
+  print_info ""
+  print_info "   🔧 Other flags:"
+  print_info "     -s                                               Build from source where supported"
+  print_info "     -d              --debug                          Enable shell debug tracing"
+  print_info "     -upc            --update-check                   Check for newer versions"
+  print_info "     -h              --help                           Show this help message and exit"
+}
+
+# CLI :: parse args ------------------------------------------------------------
 parse_args() {
   while [[ $# -gt 0 ]]; do
     key="$1"
@@ -434,7 +486,7 @@ parse_args() {
       ;;
     -irocm | --install-rocm)
       # RUN_INSTALL_ROCM=1
-      echo "ROCM installer is work in progress"
+      print_info2 "   ⚠️ ROCm installer is work in progress"
       ;;
     -ijohn | --install-john-the-ripper)
       RUN_INSTALL_JOHN=1
@@ -448,6 +500,15 @@ parse_args() {
     -itools | --install-additional-tools)
       RUN_INSTALL_TOOLS=1
       ;;
+    -itools-reverse | --install-tools-reverse)
+      RUN_INSTALL_TOOLS_REVERSE=1
+      ;;
+    -itools-vuln | --install-tools-vulnerability)
+      RUN_INSTALL_TOOLS_VULN_SCAN=1
+      ;;
+    -itools-hard | --install-tools-hardening)
+      RUN_INSTALL_TOOLS_HARD_SCAN=1
+      ;;
     -llists | --load-lists)
       RUN_LOAD_LISTS=1
       ;;
@@ -457,6 +518,9 @@ parse_args() {
     -lnmap | --load-nmap-scripts)
       RUN_LOAD_NMAP_SCRIPTS=1
       ;;
+    -lext | --load-ext-browser)
+      RUN_LOAD_EXT_BROWSER=1
+      ;;
     -s)
       INSTALL_SOURCE_FROM=source
       ;;
@@ -464,9 +528,7 @@ parse_args() {
       set -x # Enable debug mode
       ;;
     -upc | --update-check)
-      check_for_newer_tag "$VERSION_HASHCAT_G" "$VERSION_HASHCAT"
-      check_for_newer_tag "$VERSION_TIO_G" "$VERSION_TIO"
-      check_for_newer_tag "$VERSION_JTR_G" "$VERSION_JTR"
+      RUN_UPDATE_CHECK=1
       ;;
     *)
       print_error "❌ Unknown option: $key"

@@ -93,7 +93,6 @@ vm_sec_create_cert() {
       echo "[req]"
       echo "distinguished_name=req"
       echo "x509_extensions=v3_ca"
-      echo "[req]"
       echo "[v3_ca]"
       echo "basicConstraints = critical, CA:true"
       echo "keyUsage = critical, keyCertSign, cRLSign"
@@ -106,7 +105,7 @@ vm_sec_create_cert() {
   openssl req -new -sha256 -key "$key" -out "$csr" \
     -subj "/O=$name/CN=*.$name" \
     -config <(
-      : 'cat /etc/ssl/openssl.cnf ; \'
+      cat /etc/ssl/openssl.cnf 2>/dev/null || true
       echo '[req]'
       echo 'distinguished_name=req'
       echo 'req_extensions=v3_req'
@@ -120,7 +119,7 @@ vm_sec_create_cert() {
     -sha256 -days 666 -out "$cert" \
     -extensions v3_req \
     -extfile <(
-      : 'cat /etc/ssl/openssl.cnf ; \'
+      cat /etc/ssl/openssl.cnf 2>/dev/null || true
       echo '[req]'
       echo 'distinguished_name=req'
       echo 'req_extensions=v3_req'

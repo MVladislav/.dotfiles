@@ -1,0 +1,13 @@
+# Work Louder devices - installed by the Input app
+# Vendor ids: 303a (current, shared Espressif VID), 574c (legacy Nomad)
+# Access is granted via uaccess (systemd-logind) with the "input" group as a
+# fallback for systems without logind.
+# USB HID
+KERNEL=="hidraw*", SUBSYSTEMS=="usb", ATTRS{idVendor}=="303a", MODE="0660", GROUP="input", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEMS=="usb", ATTRS{idVendor}=="574c", MODE="0660", GROUP="input", TAG+="uaccess"
+# Bluetooth HID (bus 0005) - no USB parent, so match the HID kernel name
+KERNEL=="hidraw*", SUBSYSTEMS=="hid", KERNELS=="0005:303A:*", MODE="0660", GROUP="input", TAG+="uaccess"
+KERNEL=="hidraw*", SUBSYSTEMS=="hid", KERNELS=="0005:574C:*", MODE="0660", GROUP="input", TAG+="uaccess"
+# Bootloader (DFU) serial port
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="input", TAG+="uaccess"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="574c", MODE="0660", GROUP="input", TAG+="uaccess"

@@ -15,7 +15,10 @@
 !AGENTS.md
 !setup-helper
 !setup-tools
+!.shellcheckrc
 !setup
+!setup-install
+!setup-config
 !setup-sec
 !setup-ai
 !setup-ai-install
@@ -70,6 +73,8 @@ zsh/plugins/zsh-history-substring-search/**
 
 !bin/
 !bin/*
+bin/*.d/
+bin/__pycache__/
 
 !nvim/
 nvim/**
@@ -126,34 +131,36 @@ configs-single/**
 !configs-single/herdr.toml
 !configs-single/filebrowser.yml
 !configs-single/llamacpp.service
+!configs-single/70-worklouder.rules
+!configs-single/openlogi.toml
 
 !ai/
 ai/**
 !ai/setup-ai-opencode.conf
 !ai/setup-ai-llamacpp.conf
 !ai/LLAMACPP.md
-!ai/SKILL-git-release-notes.md
-!ai/SKILL-git-commit.md
 !ai/GITHUB.md
-!ai/SKILL-github-pr-issues.md
-!ai/SKILL-github-issue-research.md
-!ai/SKILL-github-advisories.md
-!ai/SKILL-repo-setup.md
-!ai/SKILL-github-repo-audit.md
 !ai/SKILL-bash-script-style.md
+!ai/SKILL-docker-stack-ops.md
+!ai/SKILL-git-commit.md
+!ai/SKILL-git-release-notes.md
+!ai/SKILL-github-advisories.md
+!ai/SKILL-github-issue-research.md
+!ai/SKILL-github-pr-issues.md
+!ai/SKILL-github-repo-audit.md
+!ai/SKILL-opnsense-firewall.md
+!ai/SKILL-repo-setup.md
+!ai/SKILL-skill-authoring.md
 !ai/SKILL-unifi-network.md
+!ai/SKILL-vm-site-builder.md
 !ai/unifi-companion/
 ai/unifi-companion/**
 !ai/unifi-companion/UNIFI-API.md
 !ai/unifi-companion/UNIFI-ONBOARDING.md
-!ai/SKILL-opnsense-firewall.md
 !ai/opnsense-companion/
 ai/opnsense-companion/**
 !ai/opnsense-companion/API.md
 !ai/opnsense-companion/ONBOARDING.md
-!ai/SKILL-docker-stack-ops.md
-!ai/SKILL-skill-authoring.md
-!ai/SKILL-vm-site-builder.md
 !ai/site-builder-companion/
 ai/site-builder-companion/**
 !ai/site-builder-companion/project-brief.md

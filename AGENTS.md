@@ -4,27 +4,74 @@
 
 This is a personal Ubuntu/amd64 dotfiles and workflow repository, not a conventional application. It contains shell startup configuration, editor/terminal settings, setup scripts, operational helpers, and an OpenCode skill/knowledge catalog. The maintainer's two main entry points are `setup` for a basic device and `setup-ai` for an AI-focused device.
 
-- `setup` is the general device setup. It does not install tools by default; it links `bin/`, Ghostty, Neovim, Zed, profiles, lazygit, and Git hooks/config, with interactive Git identity setup. Zsh, tmux, VS Code, btop, and hunk setup are opt-in. `setup-ai` is the additional AI-workstation layer; its install and config toggles default off and are enabled explicitly with flags. Both use `setup-helper` for shared behavior; `setup-sec` is a separate optional security-tool workflow.
+- `setup` is the general device setup. It does not install tools by default; it links `bin/`, Ghostty, Neovim, Zed, profiles, lazygit, and Git hooks/config, with interactive Git identity setup. Zsh, tmux, VS Code, btop, and hunk setup are opt-in. `setup-ai` is the additional AI-workstation layer; its install and config toggles default off and are enabled explicitly with flags. Both use `setup-helper` for shared behavior; `setup-sec` is a separate optional security-tool workflow that follows the same install skeleton and shares the `-upc` update-check pattern.
 - `profiles/` is the day-to-day shell layer: environment settings, aliases, and functions for workflows such as Git, containers, Ansible, and security tools. `profile-append` loads the general modules in order; `profile-sec` loads security modules. Keep shell startup lightweight; put substantial standalone tasks in `bin/` rather than expanding profiles.
-- `bin/` contains those standalone Bash helpers, including project sessionizers, Git sync/release helpers, Docker/Proxmox operations, and system/network tests. `bin/_sessionizer-common` is sourced by the sessionizer entry points.
+- `bin/` contains those standalone Bash helpers, including project sessionizers, Git sync/release helpers, Docker/Proxmox operations, and system/network tests. `bin/_sessionizer-common` is sourced by the sessionizer entry points. Do not leave build artifacts in `bin/`: the directory is symlinked onto `PATH`, and `.gitignore` only allows files there.
 - `zsh/`, `tmux/`, `nvim/`, `code/`, `zed/`, and `git/` hold multi-file or tool-specific configuration. `configs-single/` is for services/tools with a single managed config or unit file; keep multi-file configurations in their tool directory.
 - `ai/` is both the OpenCode setup catalog and a growing reusable skill/knowledge base. `setup-ai -soc` interactively configures OpenCode providers, MCPs, agents, LSPs, and skills; `setup-ai-config` links repository-owned skills and fetches selected upstream skills. `ai/setup-ai-opencode.conf` owns skill candidates, bundles, defaults, and pinned source revisions. `ai/LLAMACPP.md` documents the local model-server workflow.
-- `setup-ai-install` and `setup-ai-config` are sourced by `setup-ai`; `ai/setup-ai-opencode.conf` and `ai/setup-ai-llamacpp.conf` are sourced Bash configuration, not standalone data formats.
-- Zsh plugins/themes and tmux TPM are Git submodules. Their checked-in gitlinks pin revisions, but the setup functions use `git submodule update --remote`, which follows configured upstream branches.
+- `setup-install` and `setup-config` are sourced by `setup`; `setup-ai-install` and `setup-ai-config` are sourced by `setup-ai`; `ai/setup-ai-opencode.conf` and `ai/setup-ai-llamacpp.conf` are sourced Bash configuration, not standalone data formats. In each pair the executable keeps the banner, CLI flags, `main`/`usage`/`parse_args`, and the config data (toggles, version pins, paths); `*-install` holds the `install_*` functions, `*-config` the `setup_*` functions, and neither is ever run on its own.
+- Zsh plugins/themes and tmux TPM are Git submodules. `setup_zsh`/`setup_tmux` (and `./setup -usub`) run `git submodule update --remote`, so the checkout follows each upstream branch while the recorded gitlink stays put. `.gitmodules` sets `ignore = all`: moved pins never show in `git status`, `git add -A` and `git commit -a` never record them, and freezing a pin needs an explicit `git add <submodule-path>`.
 
 The root `.gitignore` is deny-by-default and explicitly allow-lists tracked paths. Add a matching exception when introducing a new file or directory; otherwise Git will hide it.
 
 ## Startup and setup behavior
 
-`setup_profiles` links `profiles/profile-append` and `profiles/profile-sec`, creates `~/.profile-secrets`, then appends sources for those files and the secrets file to both `~/.zshenv` and `~/.bashrc`. Because Zsh reads `.zshenv` for every shell, keep these profiles fast and non-interactive; Bash reads the added lines from `.bashrc` in shells that load it. The secrets file is created without an explicit mode, so set restrictive permissions when handling secrets. `setup_zsh` separately links `zsh/zshrc` to `~/.zshrc`.
+`setup_profiles` links `profiles/profile-append` and `profiles/profile-sec`, creates `~/.profile-secrets` with mode `600`, then appends sources for those files and the secrets file to both `~/.zshenv` and `~/.bashrc`. Because Zsh reads `.zshenv` for every shell, keep these profiles fast and non-interactive; Bash reads the added lines from `.bashrc` in shells that load it. Keep the secrets file at mode `600` when changing profile setup. `setup_zsh` separately links `zsh/zshrc` to `~/.zshrc`.
 
-`setup_bin` links repository `bin/` to `~/.local/bin/vm`; `profiles/profile1-base` prepends that directory when present, prepends `~/.local/bin`, and adds language-tool paths. This is how the standalone `vm-*` helpers enter the shell command path. Installer scripts set their own PATH; the PATH setup block in `zsh/zshrc` is currently commented out. The default `setup` does not link Zsh plugins/config or tmux config; those have separate opt-in setup flags.
+`setup_bin` links repository `bin/` to `~/.local/bin/vm`; `profiles/profile1-base` prepends that directory when present, prepends `~/.local/bin`, and adds language-tool paths. This is how the standalone `vm-*` helpers enter the shell command path. Installer scripts set their own PATH; interactive-shell PATH comes from `profiles/profile1-base`, not `zsh/zshrc`. The default `setup` does not link Zsh plugins/config or tmux config; those have separate opt-in setup flags.
 
 Run setup scripts from the repository root: they use relative paths and `$PWD`. `setup` and `setup-ai` keep installation separate from config setup; inspect their flag defaults and target paths before execution. Optional paths can invoke `sudo`, apt/dpkg, downloads/builds, GNOME settings, user systemd, or interactive model/skill selection.
 
 `setup-ai -soc` generates/merges `~/.config/opencode/opencode.jsonc` from the repository config and interactive selections, backing up an existing file. In its config-section pickers, `none` removes the whole section; in the skill picker, it prunes managed upstream copies while repository-owned skill links remain. Edit the source config/generator rather than treating the live file as canonical. For llama.cpp generated runtime files and service behavior, read `ai/LLAMACPP.md` first.
 
-Replacement policy is per target; do not impose one blanket backup/prompt policy. Many managed dotfiles intentionally replace the user's config: `create_symlink` and `copy_config` remove an existing destination first. Other paths preserve or back up data: Git setup makes a timestamped `~/.gitconfig` backup, Filebrowser keeps an existing config/database, and llama.cpp backs up its generated environment file. Profile setup edits shell startup files. Before changing a target's behavior, establish whether it is a replaceable config or user/runtime data, then document its specific policy.
+Replacement policy is per target; do not impose one blanket backup/prompt policy. Many managed dotfiles intentionally replace the user's config: `create_symlink` and `copy_config` remove an existing destination first. Other paths preserve or back up data: Git setup makes a timestamped `~/.gitconfig` backup, Filebrowser keeps an existing config/database, llama.cpp backs up its generated environment file, and OpenLogi only seeds its config when missing, then leaves it to the GUI. Profile setup edits shell startup files. Before changing a target's behavior, establish whether it is a replaceable config or user/runtime data, then document its specific policy.
+
+## Setup installer shape
+
+New `setup` installers follow one order so they are easy to scan and to make
+failure-safe: current version, preflight, dependencies, clone/build, install,
+configure, dependency cleanup, new version, completion. Copy this skeleton:
+
+```bash
+# SERVICE :: install <name> ----------------------------------------------------
+install_<name>() {
+  print_info2 "\n🚀 <NAME> :: install <name>..."
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/<name>" --version)'"
+
+  require_cmds <cmds> || return 1
+
+  local packages_tools=(...)
+  local packages_build=(...)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+
+  clone_repo "$VERSION_<NAME>_REPO" "$DEPS_INSTALL_PATH/<name>" "$VERSION_<NAME>"
+  pushd "$DEPS_INSTALL_PATH/<name>" 1>/dev/null
+  # build...
+  popd 1>/dev/null
+  rm -rf "$DEPS_INSTALL_PATH/<name>" 1>/dev/null
+
+  # install and configure...
+  install_dependencies_needs_rm
+  print_notes "   💡 new installed version :: '...'"
+  print_info2 "✅ <NAME> :: <name> installed!"
+}
+```
+
+Installer rules:
+
+- Reuse shared helpers instead of inline copies: `apt_install`, `apt_remove`,
+  `install_udev_rules`, `refresh_desktop_caches`, `clone_repo`, `fzf_select`,
+  and `fzf_multi_select`.
+- Declare every variable `local`; use `local -a` for arrays and
+  `${LN_X:-...}` for every overridable path.
+- Treat fzf exit 130 as "cancelled": skip the step without aborting under
+  `set -e`.
+- On a failure after dependencies are installed, run
+  `install_dependencies_needs_rm` and remove the checkout before returning.
+- Use `disable_setups` for setup flags that must not run, and keep the
+  version-check path separate from install and setup flags.
+- Follow the `vm-bash-script-style` conventions for quoting, headers, emoji,
+  and blank lines.
 
 ## Compatibility and dependencies
 
@@ -48,6 +95,6 @@ Setup and utility scripts are primarily Bash. Zsh startup is configured in `zsh/
 - Be especially cautious with `bin/vm-quick-wg-vpn` (its firewall setup resets UFW rules), Docker volume backup modes that stop Docker or scale services, and Proxmox restore operations.
 - `github-workflow` uses OpenCode V2's `subagent` interface, denies GitHub-side write actions, and asks before local Git mutations. If the GitHub MCP server or its tools change, verify its read/write permission action names against the registered tools.
 - `rea-investigator` handles reverse engineering (APKs, firmware, native binaries) via the `rea` MCP server and the upstream `reverse-engineer-anything` skill. It confines writes to `reverse-engineer/`, asks before runtime execution of untrusted targets, and never uploads artifacts. REA never installs analysis engines; JADX, Apktool, adb, Binwalk/Unblob, and Ghidra are caller-supplied, so expect missing prerequisites. Do not let `rea setup --client opencode` write the generated `opencode.jsonc`; edit the conf instead.
-- Validate Bash changes with `bash -n <files>` and Zsh startup/profile changes with `zsh -n <files>`. Use `shellcheck -x` on Bash entry points that source other files. `.pre-commit-config.yaml` defines formatters/fixers as well as checks; review the resulting diff after running hooks.
+- Validate Bash changes with `bash -n <files>` and Zsh startup/profile changes with `zsh -n <files>`. Use `shellcheck -x` on Bash entry points that source other files; the repo `.shellcheckrc` sets `external-sources=true`, so a plain `shellcheck` run from the repo follows sourced files (without it, cross-file variables read as unused, SC2034). `.pre-commit-config.yaml` defines formatters/fixers as well as checks; review the resulting diff after running hooks.
 - Update the README or relevant tool documentation when installation behavior, dependencies, supported environments, or operational steps change. Keep `AGENTS.md` concise and repository-specific; keep reusable skill workflows portable and scope local details separately.
 - Use the ASCII hyphen-minus (`-`) for dash punctuation in prose, headings, comments, and examples. Avoid typographic em and en dashes.

@@ -16,8 +16,15 @@ EOF
 # editorconfig-checker-enable
 
 [[ -f "./setup-helper" ]] || { echo 'ERROR: "./setup-helper" not found.'; exit 1; }
-# shellcheck disable=SC1091
 source "./setup-helper"
+
+[[ -f "./setup-install" ]] || { echo 'ERROR: "./setup-install" not found.'; exit 1; }
+# shellcheck source=setup-install
+source "./setup-install"
+
+[[ -f "./setup-config" ]] || { echo 'ERROR: "./setup-config" not found.'; exit 1; }
+# shellcheck source=setup-config
+source "./setup-config"
 
 # ******************************************************************************
 
@@ -38,6 +45,7 @@ RUN_SETUP_GITCONFIG=1
 
 RUN_SETUP_BTOP=0
 RUN_SETUP_HUNK=0
+RUN_SETUP_OPENLOGI=0
 RUN_SETUP_TMUX=0
 RUN_SETUP_ZSH=0
 
@@ -50,28 +58,38 @@ RUN_INSTALL_BTOP_AMD=0
 RUN_INSTALL_BTOP_INTEL=0
 RUN_INSTALL_ANDROID=0
 RUN_INSTALL_HUNK=0
+RUN_INSTALL_OPENLOGI=0
+RUN_INSTALL_INPUT_LINUX=0
 
 RUN_INSTALL_GH=0
+
+RUN_UPDATE_CHECK=0
+RUN_UPDATE_SUBMODULES=0
 
 # CONFIG :: version pins -------------------------------------------------------
 VERSION_ZIG_V=0.15.2
 VERSION_ZIG_URL="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
-VERSION_GHOSTTY=v1.3.1
+VERSION_GHOSTTY=v1.4.0
 VERSION_GHOSTTY_REPO=https://github.com/ghostty-org/ghostty.git
-VERSION_NVIM=v0.12.3
+VERSION_NVIM=v0.12.6
 VERSION_NVIM_REPO=https://github.com/neovim/neovim.git
-VERSION_ZSH=zsh-5.9.1
+VERSION_ZSH=zsh-5.9.2
 VERSION_ZSH_REPO=https://github.com/zsh-users/zsh.git
-VERSION_TMUX=3.7b
+VERSION_TMUX=3.8
 VERSION_TMUX_REPO=https://github.com/tmux/tmux.git
-VERSION_BTOP=v1.4.7
+VERSION_BTOP=v1.4.8
 VERSION_BTOP_REPO=https://github.com/aristocratos/btop.git
 VERSION_RSMI=rocm-7.2.4
 VERSION_RSMI_REPO=https://github.com/ROCm/rocm-systems.git
-VERSION_HUNK=v0.23.0
+VERSION_HUNK=v0.25.0
 VERSION_HUNK_REPO=https://github.com/modem-dev/hunk.git
-VERSION_FONTS_RELEASE=v3.4.0
+VERSION_OPENLOGI=v0.9.0
+VERSION_OPENLOGI_REPO=https://github.com/AprilNEA/OpenLogi.git
+VERSION_INPUT_LINUX=v1.1.0-Community
+VERSION_INPUT_LINUX_REPO=https://github.com/worklouder/input-linux
+VERSION_FONTS_RELEASE=v3.5.1
 VERSION_FONTS_REPO=https://github.com/ryanoasis/nerd-fonts
+VERSION_GH_REPO=https://github.com/cli/cli
 
 # CONFIG :: ghostty iTerm2 theme overrides -------------------------------------
 GHOSTTY_ITERM_RO='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz'
@@ -86,31 +104,55 @@ LN_GHOSTTY="${LN_GHOSTTY:-"$HOME/.config/ghostty"}"
 
 LN_NVIM="${LN_NVIM:-"$HOME/.config/nvim"}"
 
-LN_ZSH="$HOME/.zsh"
-LN_ZSHRC="$HOME/.zshrc"
+LN_ZSH="${LN_ZSH:-"$HOME/.zsh"}"
+LN_ZSHRC="${LN_ZSHRC:-"$HOME/.zshrc"}"
 
 LN_TMUX="${LN_TMUX:-"$HOME/.tmux"}"
 LN_TMUX_CONF="${LN_TMUX_CONF:-"$HOME/.tmux.conf"}"
 
 LN_ZED_FLATPAK="$HOME/.var/app/dev.zed.Zed/config/zed"
-# LN_ZED=$HOME/.config/zed
 LN_ZED="${LN_ZED:-"$LN_ZED_FLATPAK"}"
-LN_ZED_CODEBOOK="$HOME/.config/codebook"
+LN_ZED_CODEBOOK="${LN_ZED_CODEBOOK:-"$HOME/.config/codebook"}"
 
 LN_VS_CODE="${LN_VS_CODE:-"$HOME/.config/Code/User"}"
 
-LN_PROFILES_01="$HOME/.profile-append"
-LN_PROFILES_02="$HOME/.profile-sec"
+LN_PROFILES_01="${LN_PROFILES_01:-"$HOME/.profile-append"}"
+LN_PROFILES_02="${LN_PROFILES_02:-"$HOME/.profile-sec"}"
 
 LN_LAZYGIT="${LN_LAZYGIT:-"$HOME/.config/lazygit/config.yml"}"
 
-LN_GIT_HOOK_COMMIT_MSG="$HOME/.git-hooks/commit-msg"
-LN_GIT_HOOK_PRE_COMMIT="$HOME/.git-hooks/pre-commit"
+LN_GIT_HOOK_COMMIT_MSG="${LN_GIT_HOOK_COMMIT_MSG:-"$HOME/.git-hooks/commit-msg"}"
+LN_GIT_HOOK_PRE_COMMIT="${LN_GIT_HOOK_PRE_COMMIT:-"$HOME/.git-hooks/pre-commit"}"
 
 LN_BTOP="${LN_BTOP:-"$HOME/.config/btop/btop.conf"}"
 LN_HUNK="${LN_HUNK:-"$HOME/.config/hunk/config.toml"}"
 
+LN_OPENLOGI_CONFIG="${LN_OPENLOGI_CONFIG:-"${XDG_CONFIG_HOME:-$HOME/.config}/openlogi/config.toml"}"
+LN_OPENLOGI_AGENT="${LN_OPENLOGI_AGENT:-"$HOME/.config/systemd/user/openlogi-agent.service"}"
+LN_OPENLOGI_APPLICATIONS="${LN_OPENLOGI_APPLICATIONS:-"$HOME/.local/share/applications"}"
+LN_OPENLOGI_ICONS="${LN_OPENLOGI_ICONS:-"$HOME/.local/share/icons/hicolor"}"
+LN_OPENLOGI_UDEV="${LN_OPENLOGI_UDEV:-/etc/udev/rules.d/70-openlogi.rules}"
+LN_INPUT_LINUX_APPLICATIONS="${LN_INPUT_LINUX_APPLICATIONS:-"$HOME/.local/share/applications"}"
+LN_INPUT_LINUX_ICONS="${LN_INPUT_LINUX_ICONS:-"$HOME/.local/share/icons/hicolor"}"
+LN_INPUT_LINUX_UDEV="${LN_INPUT_LINUX_UDEV:-/etc/udev/rules.d/70-worklouder.rules}"
+
 # ******************************************************************************
+
+# HELPERS :: disable setup flags -----------------------------------------------
+disable_setups() {
+  RUN_SETUP_BIN=0
+  RUN_SETUP_GHOSTTY=0
+  RUN_SETUP_NVIM=0
+  RUN_SETUP_ZED=0
+  RUN_SETUP_PROFILES=0
+  RUN_SETUP_GITCONFIG=0
+  RUN_SETUP_BTOP=0
+  RUN_SETUP_HUNK=0
+  RUN_SETUP_OPENLOGI=0
+  RUN_SETUP_TMUX=0
+  RUN_SETUP_ZSH=0
+  RUN_SETUP_CODE=0
+}
 
 # MAIN :: entry point ----------------------------------------------------------
 main() {
@@ -119,8 +161,20 @@ main() {
     exit 1
   fi
 
+  if [[ $RUN_UPDATE_CHECK -eq 1 ]]; then
+    run_update_check
+    print_info2 "\n✅ Update check finished!"
+    exit 0
+  fi
+
+  if [[ $RUN_UPDATE_SUBMODULES -eq 1 ]]; then
+    run_submodule_bump
+    print_info2 "\n✅ Submodule pins bumped - commit the gitlink changes when ready."
+    exit 0
+  fi
+
   sudo_drop
-  initialize_base
+  mkdir -p "$HOME/.config" "$DEPS_INSTALL_PATH"
   run_if $RUN_INSTALL_DEPENDENCIES_ADDITIONAL && install_dependencies_additional
   run_if $RUN_INSTALL_DEPENDENCIES_DEV && install_dependencies_dev
 
@@ -130,8 +184,10 @@ main() {
   run_if $RUN_INSTALL_TMUX && install_tmux
 
   run_if $RUN_INSTALL_BTOP && install_btop
-  run_if $RUN_INSTALL_ANDROID && install_setup_android_emulator
+  run_if $RUN_INSTALL_ANDROID && install_android_emulator
   run_if $RUN_INSTALL_HUNK && install_hunk
+  run_if $RUN_INSTALL_OPENLOGI && install_openlogi
+  run_if $RUN_INSTALL_INPUT_LINUX && install_input_linux
 
   run_if $RUN_SETUP_BIN && setup_bin
   run_if $RUN_SETUP_GHOSTTY && setup_ghostty
@@ -145,797 +201,31 @@ main() {
   run_if $RUN_SETUP_CODE && setup_code
   run_if $RUN_SETUP_BTOP && setup_btop
   run_if $RUN_SETUP_HUNK && setup_hunk
+  run_if $RUN_SETUP_OPENLOGI && setup_openlogi
 
   run_if $RUN_INSTALL_CODE_EXT && install_code_ext
   run_if $RUN_INSTALL_FONTS && install_fonts
 
-  run_if $RUN_INSTALL_GH && download_github_binary 'https://github.com/cli/cli' 'gh_.*_linux_amd64\.tar\.gz'
+  run_if $RUN_INSTALL_GH && install_gh
 
   print_info2 "\n✅ All finished!"
 }
 
 # ******************************************************************************
 
-# BASE :: initialize -----------------------------------------------------------
-initialize_base() {
-  mkdir -p "$HOME/.config"
-}
-
-# ******************************************************************************
-
-# DEPS :: additional -----------------------------------------------------------
-install_dependencies_additional() {
-  print_info2 "\n🚀 DEPS :: installing additional base services"
-
-  if ! command -v fzf &>/dev/null; then
-    print_notes "   📦 installing fzf (needed for package selection)..."
-    $RUN_WITH_SUDO apt-get install -y fzf 1>/dev/null
-  fi
-
-  local tools=(
-    "curl:URL retrieval tool"
-    "git:Version control system"
-    "git-delta:Git diff viewer"
-    "pigz:Parallel gzip"
-    "jq:JSON processor"
-    "rsync:File synchronization"
-    "wl-clipboard:Wayland clipboard tools"
-    "eza:Modern ls replacement"
-    "bat:Cat with syntax highlighting"
-    "ripgrep:Fast text search"
-    "fd-find:Find alternative"
-  )
-
-  local selections
-  selections=$(
-    printf '%s\n' "${tools[@]}" \
-      | fzf --height=~40% --multi --cycle --border \
-        --prompt="Select packages > " --preview-window=hidden \
-        --bind 'start:select-all+down' \
-        --footer="📦 select packages (Tab to toggle, Enter to confirm):" \
-      | awk -F: '{print $1}'
-  )
-
-  local -a pkgs=()
-  if [[ -n "$selections" ]]; then
-    mapfile -t pkgs <<< "$selections"
-    print_notes "   📦 installing: ${pkgs[*]}"
-    $RUN_WITH_SUDO apt-get install -y "${pkgs[@]}" 1>/dev/null
-  else
-    print_notes "   💡 no packages selected, skipping"
-  fi
-
-  [[ " ${pkgs[*]} " == *" rsync "* ]] && {
-    print_notes "   ⚙️ disabling rsync systemd service..."
-    $RUN_WITH_SUDO systemctl disable rsync.service &>/dev/null
-    $RUN_WITH_SUDO systemctl mask rsync.service &>/dev/null
-  }
-
-  sudo_drop
-  print_info2 "✅ DEPS :: base services installed!"
-}
-
-# DEPS :: dev ------------------------------------------------------------------
-install_dependencies_dev() {
-  print_info2 "\n🚀 DEPS :: installing dev dependencies"
-
-  local tools=(
-    "node:Node.js runtime (snap)"
-    "rustup:Rust toolchain manager (snap)"
-    "go:Go programming language (snap)"
-    "shellcheck:Shell script analyzer (snap)"
-    "httpie:HTTPie API client (snap)"
-    "python-dev:Python dev tools (pip, venv) (apt)"
-    "lazygit:Git TUI (go install)"
-    "uv-prek:uv + prek package tools (pip)"
-  )
-
-  local selections
-  selections=$(
-    printf '%s\n' "${tools[@]}" \
-      | fzf --height=~40% --multi --cycle --border \
-        --prompt="Select dev tools > " --preview-window=hidden \
-        --footer="📦 select dev packages (Tab to toggle, Enter to confirm):" \
-      | awk -F: '{print $1}'
-  )
-
-  [[ -z "$selections" ]] && { print_notes "   💡 no dev packages selected, skipping"; return 0; }
-
-  local -a selections_arr
-  mapfile -t selections_arr <<< "$selections"
-
-  # Phase 1: install packages
-  local apt_pkgs=()
-  for sel in "${selections_arr[@]}"; do
-    case "$sel" in
-      node)     print_notes "   📦 installing npm...";       $RUN_WITH_SUDO snap install node --classic 1>/dev/null ;;
-      rustup)   print_notes "   📦 installing rust...";      $RUN_WITH_SUDO snap install rustup --classic 1>/dev/null ;;
-      go)       print_notes "   📦 installing go...";        $RUN_WITH_SUDO snap install go --classic 1>/dev/null ;;
-      shellcheck) print_notes "   📦 installing shellcheck..."; $RUN_WITH_SUDO snap install shellcheck 1>/dev/null ;;
-      httpie)   print_notes "   📦 installing httpie...";    $RUN_WITH_SUDO snap install httpie 1>/dev/null ;;
-      python-dev) apt_pkgs+=(python3-pip python3-venv python3-dev) ;;
-    esac
-  done
-  ((${#apt_pkgs[@]} > 0)) && { print_notes "   📦 installing python3 pip, venv and dev..."; $RUN_WITH_SUDO apt-get install -y "${apt_pkgs[@]}" 1>/dev/null; }
-
-  sudo_drop
-
-  # Phase 2: post-install setup
-  for sel in "${selections_arr[@]}"; do
-    case "$sel" in
-      rustup)   print_notes "   ⚙️ setting up rustup...";   rustup default stable 1>/dev/null ;;
-      lazygit)
-        if ! command -v go &>/dev/null; then
-          print_error "  ❌ 'go' not found — install 'go' first or install it manually"
-        else
-          print_notes "   📦 installing lazygit..."
-          go install github.com/jesseduffield/lazygit@latest 1>/dev/null
-        fi
-        ;;
-      uv-prek)
-        if ! command -v python3 &>/dev/null; then
-          print_error "  ❌ 'python3' not found — install 'python-dev' first"
-        else
-          print_notes "   📦 installing uv and prek..."
-          python3 -m venv "$HOME/.venv"
-          # shellcheck disable=SC1091
-          source "$HOME/.venv/bin/activate"
-          python3 -m pip install uv prek 1>/dev/null
-        fi
-        ;;
-    esac
-  done
-
-  # cargo install impala    # https://github.com/pythops/impala
-  # cargo install wiremix   # https://github.com/tsowell/wiremix
-
-  print_info2 "✅ DEPS :: dev dependencies installed!"
-}
-
-# ******************************************************************************
-
-# SERVICE :: install ghostty ---------------------------------------------------
-install_ghostty() {
-  print_info2 "\n🚀 GHOSTTY :: install ghostty ..."
-  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
-  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=(libgtk4-layer-shell0)
-  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  local ZIG_COMMAND=zig
-  if ! command -v zig >/dev/null 2>&1; then
-    print_notes "   📦 downloading zig binary..."
-    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_URL"
-    mkdir -p "$DEPS_INSTALL_PATH/zig"
-    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
-    ZIG_COMMAND="$DEPS_INSTALL_PATH/zig/zig"
-  fi
-
-  print_notes "   📦 cloning ghostty..."
-  git clone -q "$VERSION_GHOSTTY_REPO" "$DEPS_INSTALL_PATH/ghostty"
-  pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
-  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_GHOSTTY"
-
-  print_notes "   🔧 building and installing ghostty..."
-  sed -i "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" ./build.zig.zon
-  sed -i "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
-  "$ZIG_COMMAND" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
-  update-desktop-database "$USER_LOCAL_PREFIX/share/applications/" -q || true
-  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
-
-  if command -v gsettings &>/dev/null; then
-    print_notes "   ⚙️ switching default keybind to open terminal ('<Ctrl><Alt>T')"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys terminal "['']"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name "'Open Custom Terminal'"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding "'<Ctrl><Alt>T'"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command "'ghostty'"
-    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
-  fi
-
-  print_notes "   💡 for 'xterm compatibility', use vm_xterm_cp_local (sudo) or vm_xterm_cp_ssh (SSH)"
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_info2 "✅ GHOSTTY :: ghostty installed!"
-
-}
-
-# SERVICE :: install nvim ------------------------------------------------------
-install_nvim() {
-  print_info2 "\n🚀 NVIM :: install nvim..."
-  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
-  rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=(python3-venv)
-  local packages_build=(git curl ninja-build gettext cmake build-essential)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  print_notes "   📦 cloning nvim..."
-  git clone -q "$VERSION_NVIM_REPO" "$DEPS_INSTALL_PATH/nvim"
-  pushd "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_NVIM"
-
-  print_notes "   🔧 building and installing nvim..."
-  # CMAKE_BUILD_TYPE: Release | RelWithDebInfo
-  make CMAKE_BUILD_TYPE=Release CMAKE_INSTALL_PREFIX="$USER_LOCAL_PREFIX/" 1>/dev/null
-  make install 1>/dev/null
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/nvim" 1>/dev/null
-  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/nvim" -v)'"
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_notes "   💡 install 'node' for Mason plugin support"
-  print_info2 "✅ NVIM :: nvim installed!"
-}
-
-# SERVICE :: install zsh -------------------------------------------------------
-install_zsh() {
-  print_info2 "\n🚀 ZSH :: install zsh ..."
-  print_notes "   💡 current installed version :: '$(installed_version zsh --version)'"
-  rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
-
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    # Define packages needed for build and install
-    local packages_tools=()
-    local packages_build=(gcc make autoconf yodl texinfo libncurses-dev)
-    install_dependencies_needs packages_tools[@] packages_build[@]
-  fi
-
-  if [[ $INSTALL_SOURCE_FROM == 'source' ]]; then
-    print_notes "   📦 cloning zsh..."
-    git clone -q "$VERSION_ZSH_REPO" "$DEPS_INSTALL_PATH/zsh"
-    pushd "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
-    git checkout -q "${VERSION_ZSH}"
-
-    print_notes "   🔧 building and installing zsh..."
-    ./Util/preconfig 1>/dev/null
-    ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-    make 1>/dev/null
-    make install 1>/dev/null
-    popd 1>/dev/null
-    rm -rf "$DEPS_INSTALL_PATH/zsh" 1>/dev/null
-  elif [[ $INSTALL_SOURCE_FROM == 'release' ]]; then
-    print_notes "   📦 installing zsh..."
-    $RUN_WITH_SUDO apt-get install -y zsh 1>/dev/null
-  fi
-  sudo_drop
-
-  local zsh_install_bin_path
-  zsh_install_bin_path=$(command -v zsh >/dev/null 2>&1 || echo "/usr/bin/zsh")
-  # zsh_install_bin_path="$USER_LOCAL_PREFIX/bin/zsh"
-
-  print_notes "   💡 new installed version :: '$(installed_version zsh --version)'"
-
-
-  if [[ "$(basename "$SHELL")" != "zsh" ]]; then
-    print_info2 "🚀 ZSH :: setting zsh as default shell for user '$USER'"
-    # sudo chsh -s "$(which zsh)" "$USER"
-    $RUN_WITH_SUDO chsh -s "$zsh_install_bin_path" "$USER" || {
-      print_error "  ❌ failed to change default shell to ZSH. Run 'sudo chsh -s \"$(which zsh)\" \"$USER\"' manually."
-    }
-    sudo_drop
-  fi
-
-  # Remove build dependencies if any
-  [[ $INSTALL_SOURCE_FROM == 'source' ]] && install_dependencies_needs_rm
-
-  print_info2 "✅ ZSH :: zsh installed!"
-}
-
-# SERVICE :: install tmux ------------------------------------------------------
-install_tmux() {
-  print_info2 "\n🚀 TMUX :: install tmux..."
-  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=(libevent-dev)
-  local packages_build=(git unzip curl jq build-essential pkg-config libncurses-dev bison)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  print_notes "   📦 cloning tmux..."
-  git clone -q "$VERSION_TMUX_REPO" "$DEPS_INSTALL_PATH/tmux"
-  pushd "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_TMUX"
-  bash ./autogen.sh 1>/dev/null
-
-  print_notes "   🔧 building and installing tmux..."
-  bash ./configure --prefix="$USER_LOCAL_PREFIX/" 1>/dev/null
-  make 1>/dev/null
-  make install 1>/dev/null
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/tmux" 1>/dev/null
-  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/tmux" -V)'"
-
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_info2 "✅ TMUX :: tmux installed!"
-}
-
-# ******************************************************************************
-
-# SERVICE :: install btop ------------------------------------------------------
-install_btop() {
-  print_info2 "\n🚀 BTOP :: install btop..."
-  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
-  rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-
-  # Define packages needed for build and install
-  local packages_tools=()
-  local packages_build=(git build-essential cmake libdrm-dev pkg-config)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  print_notes "   📦 cloning btop..."
-  git clone -q "$VERSION_BTOP_REPO" "$DEPS_INSTALL_PATH/btop"
-  pushd "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-  [[ $INSTALL_SOURCE_FROM == 'release' ]] && git checkout -q "$VERSION_BTOP"
-
-  local RSMI_STATIC='false'
-  local ROCM_DIR='lib/rocm_smi_lib'
-  local ROCM_PROJECT='rocm-smi-lib' # amdsmi
-  if [[ $RUN_INSTALL_BTOP_AMD -eq 1 ]]; then
-    print_notes "   📦 cloning and building rocm..."
-    rm -rf $ROCM_DIR /tmp/rocm-systems 1>/dev/null
-    mkdir -p lib
-    git -c advice.detachedHead=false clone -q -b "$VERSION_RSMI" "$VERSION_RSMI_REPO" /tmp/rocm-systems
-    mv "/tmp/rocm-systems/projects/$ROCM_PROJECT" "$ROCM_DIR"
-    mkdir -p "${ROCM_DIR}/build"
-    pushd "${ROCM_DIR}/build" 1>/dev/null
-    cmake .. 1>/dev/null           # -DBUILD_TESTS=OFF -DENABLE_ESMI_LIB=ON -DBUILD_SHARED_LIBS=OFF
-    make -j "$(nproc)" 1>/dev/null # amd_smi
-    popd 1>/dev/null
-    RSMI_STATIC='true'
-  fi
-
-  print_notes "   🔧 building and installing btop..."
-  make -j "$(nproc)" GPU_SUPPORT="true" RSMI_STATIC="$RSMI_STATIC" ROCM_DIR="$ROCM_DIR" ADDFLAGS="-Wno-dangling-reference -march=native" 1>/dev/null
-  make install PREFIX="$USER_LOCAL_PREFIX" 1>/dev/null
-
-  popd 1>/dev/null
-  rm -rf "$DEPS_INSTALL_PATH/btop" 1>/dev/null
-  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/btop" -v)'"
-
-  if [[ $RUN_INSTALL_BTOP_INTEL -eq 1 ]]; then
-    print_notes "   ⚙️ configuring btop with setcap for GPU and CPU watts access without sudo"
-    $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search,cap_sys_admin+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
-    sudo_drop
-  else
-    print_notes "   ⚙️ configuring btop with setcap for CPU watts access without sudo"
-    $RUN_WITH_SUDO setcap cap_perfmon,cap_dac_read_search+ep "$USER_LOCAL_PREFIX_BIN/btop" 1>/dev/null
-    sudo_drop
-  fi
-
-  # Remove build dependencies if any
-  install_dependencies_needs_rm
-
-  print_info2 "✅ BTOP :: btop installed!"
-
-}
-
-# SERVICE :: install hunk ------------------------------------------------------
-install_hunk() {
-  print_info2 "\n🚀 HUNK :: install hunk..."
-  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
-  download_github_binary "$VERSION_HUNK_REPO" 'hunkdiff-linux-x64\.tar\.gz'
-  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/hunk" --version)'"
-  print_info2 "✅ HUNK :: hunk installed!"
-}
-
-# SERVICE :: install android emulator ------------------------------------------
-install_setup_android_emulator() {
-  # sudo apt install openjdk-26-jre-headless
-  # --- Paths ----------------------------------------------------------
-  export VM_ANDROID_PATH="${VM_ANDROID_PATH:-"$HOME/.android"}"
-  export ANDROID_HOME="${ANDROID_HOME:-"$VM_ANDROID_PATH/Sdk"}"
-  export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-"$ANDROID_HOME"}"
-  mkdir -p "$ANDROID_HOME"
-
-  command -v fzf >/dev/null 2>&1 || {
-    print_error "❌ fzf not installed"
-    exit 1
-  }
-
-  if [[ ! -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]]; then
-    print_info2 "📦 downloading Android command-line tools..."
-    # https://developer.android.com/studio#command-line-tools-only
-    # - https://dl.google.com/android/repository/commandlinetools-<os>-<version>_latest.zip
-    run_quiet_hint "⏳ downloading ~150 MB (commandlinetools), this can take a few minutes..." \
-      curl -fsSL "$ANDROID_HOME/cmdline-tools.zip" \
-      https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
-
-    unzip -q "$ANDROID_HOME/cmdline-tools.zip" -d "$ANDROID_HOME/cmdline-tools"
-    mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest"
-    rm "$ANDROID_HOME/cmdline-tools.zip"
-  fi
-
-  SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-  AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
-  EMULATOR="$ANDROID_HOME/emulator/emulator"
-
-  # --- Accept licenses automatically ---------------------------------
-  yes | "$SDKMANAGER" --licenses >/dev/null || true
-
-  # --- Update SDK tools ----------------------------------------------
-  # "$SDKMANAGER" --uninstall emulator
-  "$SDKMANAGER" --update
-
-  # --- Install build tools ----------------------
-  print_info2 "📋 available build-tools:"
-  BUILD_TOOLS=$("$SDKMANAGER" --list | grep -Eo 'build-tools;[0-9][^ ]+' | sort -ur)
-  SELECTED_BUILD_TOOL=$(echo "$BUILD_TOOLS" | fzf --prompt="Select build-tools version: ")
-  "$SDKMANAGER" "$SELECTED_BUILD_TOOL"
-
-  # --- Show available system images and devices ----------------------
-  print_info2 "📋 available system images:"
-  IMAGES=$("$SDKMANAGER" --list | grep -Eo 'system-images;android-[0-9][^ ]+' | sort -ur)
-  SELECTED_IMAGE=$(echo "$IMAGES" | fzf --prompt="Select system image: " --query="x86_64 api !store")
-
-  print_info2 "📦 installing: $SELECTED_IMAGE ..."
-  "$SDKMANAGER" "platform-tools" "emulator" "$SELECTED_IMAGE"
-
-  # --- Choose device profile -----------------------------------------
-  DEVICES=$("$AVDMANAGER" list devices | grep 'id:' | awk -F'"' '{print $2}' | grep 'pixel_' | sort -ur)
-  SELECTED_DEVICE=$(echo "$DEVICES" | fzf --prompt="Select device profile: " --query="pro")
-
-  # --- Create AVD ----------------------------------------------------
-  SELECTED_IMAGE_NAME=$(basename "$SELECTED_IMAGE" | tr ';:' '_' | tr -d '[:punct:]')
-  AVD_NAME=${SELECTED_IMAGE_NAME}_$(basename "$SELECTED_DEVICE")_"$(date +%s)"
-  print_info2 "📱 creating AVD: $AVD_NAME ..."
-  "$AVDMANAGER" create avd -n "$AVD_NAME" -k "$SELECTED_IMAGE" -d "$SELECTED_DEVICE" --force
-
-  # --- Verify --------------------------------------------------------
-  print_info2 "✅ available AVDs:"
-  "$EMULATOR" -list-avds
-}
-
-# ******************************************************************************
-
-# SETUP :: bin -----------------------------------------------------------------
-setup_bin() {
-  print_section "BIN :: config"
-  print_info2 "🔗 BIN :: linking ./bin/* -> $LN_VM_BIN"
-  create_symlink "$PWD/bin" "$LN_VM_BIN"
-  print_section_end "✅ BIN :: config ready."
-}
-
-# SETUP :: ghostty -------------------------------------------------------------
-# NOTE: runs inside 'install_ghostty'
-setup_ghostty() {
-  print_section "GHOSTTY :: config"
-  print_info2 "🔗 GHOSTTY :: linking configs-single/ghostty.conf -> $LN_GHOSTTY/config"
-  create_symlink "${PWD}/configs-single/ghostty.conf" "${LN_GHOSTTY}/config"
-  print_section_end "✅ GHOSTTY :: config ready."
-}
-
-# SETUP :: nvim ----------------------------------------------------------------
-setup_nvim() {
-  print_section "NVIM :: config"
-  print_info2 "🔗 NVIM :: linking ./nvim -> $LN_NVIM"
-  create_symlink "${PWD}/nvim" "${LN_NVIM}"
-  print_section_end "✅ NVIM :: config ready."
-}
-
-# SETUP :: zed -----------------------------------------------------------------
-setup_zed() {
-  print_section "ZED :: config"
-  print_info2 "🔗 ZED :: linking zed/settings.json -> $LN_ZED/settings.json"
-  create_symlink "${PWD}/zed/settings.json" "${LN_ZED}/settings.json"
-  print_info2 "🔗 ZED :: linking zed/keymap.json -> $LN_ZED/keymap.json"
-  create_symlink "${PWD}/zed/keymap.json" "${LN_ZED}/keymap.json"
-  print_info2 "🔗 ZED :: linking zed/snippets -> $LN_ZED/snippets"
-  create_symlink "${PWD}/zed/snippets" "${LN_ZED}/snippets"
-
-  print_info2 "🔗 ZED :: linking zed/codebook.toml -> $LN_ZED_CODEBOOK/codebook.toml"
-  create_symlink "${PWD}/zed/codebook.toml" "${LN_ZED_CODEBOOK}/codebook.toml"
-
-  print_section_end "✅ ZED :: config ready."
-}
-
-# SETUP :: profiles ------------------------------------------------------------
-setup_profiles() {
-  print_section "PROFILES :: config"
-  print_info2 "🔗 PROFILES :: linking profiles/profile-append -> $LN_PROFILES_01"
-  create_symlink "${PWD}/profiles/profile-append" "${LN_PROFILES_01}"
-  print_info2 "🔗 PROFILES :: linking profiles/profile-sec -> $LN_PROFILES_02"
-  create_symlink "${PWD}/profiles/profile-sec" "${LN_PROFILES_02}"
-
-  local PROFILE_SECRETS="${HOME}/.profile-secrets"
-  print_info2 "🔧 PROFILES :: creating secrets file at $PROFILE_SECRETS"
-  touch "$PROFILE_SECRETS"
-
-  local profile_files=(
-    "${HOME}/.zshenv"
-    "${HOME}/.bashrc"
-  )
-  # shellcheck disable=SC2016
-  local lines_to_add=(
-    "source \"$LN_PROFILES_01\""
-    "source \"$LN_PROFILES_02\""
-    "source \"$PROFILE_SECRETS\""
-  )
-
-  for profile_file in "${profile_files[@]}"; do
-    print_info2 "⚙️ PROFILES :: updating ${profile_file}"
-    touch "${profile_file}" 1>/dev/null
-    for line in "${lines_to_add[@]}"; do
-      if ! grep -Fxq "$line" "${profile_file}"; then
-        echo "$line" >>"${profile_file}"
-      fi
-    done
-  done
-
-  print_section_end "✅ PROFILES :: config ready."
-}
-
-# SETUP :: gitconfig -----------------------------------------------------------
-setup_gitconfig() {
-  setup_lazygit
-
-  print_section "GIT :: config"
-  print_info2 "🚀 GIT :: setting up git..."
-
-  local -a ssh_keys
-  local git_user_name git_user_email git_signing_key signing_key_path_expanded
-
-  print_info2 "🔗 GITHOOKS :: linking git/commit-msg -> $LN_GIT_HOOK_COMMIT_MSG"
-  create_symlink "${PWD}/git/commit-msg" "${LN_GIT_HOOK_COMMIT_MSG}"
-  print_info2 "🔗 GITHOOKS :: linking git/pre-commit -> $LN_GIT_HOOK_PRE_COMMIT"
-  create_symlink "${PWD}/git/pre-commit" "${LN_GIT_HOOK_PRE_COMMIT}"
-
-  print_info2 "⚙️ GITCONFIG :: starting global Git configuration..."
-
-  print_read "  ✏️ enter your Git user.name: "
-  read -r git_user_name
-
-  print_read "  ✏️ enter your Git user.email: "
-  read -r git_user_email
-  if [[ ! $git_user_email =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-    print_error "  ❌ that doesn't look like a valid email. Please try again."
-    git_user_email=
-  fi
-
-  if [ -z "$git_user_name" ] || [ -z "$git_user_email" ]; then
-    print_info2 "⚠️ GIT :: no user/email provided, skipping setup"
-    return 0
-  fi
-  print_info2 "  🔍 scanning $HOME/.ssh for available public keys"
-  mapfile -t ssh_keys < <(find "$HOME/.ssh" -type f -name "*.pub")
-
-  if [ ${#ssh_keys[@]} -gt 0 ]; then
-    git_signing_key="$(printf '%s\n' "${ssh_keys[@]}" | fzf --prompt='Select signing key: ')"
-  else
-    print_info2 "  ⚠️ no SSH public keys found in $HOME/.ssh."
-    print_read "  ✏️ enter path to Git signing key manually (or empty to skip): "
-    read -e -r git_signing_key
-  fi
-
-  if [ -n "$git_signing_key" ]; then
-    git_signing_key="$(echo "$git_signing_key" | xargs)"
-    signing_key_path_expanded="${git_signing_key/#\~/$HOME}"
-    if [ ! -f "$signing_key_path_expanded" ]; then
-      print_error "  ❌ file '$git_signing_key' does not exist"
-      return 1
-    fi
-  fi
-
-  print_info2 "  📋 copying git/.gitconfig to ${HOME}/.gitconfig"
-  if [ -f "${HOME}/.gitconfig" ]; then
-    cp "${HOME}/.gitconfig" "${HOME}/.gitconfig-$(date '+%Y%m%d-%H%M%S')"
-  fi
-  copy_config "${PWD}/git/.gitconfig" "${HOME}/.gitconfig"
-
-  print_info2 "  ⚙️ applying git configuration"
-  git config --global user.name "$git_user_name"
-  git config --global user.email "$git_user_email"
-
-  if [ -n "$git_signing_key" ]; then
-    git config --global user.signingkey "$git_signing_key"
-    git config --global commit.gpgsign true
-    print_info2 "  ✅ GPG signing enabled using key: '$git_signing_key'"
-  else
-    git config --global --unset user.signingkey 2>/dev/null || true
-    git config --global commit.gpgsign false
-    print_info2 "  💡 GPG signing disabled"
-  fi
-
-  print_section_end "✅ GIT :: config ready."
-}
-
-# SETUP :: lazygit -------------------------------------------------------------
-setup_lazygit() {
-  print_section "LAZYGIT :: config"
-  print_info2 "🔗 LAZYGIT :: linking git/lazygit.yml -> $LN_LAZYGIT"
-  create_symlink "${PWD}/git/lazygit.yml" "${LN_LAZYGIT}"
-
-  print_section_end "✅ LAZYGIT :: config ready."
-}
-
-# ******************************************************************************
-
-# SETUP :: zsh -----------------------------------------------------------------
-# NOTE: runs inside 'install_zsh'
-setup_zsh() {
-  print_section "ZSH :: config"
-  print_info2 "📦 ZSH :: loading git submodules"
-  git submodule update -q --init --remote \
-    zsh/themes/spaceship \
-    zsh/plugins/zsh-autosuggestions \
-    zsh/plugins/zsh-syntax-highlighting \
-    zsh/plugins/zsh-history-substring-search
-
-  print_info2 "🔗 ZSH :: linking zsh/themes/* -> $LN_ZSH/custom/themes/*"
-  create_symlink "${PWD}/zsh/themes/spaceship/spaceship.zsh-theme" "$LN_ZSH/custom/themes/spaceship.zsh-theme"
-  print_info2 "🔗 ZSH :: linking zsh/plugins/* -> $LN_ZSH/custom/plugins/*"
-  create_symlink "${PWD}/zsh/plugins/zsh-autosuggestions" "$LN_ZSH/custom/plugins/zsh-autosuggestions"
-  create_symlink "${PWD}/zsh/plugins/zsh-syntax-highlighting" "$LN_ZSH/custom/plugins/zsh-syntax-highlighting"
-  create_symlink "${PWD}/zsh/plugins/zsh-history-substring-search" "$LN_ZSH/custom/plugins/zsh-history-substring-search"
-
-  print_info2 "🔗 ZSH :: linking zsh/zshrc -> $LN_ZSHRC"
-  create_symlink "${PWD}/zsh/zshrc" "${LN_ZSHRC}"
-  print_section_end "✅ ZSH :: config ready."
-}
-
-# SETUP :: tmux ----------------------------------------------------------------
-# NOTE: runs inside 'install_tmux'
-setup_tmux() {
-  print_section "TMUX :: config"
-  print_info2 "🔗 TMUX :: linking tmux/tmux -> $LN_TMUX"
-  create_symlink "${PWD}/tmux/tmux" "${LN_TMUX}"
-  print_info2 "🔗 TMUX :: linking tmux/tmux.conf -> $LN_TMUX_CONF"
-  create_symlink "${PWD}/tmux/tmux.conf" "${LN_TMUX_CONF}"
-
-  print_info2 "📦 TMUX :: loading git submodules"
-  git submodule update -q --init --remote tmux/tmux/plugins/tpm
-  if command -v tmux >/dev/null 2>&1; then
-    print_info2 "🔧 TMUX :: running tpm to install plugins"
-    PATH="$USER_LOCAL_PREFIX_BIN:$PATH" bash "${LN_TMUX}/plugins/tpm/bin/install_plugins" 1>/dev/null
-  fi
-
-  print_section_end "✅ TMUX :: config ready."
-}
-
-# SETUP :: btop ----------------------------------------------------------------
-# NOTE: runs inside 'install_btop'
-setup_btop() {
-  print_section "BTOP :: config"
-  print_info2 "🔧 BTOP :: copying configs-single/btop.conf -> $LN_BTOP"
-  copy_config "${PWD}/configs-single/btop.conf" "${LN_BTOP}"
-  print_section_end "✅ BTOP :: config ready."
-}
-
-setup_hunk() {
-  print_section "HUNK :: config"
-  print_info2 "🔧 HUNK :: setting hunk as git pager"
-  git config --global core.pager "hunk pager"
-
-  print_info2 "🔗 HUNK :: linking configs-single/hunk.toml -> $LN_HUNK"
-  create_symlink "${PWD}/configs-single/hunk.toml" "${LN_HUNK}"
-  print_section_end "✅ HUNK :: config ready."
-}
-
-# SETUP :: code ----------------------------------------------------------------
-setup_code() {
-  print_section "CODE :: config"
-  print_info2 "🔗 CODE :: linking code/keybindings.json -> $LN_VS_CODE/keybindings.json"
-  create_symlink "${PWD}/code/keybindings.json" "${LN_VS_CODE}/keybindings.json"
-  print_info2 "🔗 CODE :: linking code/settings.json -> $LN_VS_CODE/settings.json"
-  create_symlink "${PWD}/code/settings.json" "${LN_VS_CODE}/settings.json"
-  print_info2 "🔗 CODE :: linking code/snippets -> $LN_VS_CODE/snippets"
-  create_symlink "${PWD}/code/snippets" "${LN_VS_CODE}/snippets"
-  print_section_end "✅ CODE :: config ready."
-}
-
-# ******************************************************************************
-
-# CODE :: install extensions ---------------------------------------------------
-install_code_ext() {
-  if command -v code >/dev/null 2>&1; then
-    print_info2 "\n📦 CODE :: installing VS Code extensions"
-
-    # james-yu.latex-workshop  ms-vscode.live-server ryanluker.vscode-coverage-gutters
-    # "github.copilot" "github.copilot-chat"
-    # "ms-python.debugpy" "ms-python.mypy-type-checker" "ms-python.vscode-pylance" "ms-python.vscode-python-envs"
-    # "astral-sh.ty" "donjayamanne.githistory"
-    VS_CODE_EXTS=(
-      "aaron-bond.better-comments" "adpyke.vscode-sql-formatter" "analytic-signal.preview-pdf"
-      "bibhasdn.unique-lines" "bierner.markdown-preview-github-styles" "charliermarsh.ruff"
-      "eamodio.gitlens" "esbenp.prettier-vscode" "foxundermoon.shell-format"
-      "ms-python.python" "mushan.vscode-paste-image" "pkief.material-icon-theme" "redhat.ansible"
-      "redhat.vscode-xml" "redhat.vscode-yaml" "samuelcolvin.jinjahtml" "silofy.hackthebox"
-      "streetsidesoftware.code-spell-checker" "streetsidesoftware.code-spell-checker-german" "tamasfe.even-better-toml"
-      "timonwong.shellcheck" "wayou.vscode-todo-highlight" "yzane.markdown-pdf" "yzhang.markdown-all-in-one"
-    )
-
-    for vs_code_ext in "${VS_CODE_EXTS[@]}"; do
-      print_info2 "  📌 installing extension '$vs_code_ext'"
-      code --force --install-extension "$vs_code_ext" 1>/dev/null || true
-    done
-  else
-    print_error "❌ CODE :: code not found, extension install skipped!"
-  fi
-}
-
-# FONTS :: install -------------------------------------------------------------
-install_fonts() {
-  print_info2 "\n📦 FONTS :: downloading fonts"
-
-  # Define packages needed for build and install
-  # shellcheck disable=SC2034
-  local packages_tools=()
-  # shellcheck disable=SC2034
-  local packages_build=(curl file unzip)
-  install_dependencies_needs packages_tools[@] packages_build[@]
-
-  FONTS_URLS=(
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/NerdFontsSymbolsOnly.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/FiraCode.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/Hack.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/UbuntuMono.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/FiraMono.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/RobotoMono.tar.xz"
-    "${VERSION_FONTS_REPO}/releases/download/${VERSION_FONTS_RELEASE}/ProggyClean.tar.xz"
-    "https://github.com/fonsecapeter/brass_mono/releases/download/v1.101/BrassMono.zip"
-  )
-  local fonts_dir="$USER_LOCAL_PREFIX/share/fonts"
-
-  for url in "${FONTS_URLS[@]}"; do
-    file_name=$(basename "$url")
-    temp_file="/tmp/$file_name"
-
-    print_info2 "  ⬇️ downloading $file_name..."
-    curl -sL -o "$temp_file" "$url" || {
-      print_error "  ❌ failed to download $file_name"
-      return 1
-    }
-
-    if [[ "$url" =~ github.com/([^/]+)/([^/]+) ]]; then
-      repo_name="${BASH_REMATCH[2]}"
-    else
-      repo_name="custom-font"
-    fi
-
-    local repo_dir="$fonts_dir/$repo_name"
-    mkdir -p "$repo_dir"
-
-    archive_type=$(file --mime-type -b "$temp_file")
-
-    print_info2 "  📦 extracting $file_name..."
-    case "$archive_type" in
-    application/x-xz) # .tar.xz
-      tar -xf "$temp_file" -C "$repo_dir" || {
-        print_error "  ❌ failed to extract $file_name"
-        return 1
-      }
-      ;;
-    application/zip) # .zip
-      unzip -qo "$temp_file" -d "$repo_dir" || {
-        print_error "  ❌ failed to extract $file_name"
-        return 1
-      }
-      ;;
-    *)
-      print_error "  ❌ unsupported archive type: $archive_type for $file_name"
-      return 1
-      ;;
-    esac
-
-    rm "$temp_file"
-  done
-
-  install_dependencies_needs_rm
-
-  print_info2 "✅ FONTS :: all fonts downloaded and extracted"
+# UPDATE :: check newer tags ---------------------------------------------------
+run_update_check() {
+  echo
+  check_for_newer_tag "$VERSION_GHOSTTY_REPO" "$VERSION_GHOSTTY" "^v[0-9]"
+  check_for_newer_tag "$VERSION_NVIM_REPO" "$VERSION_NVIM"
+  check_for_newer_tag "$VERSION_ZSH_REPO" "$VERSION_ZSH" "-test"
+  check_for_newer_tag "$VERSION_TMUX_REPO" "$VERSION_TMUX"
+  check_for_newer_tag "$VERSION_BTOP_REPO" "$VERSION_BTOP"
+  check_for_newer_tag "$VERSION_RSMI_REPO" "$VERSION_RSMI" "rocm"
+  check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK" "" "releases"
+  check_for_newer_tag "$VERSION_OPENLOGI_REPO" "$VERSION_OPENLOGI" "" "releases"
+  check_for_newer_tag "$VERSION_INPUT_LINUX_REPO" "$VERSION_INPUT_LINUX" "Community" "releases"
+  check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
 }
 
 # ******************************************************************************
@@ -951,7 +241,7 @@ usage() {
   print_info "     $0 -ds -invim                                Install nvim only (no symlinks)"
   print_info "     $0 -itools -idev                             Install CLI tools + dev deps + symlinks"
   print_info "     $0 -it -invim -izsh -ighost                  Install nvim, zsh, ghostty + tools + symlinks"
-  print_info "     $0 -upc                                    Check for newer versions of all tools"
+  print_info "     $0 -upc                                      Check for newer versions of all tools"
   print_info ""
   print_info "     Install and config are separate steps. Pair the -i flag"
   print_info "     with the -s flag for tools whose config is not on by default:"
@@ -975,6 +265,8 @@ usage() {
   print_info "     -ibtop-amd   --install-btop-amd                 btop with AMD GPU support (ROCm)"
   print_info "     -ibtop-intel --install-btop-intel               btop + Intel GPU support"
   print_info "     -ihunk       --install-hunk                     Install hunk git diff pager"
+  print_info "     -iolog       --install-openlogi                 Build and install OpenLogi from source (user prefix)"
+  print_info "     -iin         --install-input-linux              Install Work Louder Input AppImage (user prefix)"
   print_info "     -iemu        --install-android-emulator         Interactive Android emulator setup"
   print_info "     -igh         --install-github-cli               Install GitHub CLI from releases"
   print_info "     -ice         --install-code-ext                 Install VS Code extensions"
@@ -993,12 +285,14 @@ usage() {
   print_info "     -scd         --setup-code                       Link VS Code config"
   print_info "     -sbt         --setup-btop                       Copy btop config"
   print_info "     -shk         --setup-hunk                       Link hunk config + git pager"
+  print_info "     -solog       --setup-openlogi                   Seed OpenLogi config if missing"
   print_info ""
   print_info "   🛠️ Meta flags:"
   print_info "     -h           --help                             Show this help"
   print_info "     -s                                              Build services from source (instead of release)"
   print_info "     -d           --debug                            Enable bash debug mode (set -x)"
   print_info "     -upc         --update-check                     Check all tools for newer versions"
+  print_info "     -usub        --update-submodules                Refresh submodules to upstream tips (no configs)"
   print_info ""
   print_info "   💡 Quick combos:"
   print_info "     -ioall       --install-dependencies-old-all     Install tmux + nvim + zsh + tools"
@@ -1046,6 +340,12 @@ parse_args() {
     -ihunk | --install-hunk)
       RUN_INSTALL_HUNK=1
       ;;
+    -iolog | --install-openlogi)
+      RUN_INSTALL_OPENLOGI=1
+      ;;
+    -iin | --install-input-linux)
+      RUN_INSTALL_INPUT_LINUX=1
+      ;;
     -iemu | --install-android-emulator)
       RUN_INSTALL_ANDROID=1
       ;;
@@ -1059,7 +359,6 @@ parse_args() {
       RUN_INSTALL_DEPENDENCIES_ADDITIONAL=1
       RUN_INSTALL_NVIM=1
       RUN_INSTALL_GHOSTTY=1
-      # RUN_SETUP_TMUX=0
       ;;
     -nsb | --not-setup-bin)
       RUN_SETUP_BIN=0
@@ -1080,15 +379,7 @@ parse_args() {
       RUN_SETUP_GITCONFIG=0
       ;;
     -ds | --disable-setups)
-      RUN_SETUP_BIN=0
-      RUN_SETUP_GHOSTTY=0
-      RUN_SETUP_NVIM=0
-      RUN_SETUP_ZED=0
-      RUN_SETUP_PROFILES=0
-      RUN_SETUP_GITCONFIG=0
-      # RUN_SETUP_TMUX=0
-      # RUN_SETUP_ZSH=0
-      # RUN_SETUP_CODE=0
+      disable_setups
       ;;
     -szh | --setup-zsh)
       RUN_SETUP_ZSH=1
@@ -1101,6 +392,9 @@ parse_args() {
       ;;
     -shk | --setup-hunk)
       RUN_SETUP_HUNK=1
+      ;;
+    -solog | --setup-openlogi)
+      RUN_SETUP_OPENLOGI=1
       ;;
     -scd | --setup-code)
       RUN_SETUP_CODE=1
@@ -1121,24 +415,10 @@ parse_args() {
       set -x
       ;;
     -upc | --update-check)
-      RUN_SETUP_BIN=0
-      RUN_SETUP_NVIM=0
-      RUN_SETUP_ZED=0
-      RUN_SETUP_PROFILES=0
-      RUN_SETUP_GITCONFIG=0
-      # RUN_SETUP_TMUX=0
-      # RUN_SETUP_ZSH=0
-      # RUN_SETUP_CODE=0
-
-      echo
-      check_for_newer_tag "$VERSION_GHOSTTY_REPO" "$VERSION_GHOSTTY"
-      check_for_newer_tag "$VERSION_NVIM_REPO" "$VERSION_NVIM"
-      check_for_newer_tag "$VERSION_ZSH_REPO" "$VERSION_ZSH" "-test"
-      check_for_newer_tag "$VERSION_TMUX_REPO" "$VERSION_TMUX"
-      check_for_newer_tag "$VERSION_BTOP_REPO" "$VERSION_BTOP"
-      check_for_newer_tag "$VERSION_RSMI_REPO" "$VERSION_RSMI" "rocm"
-      check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK" "" "releases"
-      check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
+      RUN_UPDATE_CHECK=1
+      ;;
+    -usub | --update-submodules)
+      RUN_UPDATE_SUBMODULES=1
       ;;
     *)
       print_error "❌ Unknown option: $key"

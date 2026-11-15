@@ -33,6 +33,11 @@ USER_LOCAL_PREFIX_BIN="$USER_LOCAL_PREFIX/bin"
 
 DEPS_PACKAGES_TO_REMOVE=()
 
+# apt env: `env` runs as the sudo'ed command so these actually reach apt. sudo
+# strips the environment; without them debconf opens a dialog and maintainer
+# scripts reprint the perl locale warnings.
+APT_ENV=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
+
 # shellcheck disable=SC2034
 INSTALL_SOURCE_FROM=release # source | release
 
@@ -42,6 +47,7 @@ print_info() { echo -e "${BPURPLE}$1${NC}"; }
 print_info2() { echo -e "${BYELLOW}$1${NC}"; }
 print_read() { printf "%b%s%b" "${BYELLOW}" "$1" "${NC}"; }
 print_notes() { echo -e "${BCYAN}$1${NC}"; }
+print_warn() { echo -e "${BYELLOW}$1${NC}" >&2; }
 print_error() { echo -e "${BRED}$1${NC}" >&2; }
 
 # HELPERS :: print section divider ---------------------------------------------
@@ -52,7 +58,7 @@ print_section() {
   echo ""
 }
 
-# HELPERS :: print section divider ---------------------------------------------
+# HELPERS :: print section footer ----------------------------------------------
 print_section_end() {
   echo ""
   print_info2 "$1"
@@ -67,7 +73,7 @@ fzf_preselect_bind() {
   local bind="start:"
   local def line
   for def in $defaults; do
-    line=$(echo "$list" | grep -nx "$def" | cut -d: -f1)
+    line=$(echo "$list" | grep -Fnx -- "$def" | cut -d: -f1 || true)
     [[ -n "$line" ]] && bind+="pos($line)+toggle+"
   done
   [[ "$bind" == "start:" ]] && return 0
@@ -76,12 +82,13 @@ fzf_preselect_bind() {
 
 # HELPERS :: fzf multiselect ----------------------------------------------------
 # Run a multi-select fzf prompt. Prints the selected lines; empty when nothing
-# was chosen. ESC/abort (exit 130) is treated as "no selection", NOT an error -
-# otherwise 'set -euo pipefail' in the caller kills the script.
+# was chosen. ESC/abort (exit 130) is returned to the caller, NOT treated as an
+# error - otherwise 'set -euo pipefail' in the caller kills the script.
 # Args: $1 list (newline-joined), $2 space-separated preselect defaults,
-#       $3 header, $4 prompt, $5 (optional) preview command ({} = current line).
+#       $3 header, $4 prompt, $5 (optional) preview command ({} = current line),
+#       $6 (optional) initial --query string.
 fzf_pick() {
-  local list="$1" defaults="$2" header="$3" prompt="$4" preview="${5:-}"
+  local list="$1" defaults="$2" header="$3" prompt="$4" preview="${5:-}" query="${6:-}"
   local preselect_bind=() bind_value
   bind_value=$(fzf_preselect_bind "$list" "$defaults")
   [[ -n "$bind_value" ]] && preselect_bind=(--bind "$bind_value")
@@ -89,10 +96,11 @@ fzf_pick() {
   local args=(--sync --height=~40% --multi --cycle --border
     "${preselect_bind[@]}" --header "$header" --prompt "$prompt")
   [[ -n "$preview" ]] && args+=(--preview "$preview")
+  [[ -n "$query" ]] && args+=(--query "$query")
 
   local out rc
   out=$(echo "$list" | fzf "${args[@]}") || rc=$?
-  [[ ${rc:-0} -eq 130 ]] && rc=0
+  [[ ${rc:-0} -eq 130 ]] && return 130
   [[ ${rc:-0} -ne 0 ]] && return "${rc:-1}"
   echo "$out"
 }
@@ -101,7 +109,7 @@ fzf_pick() {
 
 # HELPERS :: require commands --------------------------------------------------
 require_cmds() {
-  local missing=()
+  local missing=() cmd
   for cmd in "$@"; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
       missing+=("$cmd")
@@ -114,7 +122,65 @@ require_cmds() {
 
 # HELPERS :: package installed? ------------------------------------------------
 is_package_installed() {
-  dpkg -l "$1" 2>/dev/null | grep -q "^ii  $1 "
+  dpkg-query -s "$1" 2>/dev/null | grep -q '^Status: .* installed$'
+}
+
+# HELPERS :: apt update --------------------------------------------------------
+apt_update() {
+  if ! run_quiet_hint "   ⏳ refreshing package lists (sudo may ask for your password)..." \
+    $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get update -qqq; then
+    print_error "❌ Failed to update package list"
+    return 1
+  fi
+}
+
+# HELPERS :: apt install -------------------------------------------------------
+# Install packages non-interactively. The hint is printed first because a quiet
+# sudo/apt step that takes a minute otherwise reads as a hang.
+# Args: <hint> <package...>
+apt_install() {
+  local hint="$1"
+  shift
+  (($# > 0)) || return 0
+
+  if ! run_quiet_hint "$hint" $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get install -y "$@"; then
+    print_error "❌ Failed to install packages: $*"
+    return 1
+  fi
+}
+
+# HELPERS :: apt remove --------------------------------------------------------
+# Remove packages, then drop their now-unused dependencies.
+# Args: <hint> <package...>
+apt_remove() {
+  local hint="$1"
+  shift
+  (($# > 0)) || return 0
+
+  if ! run_quiet_hint "$hint" $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get remove -y "$@"; then
+    print_error "❌ Failed to remove packages: $*"
+    return 1
+  fi
+  run_quiet $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get -y autoremove -qqq || true
+  run_quiet $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get -y autoclean -qqq || true
+}
+
+# HELPERS :: snap install -------------------------------------------------------
+# Install a snap only when it is missing. `snap install` exits non-zero for an
+# already-installed snap, which aborts the caller under `set -euo pipefail`.
+# Refreshing installed snaps belongs to the update workflow, not to setup.
+# Args: <snap> [snap install flags...]
+snap_install() {
+  local name="$1"
+  shift
+  if snap list "$name" >/dev/null 2>&1; then
+    print_notes "   💡 snap '$name' already installed, skipping"
+    return 0
+  fi
+  if ! run_quiet $RUN_WITH_SUDO snap install "$name" "$@"; then
+    print_error "❌ Failed to install snap: $name"
+    return 1
+  fi
 }
 
 # HELPERS :: run a command quietly -----------------------------------------------
@@ -195,6 +261,7 @@ install_dependencies_needs() {
   local packages_build=("${build_ref[@]}")
 
   local packages_to_install=()
+  local pkg
 
   # Check packages_tools: install if missing, but never mark for removal.
   for pkg in "${packages_tools[@]}"; do
@@ -217,24 +284,11 @@ install_dependencies_needs() {
     return 0
   fi
 
-  print_notes "   📥 Installing build dependencies..."
   print_notes "   📥 Packages to install: [${packages_to_install[*]}]"
-  print_notes "   📥 Packages to remove afterward: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
+  [[ ${#DEPS_PACKAGES_TO_REMOVE[@]} -gt 0 ]] && print_notes "   📥 Packages to remove afterward: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
 
-  # `env` runs as the sudo'ed command so the variables actually reach apt:
-  # sudo strips the environment, and without these debconf opens a dialog and
-  # every maintainer script reprints the perl locale warnings.
-  local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
-  if ! run_quiet_hint "⏳ refreshing package lists (sudo may ask for your password)..." \
-    $RUN_WITH_SUDO "${apt_env[@]}" apt-get update -qqq; then
-    print_error "❌ Failed to update package list"
-    exit 1
-  fi
-  if ! run_quiet_hint "⏳ installing packages, this can take a minute..." \
-    $RUN_WITH_SUDO "${apt_env[@]}" apt-get install -y "${packages_to_install[@]}"; then
-    print_error "❌ Failed to install packages"
-    exit 1
-  fi
+  apt_update || return 1
+  apt_install "   ⏳ installing build dependencies, this can take a minute..." "${packages_to_install[@]}" || return 1
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_notes "   📥 Build dependencies installed"
 }
@@ -246,17 +300,11 @@ install_dependencies_needs_rm() {
   fi
 
   print_notes "   📥 Removing build dependencies: [${DEPS_PACKAGES_TO_REMOVE[*]}]..."
-  local -a apt_env=(env DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true LC_ALL=C)
-  if ! run_quiet_hint "⏳ removing packages (sudo may ask for your password)..." \
-    $RUN_WITH_SUDO "${apt_env[@]}" apt-get remove -y "${DEPS_PACKAGES_TO_REMOVE[@]}"; then
-    print_error "❌ Failed to remove packages"
-    return 1
-  fi
-  run_quiet $RUN_WITH_SUDO "${apt_env[@]}" apt-get -y autoremove -qqq || true
-  run_quiet $RUN_WITH_SUDO "${apt_env[@]}" apt-get -y autoclean -qqq || true
+  apt_remove "   ⏳ removing packages (sudo may ask for your password)..." "${DEPS_PACKAGES_TO_REMOVE[@]}" || return 1
 
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
   print_notes "   📥 Packages removed: [${DEPS_PACKAGES_TO_REMOVE[*]}]"
+  DEPS_PACKAGES_TO_REMOVE=()
 }
 
 download_github_binary() {
@@ -406,10 +454,12 @@ check_for_newer_tag() {
     return 0
   fi
 
-  # Extract tag names
+  # Extract tag names. Release checks ignore prereleases: a beta tag sorts
+  # above the current stable version and would report a downgrade-to-beta as
+  # an available update.
   local tags
   if [[ "$latest_from" == "releases" ]]; then
-    tags=$(echo "$tags_json" | jq -r '.[].tag_name')
+    tags=$(echo "$tags_json" | jq -r '.[] | select(.prerelease == false) | .tag_name')
   else
     tags=$(echo "$tags_json" | jq -r '.[].name')
   fi
@@ -472,6 +522,15 @@ create_symlink() {
   ln -sf "$target" "$link_name"
 }
 
+# HELPERS :: link a repo path and report it ------------------------------------
+# Prints the "linking <src> -> <dst>" line and creates the symlink. <src> is
+# shown relative to the repository root. Args: <label> <src> <dst>
+link_config() {
+  local label="$1" src="$2" dest="$3"
+  print_info2 "🔗 $label :: linking ${src#"$PWD"/} -> $dest"
+  create_symlink "$src" "$dest"
+}
+
 # HELPERS :: copy config -------------------------------------------------------
 copy_config() {
   local src="$1" dest="$2"
@@ -489,4 +548,109 @@ run_if() {
 # HELPERS :: sudo drop ---------------------------------------------------------
 sudo_drop() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+}
+
+# HELPERS :: clone at pinned version -------------------------------------------
+# Clone <repo> into <dir> and, when building from a release, check out <version>.
+clone_repo() {
+  local repo="$1" dir="$2" version="${3:-}"
+  rm -rf "$dir" 1>/dev/null
+  git clone -q "$repo" "$dir"
+  if [[ $INSTALL_SOURCE_FROM == 'release' && -n "$version" ]]; then
+    git -C "$dir" checkout -q "$version"
+  fi
+}
+
+# HELPERS :: install udev rules ------------------------------------------------
+# Install <src> to <dst> with sudo when available; otherwise print the manual
+# commands. Remaining args are passed to 'udevadm trigger'. Separate multiple
+# trigger calls with '--trigger' (for example
+# --subsystem-match=hidraw --trigger --subsystem-match=input).
+install_udev_rules() {
+  local src="$1" dst="$2"
+  shift 2
+
+  local -a trigger_sets=() current=()
+  local arg trigger
+  for arg in "$@"; do
+    if [[ $arg == '--trigger' ]]; then
+      ((${#current[@]})) && trigger_sets+=("${current[*]}")
+      current=()
+    else
+      current+=("$arg")
+    fi
+  done
+  ((${#current[@]})) && trigger_sets+=("${current[*]}")
+
+  [[ -f "$src" ]] || { print_notes "   ⚠️ udev rules source not found: $src"; return 0; }
+  if [[ -n "$RUN_WITH_SUDO" ]] && sudo -n true 2>/dev/null; then
+    print_notes "   📌 installing udev rules -> $dst (sudo)"
+    $RUN_WITH_SUDO install -Dm644 "$src" "$dst"
+    if command -v udevadm >/dev/null 2>&1; then
+      $RUN_WITH_SUDO udevadm control --reload-rules
+      for trigger in "${trigger_sets[@]}"; do
+        # trigger holds a pre-validated flag group; splitting it is intended.
+        # shellcheck disable=SC2086
+        $RUN_WITH_SUDO udevadm trigger $trigger || true
+      done
+      $RUN_WITH_SUDO udevadm settle || true
+    fi
+    sudo_drop
+    print_notes "   ✅ udev rules installed ($dst)"
+  else
+    print_notes "   ⚠️ sudo not usable non-interactively; skipping udev rules."
+    print_notes "   💡 root must install them manually:"
+    print_notes "      sudo install -Dm644 '$src' '$dst'"
+    if ((${#trigger_sets[@]} > 0)); then
+      print_notes "      sudo udevadm control --reload-rules"
+      for trigger in "${trigger_sets[@]}"; do
+        print_notes "      sudo udevadm trigger $trigger"
+      done
+    fi
+  fi
+}
+
+# HELPERS :: refresh desktop/icon caches ---------------------------------------
+refresh_desktop_caches() {
+  local icons="${1:-}" apps="${2:-}"
+  if [[ -n "$icons" ]] && command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -qtf "$icons" || true
+  fi
+  if [[ -n "$apps" ]] && command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q "$apps" || true
+  fi
+}
+
+# HELPERS :: fzf single select -------------------------------------------------
+# Print one selected line. ESC/abort returns 130.
+# Args: $1 list, $2 header, $3 prompt, $4 (optional) initial --query string.
+fzf_select() {
+  local list="$1" header="$2" prompt="$3" query="${4:-}"
+  [[ -n "$list" ]] || return 0
+  local args=(--sync --height=~40% --cycle --border --header "$header" --prompt "$prompt")
+  [[ -n "$query" ]] && args+=(--query "$query")
+  local out rc=0
+  out=$(echo "$list" | fzf "${args[@]}") || rc=$?
+  [[ $rc -eq 130 ]] && return 130
+  [[ $rc -ne 0 ]] && return "$rc"
+  printf '%s\n' "$out"
+}
+
+# HELPERS :: fzf multi-select of "name:description" lines ----------------------
+# Prints the selected names (text before the first colon). ESC/abort returns
+# 130 so callers can skip without tripping 'set -e'.
+# Args: prompt, footer, select-all ("select-all" or empty), then the items.
+fzf_multi_select() {
+  local prompt="$1" footer="$2" select_all="$3"
+  shift 3
+  [[ $# -gt 0 ]] || return 0
+  local bind=()
+  [[ "$select_all" == "select-all" ]] && bind=(--bind 'start:select-all+down')
+  local out rc=0
+  out=$(printf '%s\n' "$@" | fzf --height=~40% --multi --cycle --border \
+    "${bind[@]}" --prompt="$prompt" --preview-window=hidden \
+    --footer="$footer" | awk -F: '{print $1}') || rc=$?
+  [[ $rc -eq 130 ]] && return 130
+  [[ $rc -ne 0 ]] && return "$rc"
+  printf '%s\n' "$out" | sed '/^$/d'
 }

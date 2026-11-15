@@ -1,0 +1,6 @@
+# Lint sourced files as well.
+# setup / setup-ai keep their flags, version pins, and paths in the executable
+# but read them from sibling files (setup-install, setup-config, ...), so a
+# single-file run reports every cross-file variable as unused (SC2034). This is
+# the same as passing -x on every invocation.
+external-sources=true
