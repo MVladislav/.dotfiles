@@ -4,15 +4,15 @@ Choose based on required behavior, not on the fact that a UI has fields or butto
 
 ## Storage decision guide
 
-| Requirement | Typical choice | Important boundary |
-|---|---|---|
-| Mostly static reference or content site | Static files / content source | No durable application database unless required |
-| Theme, expanded panel, temporary filters | Component state or browser storage | Not suitable for sensitive data or shared business records |
-| Single-user app on one machine | SQLite or local files with validated formats | Back up the data directory; do not expose files over the web |
-| Multiple users or multiple app instances | PostgreSQL or a supported managed relational database | Shared, durable server-side storage and migrations |
-| User uploads or large binary files | Object storage or a deliberately managed file store | Store metadata separately; enforce upload and download authorization |
-| Uploaded documents with searchable metadata | Object storage plus a relational metadata index, where useful | Keep file bytes and metadata consistent; validate file type and size |
-| External live data | Documented API / approved connector | Handle credentials, scopes, rate limits, stale data, pagination, and errors |
+| Requirement                                 | Typical choice                                                | Important boundary                                                          |
+| ------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Mostly static reference or content site     | Static files / content source                                 | No durable application database unless required                             |
+| Theme, expanded panel, temporary filters    | Component state or browser storage                            | Not suitable for sensitive data or shared business records                  |
+| Single-user app on one machine              | SQLite or local files with validated formats                  | Back up the data directory; do not expose files over the web                |
+| Multiple users or multiple app instances    | PostgreSQL or a supported managed relational database         | Shared, durable server-side storage and migrations                          |
+| User uploads or large binary files          | Object storage or a deliberately managed file store           | Store metadata separately; enforce upload and download authorization        |
+| Uploaded documents with searchable metadata | Object storage plus a relational metadata index, where useful | Keep file bytes and metadata consistent; validate file type and size        |
+| External live data                          | Documented API / approved connector                           | Handle credentials, scopes, rate limits, stale data, pagination, and errors |
 
 SQLite is a sensible default for many local applications, but not an automatic default for a multi-instance hosted app. Filesystem persistence may be ephemeral in container or serverless environments; verify the selected host's guarantees.
 
@@ -38,11 +38,11 @@ Sharing a site does not itself grant access to a third-party service. Do not reu
 
 ## Deployment target
 
-| Target | Default posture | Additional work to consider |
-|---|---|---|
-| Local development | Bind to `127.0.0.1` | Dev server and local test data |
-| Private LAN | Requires explicit approval | Bind interface, firewall scope, authentication, TLS/reverse proxy as appropriate |
-| Private hosted service | Requires explicit approval | Network boundaries, secrets, backups, monitoring, TLS, update/rollback plan |
-| Public website/app | Requires explicit approval | Public data review, abuse/rate limiting, auth, TLS, security headers, privacy notices, backup/restore, costs and operational owner |
+| Target                 | Default posture            | Additional work to consider                                                                                                        |
+| ---------------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Local development      | Bind to `127.0.0.1`        | Dev server and local test data                                                                                                     |
+| Private LAN            | Requires explicit approval | Bind interface, firewall scope, authentication, TLS/reverse proxy as appropriate                                                   |
+| Private hosted service | Requires explicit approval | Network boundaries, secrets, backups, monitoring, TLS, update/rollback plan                                                        |
+| Public website/app     | Requires explicit approval | Public data review, abuse/rate limiting, auth, TLS, security headers, privacy notices, backup/restore, costs and operational owner |
 
 A URL being reachable is not proof of production readiness. Choose a real deployment target - such as the user's existing Docker/Traefik environment or an approved provider - and check current provider documentation before configuring it. Never assume the provider, region, cost, domain, or persistence model.
