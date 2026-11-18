@@ -187,25 +187,30 @@ install_ghostty() {
   print_info2 "\n🚀 GHOSTTY :: install ghostty..."
   print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/ghostty" --version)'"
 
-  local packages_tools=(libgtk4-layer-shell0)
-  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils blueprint-compiler)
-  install_dependencies_needs packages_tools[@] packages_build[@]
+  # blueprint-compiler is a Python tool and pip/uv install into the user
+  # prefix, so it has to be on PATH for the build.
+  export PATH="$USER_LOCAL_PREFIX_BIN:$PATH"
 
-  local zig_command=zig
-  if ! command -v zig >/dev/null 2>&1; then
-    print_notes "   📦 downloading zig binary..."
-    curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_URL"
-    mkdir -p "$DEPS_INSTALL_PATH/zig"
-    tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
-    zig_command="$DEPS_INSTALL_PATH/zig/zig"
-  fi
+  local packages_tools=(libgtk4-layer-shell0)
+  local packages_build=(curl git libgtk-4-dev libgtk4-layer-shell-dev libadwaita-1-dev gettext libxml2-utils)
+  install_dependencies_needs packages_tools[@] packages_build[@]
+  install_python_package blueprint-compiler blueprint-compiler 0.20.0 || return 1
+
+  print_notes "   📦 downloading zig binary..."
+  curl -L -so "$DEPS_INSTALL_PATH/zig.tar.xz" "$VERSION_ZIG_URL"
+  mkdir -p "$DEPS_INSTALL_PATH/zig"
+  tar xf "$DEPS_INSTALL_PATH/zig.tar.xz" -C "$DEPS_INSTALL_PATH/zig" --strip-components=1
+  zig_command="$DEPS_INSTALL_PATH/zig/zig"
+  local zig_version
+  zig_version="$("$zig_command" version 2>/dev/null | awk '{print $1}')"
+  print_notes "   💡 building with zig $zig_version"
 
   print_notes "   📦 cloning ghostty..."
   clone_repo "$VERSION_GHOSTTY_REPO" "$DEPS_INSTALL_PATH/ghostty" "$VERSION_GHOSTTY"
   pushd "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
 
   print_notes "   🔧 building and installing ghostty..."
-  sed -i -e "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" -e "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
+  # sed -i -e "s|$GHOSTTY_ITERM_RO|$GHOSTTY_ITERM_RN|g" -e "s|$GHOSTTY_ITERM_ROH|$GHOSTTY_ITERM_RNH|g" ./build.zig.zon
   "$zig_command" build -p "$USER_LOCAL_PREFIX" -Doptimize=ReleaseFast 1>/dev/null
   popd 1>/dev/null
   rm -rf "$DEPS_INSTALL_PATH/ghostty" 1>/dev/null
@@ -495,10 +500,9 @@ install_openlogi() {
     return 1
   }
 
-  local rustc_version rustc_major rustc_minor
+  local rustc_version
   rustc_version=$(rustc --version | awk '{print $2}')
-  IFS=. read -r rustc_major rustc_minor _ <<< "$rustc_version"
-  if ((rustc_major < 1 || (rustc_major == 1 && rustc_minor < 99))); then
+  if ! version_ge "$rustc_version" 1.99; then
     print_error "❌ OPENLOGI :: rustc >= 1.99 required (found $rustc_version). Update with 'rustup update stable'."
     return 1
   fi

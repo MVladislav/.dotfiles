@@ -307,6 +307,45 @@ install_dependencies_needs_rm() {
   DEPS_PACKAGES_TO_REMOVE=()
 }
 
+# PY :: install a PyPI package into the user prefix ----------------------------
+install_python_package() {
+  local package="$1"
+  local command_name="$2"
+  local min_version="${3:-}"
+  local current_version
+
+  current_version="$("$command_name" --version 2>/dev/null | grep -Eo '[0-9]+(\.[0-9]+)+' | head -n1 || true)"
+
+  if [[ -n "$min_version" && -n "$current_version" ]] && version_ge "$current_version" "$min_version"; then
+    print_notes "   💡 $command_name $current_version already satisfies $package >= $min_version"
+    return 0
+  fi
+
+  if command -v uv >/dev/null 2>&1; then
+    print_notes "   📦 installing $package with 'uv tool'..."
+    uv tool install --upgrade "$package" || {
+      print_error "❌ PY :: 'uv tool install $package' failed."
+      return 1
+    }
+  elif command -v pip3 >/dev/null 2>&1; then
+    print_notes "   📦 installing $package with pip..."
+    python3 -m pip install --user --break-system-packages --upgrade "$package" || {
+      print_error "❌ PY :: 'pip install $package' failed."
+      return 1
+    }
+  else
+    print_error "❌ PY :: install 'uv' (./setup -idev) or 'python3-pip' to install $package."
+    return 1
+  fi
+
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    print_error "❌ PY :: $command_name not found after installing $package."
+    return 1
+  fi
+  current_version="$("$command_name" --version 2>/dev/null | grep -Eo '[0-9]+(\.[0-9]+)+' | head -n1 || true)"
+  print_notes "   💡 $command_name ${current_version:-version unknown}"
+}
+
 download_github_binary() {
   # "Usage: download_github_binary <repo_url> <binary_regex> [output_dir]"
   local repo_url="$1"
@@ -509,6 +548,41 @@ check_for_newer_tag() {
     print_info2 "    https://github.com/$repo_name/releases/tag/$latest_tag"
   else
     print_info2 "✅ You already have the latest version for '$repo_name': $current_tag"
+  fi
+}
+
+# Returns 0 when "$1" sorts at or above "$2" (version-sort).
+version_ge() {
+  local have="$1" need="$2"
+  [[ "$(printf '%s\n%s\n' "$have" "$need" | sort -V | head -n1)" == "$need" ]]
+}
+
+# Zig does not tag releases on GitHub (the newest tag there is 0.15.2), so its
+# version is read from the official download index instead.
+check_for_newer_zig() {
+  local current_version="$1"
+
+  require_cmds curl jq || return 1
+
+  local index_json
+  index_json=$(curl -sL "https://ziglang.org/download/index.json") || {
+    print_error "⚠️ Could not fetch https://ziglang.org/download/index.json."
+    return 0
+  }
+
+  local latest_version
+  latest_version=$(echo "$index_json" | jq -r 'keys[] | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' | sort -V | tail -n1)
+
+  if [[ -z "$latest_version" ]]; then
+    print_error "⚠️ No Zig release version found on ziglang.org."
+    return 0
+  fi
+
+  if [[ "$current_version" != "$latest_version" ]]; then
+    print_info2 "⬆️ A newer Zig version is available: $latest_version (current: $current_version)"
+    print_info2 "    https://ziglang.org/download/#release-${latest_version}"
+  else
+    print_info2 "✅ You already have the latest Zig version: $current_version"
   fi
 }
 

@@ -67,7 +67,7 @@ RUN_UPDATE_CHECK=0
 RUN_UPDATE_SUBMODULES=0
 
 # CONFIG :: version pins -------------------------------------------------------
-VERSION_ZIG_V=0.15.2
+VERSION_ZIG_V=0.17.1
 VERSION_ZIG_URL="https://ziglang.org/download/${VERSION_ZIG_V}/zig-x86_64-linux-${VERSION_ZIG_V}.tar.xz"
 VERSION_GHOSTTY=v1.4.0
 VERSION_GHOSTTY_REPO=https://github.com/ghostty-org/ghostty.git
@@ -92,10 +92,10 @@ VERSION_FONTS_REPO=https://github.com/ryanoasis/nerd-fonts
 VERSION_GH_REPO=https://github.com/cli/cli
 
 # CONFIG :: ghostty iTerm2 theme overrides -------------------------------------
-GHOSTTY_ITERM_RO='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz'
-GHOSTTY_ITERM_ROH='N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y' # pragma: allowlist secret
-GHOSTTY_ITERM_RN='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz'
-GHOSTTY_ITERM_RNH='N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN' # pragma: allowlist secret
+# GHOSTTY_ITERM_RO='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251002-142451-4a5043e/ghostty-themes.tgz'
+# GHOSTTY_ITERM_ROH='N-V-__8AALIsAwDyo88G5mGJGN2lSVmmFMx4YePfUvp_2o3Y' # pragma: allowlist secret
+# GHOSTTY_ITERM_RN='https://github.com/mbadolato/iTerm2-Color-Schemes/releases/download/release-20251110-150531-d5f3d53/ghostty-themes.tgz'
+# GHOSTTY_ITERM_RNH='N-V-__8AAPZCAwDJ0OsIn2nbr3FMvBw68oiv-hC2pFuY1eLN' # pragma: allowlist secret
 
 # CONFIG :: paths --------------------------------------------------------------
 LN_VM_BIN="${LN_VM_BIN:-"$USER_LOCAL_PREFIX_BIN/vm"}"
@@ -226,6 +226,7 @@ run_update_check() {
   check_for_newer_tag "$VERSION_OPENLOGI_REPO" "$VERSION_OPENLOGI" "" "releases"
   check_for_newer_tag "$VERSION_INPUT_LINUX_REPO" "$VERSION_INPUT_LINUX" "Community" "releases"
   check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
+  check_for_newer_zig "$VERSION_ZIG_V"
 }
 
 # ******************************************************************************
