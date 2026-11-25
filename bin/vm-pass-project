@@ -1,0 +1,856 @@
+#!/usr/bin/env bash
+PATH=/usr/bin:/usr/local/bin:/bin:/usr/sbin:/sbin
+set -euo pipefail
+
+# *** Global Variables ***
+UNIT_PREFIX='vm-pass-project'
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/vm-pass-project"
+SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
+
+COMMAND=''
+PROJECT_DIR=''
+STORE_DIR=''
+MODE='docker'
+MODE_EXPLICIT='no'
+CALENDAR=''
+UNIT_NAME=''
+REMOVE_ALL='no'
+ASSUME_YES='no'
+FORCE='no'
+DRY_RUN='no'
+PRUNE_STALE='no'
+NO_DEFAULT_EXCLUDES='no'
+MAX_SIZE='5K'
+MAX_SIZE_EXPLICIT='no'
+MAX_SIZE_BYTES=''
+
+USER_EXCLUDES=()
+IGNORE_FILE=''
+IGNORE_PATTERNS=()
+MANIFEST_FILE=''
+declare -A OLD_MANIFEST=()
+declare -A NEW_MANIFEST=()
+
+ALWAYS_PRUNE_NAMES=(.git .hg .svn .jj .bzr CVS .password-store .gitempty .gitignore)
+DEFAULT_PRUNE_NAMES=(
+  node_modules vendor .venv venv .tox .nox dist build target out
+  .next .nuxt .cache .gradle .terraform .parcel-cache .turbo .pnpm-store
+  bower_components Pods DerivedData __pycache__ .mypy_cache .pytest_cache
+  .ruff_cache .idea
+)
+ALWAYS_EXCLUDE_BASENAMES=(.pass-import-ignore)
+DEFAULT_EXCLUDE_PATTERNS=('.DS_Store' 'Thumbs.db' '*.swp' '*.swo' '*~')
+
+
+# *** Utility Functions ***
+exit_with_error() {
+  echo "vm-pass-project: ERROR: $1" >&2
+  exit 1
+}
+
+require_cmds() {
+  local cmd
+  for cmd in "$@"; do
+    command -v "$cmd" >/dev/null 2>&1 || exit_with_error "Missing dependency '$cmd'."
+  done
+}
+
+resolve_project() {
+  local candidate="$PROJECT_DIR"
+  if [[ -z "$candidate" ]]; then
+    candidate=$(find_store_root "$PWD" || true)
+    if [[ -z "$candidate" ]] && command -v git >/dev/null 2>&1; then
+      candidate=$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null || true)
+    fi
+    candidate="${candidate:-$PWD}"
+  fi
+  [[ -d "$candidate" ]] || exit_with_error "Project directory '$candidate' does not exist."
+  PROJECT_DIR=$(cd -- "$candidate" && pwd -P) || exit_with_error "Cannot resolve '$candidate'."
+}
+
+# Print the nearest ancestor of $1 that contains a project-local pass store.
+find_store_root() {
+  local dir="$1"
+  while true; do
+    if [[ -d "$dir/.password-store" ]]; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+    [[ "$dir" == '/' ]] && return 1
+    dir=$(dirname -- "$dir")
+  done
+}
+
+resolve_store() {
+  if [[ -n "$STORE_DIR" ]]; then
+    [[ -d "$STORE_DIR" ]] || exit_with_error "Pass store '$STORE_DIR' does not exist."
+    STORE_DIR=$(cd -- "$STORE_DIR" && pwd -P)
+  elif [[ -n "${PASSWORD_STORE_DIR:-}" ]]; then
+    [[ -d "$PASSWORD_STORE_DIR" ]] || exit_with_error "PASSWORD_STORE_DIR '$PASSWORD_STORE_DIR' does not exist."
+    STORE_DIR=$(cd -- "$PASSWORD_STORE_DIR" && pwd -P)
+  else
+    STORE_DIR="$PROJECT_DIR/.password-store"
+  fi
+
+  [[ -d "$STORE_DIR" ]] || exit_with_error "Pass store '$STORE_DIR' does not exist. Run 'vm_pass_setup' in '$PROJECT_DIR' first."
+  [[ -f "$STORE_DIR/.gpg-id" ]] || exit_with_error "Pass store '$STORE_DIR' is not initialized (missing .gpg-id). Run 'vm_pass_setup' in '$PROJECT_DIR' first."
+  export PASSWORD_STORE_DIR="$STORE_DIR"
+}
+
+validate_calendar() {
+  local expression="$1"
+  if command -v systemd-analyze >/dev/null 2>&1; then
+    systemd-analyze calendar "$expression" >/dev/null 2>&1 || {
+      echo "vm-pass-project: ERROR: Invalid OnCalendar expression '$expression'." >&2
+      return 1
+    }
+  fi
+}
+
+# Escape a value for a unit-file setting such as WorkingDirectory= or
+# ExecStart=. systemd does not strip quotes from WorkingDirectory=, so spaces
+# must use the C-style \x20 escape instead.
+systemd_escape_path() {
+  local value="$1"
+  value="${value//%/%%}"
+  value="${value//\\/\\\\}"
+  value="${value// /\\x20}"
+  value="${value//$'\t'/\\x09}"
+  value="${value//$'\n'/\\x0a}"
+  value="${value//\"/\\x22}"
+  value="${value//\'/\\x27}"
+  value="${value//\$/\\x24}"
+  printf '%s\n' "$value"
+}
+
+systemd_unescape_path() {
+  local value="$1"
+  value="${value//%%/%}"
+  printf '%b\n' "$value"
+}
+
+parse_size() {
+  local value="$1"
+  local number unit
+  if [[ ! "$value" =~ ^([0-9]+)([KkMmGg]?[Bb]?)$ ]]; then
+    exit_with_error "Invalid size '$value' (use bytes, K, M, or G; 0 disables the limit)."
+  fi
+  number="${BASH_REMATCH[1]}"
+  unit="${BASH_REMATCH[2]^^}"
+  case "$unit" in
+    '' | B) ;;
+    K | KB) number=$((number * 1024)) ;;
+    M | MB) number=$((number * 1024 * 1024)) ;;
+    G | GB) number=$((number * 1024 * 1024 * 1024)) ;;
+  esac
+  MAX_SIZE_BYTES="$number"
+}
+
+init_manifest() {
+  local key
+  key=$(printf '%s\n%s\n%s\n' "$PROJECT_DIR" "$STORE_DIR" "$MODE" | sha256sum | cut -d ' ' -f1)
+  MANIFEST_FILE="$STATE_DIR/${key}.manifest"
+  IGNORE_FILE="$PROJECT_DIR/.pass-import-ignore"
+  IGNORE_PATTERNS=()
+
+  [[ -f "$IGNORE_FILE" ]] || return 0
+  local pattern
+  while IFS= read -r pattern; do
+    pattern="${pattern%$'\r'}"
+    [[ -z "$pattern" || "$pattern" == \#* ]] && continue
+    IGNORE_PATTERNS+=("${pattern#./}")
+  done <"$IGNORE_FILE"
+}
+
+manifest_load() {
+  OLD_MANIFEST=()
+  NEW_MANIFEST=()
+  [[ -f "$MANIFEST_FILE" ]] || return 0
+
+  local hash name
+  while IFS=$'\t' read -r hash name; do
+    [[ -n "$hash" && -n "$name" ]] || continue
+    OLD_MANIFEST["$name"]="$hash"
+  done <"$MANIFEST_FILE"
+}
+
+manifest_write() {
+  local tmp name
+  mkdir -p "$STATE_DIR" || return 1
+  tmp=$(mktemp "$STATE_DIR/.manifest.XXXXXX") || return 1
+  {
+    for name in "${!NEW_MANIFEST[@]}"; do
+      printf '%s\t%s\n' "${NEW_MANIFEST[$name]}" "$name"
+    done | LC_ALL=C sort -t $'\t' -k2
+  } >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
+  mv -f "$tmp" "$MANIFEST_FILE" || {
+    rm -f "$tmp"
+    return 1
+  }
+}
+
+# Match a shell glob against a project-relative path. Patterns without a slash
+# also match a path component anywhere in the tree.
+pattern_matches() {
+  local relative="$1"
+  local pattern="$2"
+  local base="${relative##*/}"
+
+  # shellcheck disable=SC2053
+  [[ "$relative" == $pattern ]] && return 0
+  # shellcheck disable=SC2053
+  [[ "$relative" == $pattern/* ]] && return 0
+  # shellcheck disable=SC2053
+  [[ "$base" == $pattern ]] && return 0
+  if [[ "$pattern" != */* ]]; then
+    # shellcheck disable=SC2053
+    [[ "/$relative/" == *"/$pattern/"* ]] && return 0
+  fi
+  return 1
+}
+
+# Select files for the active import mode.
+file_matches_mode() {
+  local relative="$1"
+  local base="${relative##*/}"
+
+  case "$MODE" in
+    docker)
+      [[ "$base" == '.env' ]] && return 0
+      [[ "$relative" == 'secrets/'*.txt || "$relative" == */secrets/*.txt ]] && return 0
+      return 1
+      ;;
+    mirror) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+path_is_excluded() {
+  local relative="$1"
+  local base="${relative##*/}"
+  local pattern
+
+  for pattern in "${ALWAYS_EXCLUDE_BASENAMES[@]}"; do
+    [[ "$base" == "$pattern" ]] && return 0
+  done
+
+  if [[ "$NO_DEFAULT_EXCLUDES" != 'yes' ]]; then
+    for pattern in "${DEFAULT_EXCLUDE_PATTERNS[@]}"; do
+      # shellcheck disable=SC2053
+      [[ "$base" == $pattern ]] && return 0
+    done
+  fi
+
+  for pattern in "${USER_EXCLUDES[@]}"; do
+    pattern_matches "$relative" "$pattern" && return 0
+  done
+
+  for pattern in "${IGNORE_PATTERNS[@]}"; do
+    pattern_matches "$relative" "$pattern" && return 0
+  done
+
+  return 1
+}
+
+# Print all candidate files as NUL-separated records.
+list_files() {
+  local -a prune_names=("${ALWAYS_PRUNE_NAMES[@]}")
+  local -a find_expr=()
+  local name
+
+  if [[ "$NO_DEFAULT_EXCLUDES" != 'yes' ]]; then
+    prune_names+=("${DEFAULT_PRUNE_NAMES[@]}")
+  fi
+
+  for name in "${prune_names[@]}"; do
+    [[ ${#find_expr[@]} -gt 0 ]] && find_expr+=(-o)
+    find_expr+=(-name "$name")
+  done
+
+  if [[ "$STORE_DIR" == "$PROJECT_DIR"/* ]]; then
+    [[ ${#find_expr[@]} -gt 0 ]] && find_expr+=(-o)
+    find_expr+=(-path "$STORE_DIR")
+  fi
+
+  find "$PROJECT_DIR" -mindepth 1 \( "${find_expr[@]}" \) -prune -o -type f -print0
+}
+
+file_size() {
+  stat -c '%s' -- "$1" 2>/dev/null || echo 0
+}
+
+sha256_file() {
+  sha256sum -- "$1" 2>/dev/null | cut -d ' ' -f1
+}
+
+# Print unit base names (without .service/.timer) whose WorkingDirectory
+# matches the given project path.
+find_project_units() {
+  local project="$1"
+  local escaped service
+  escaped=$(systemd_escape_path "$project")
+  shopt -s nullglob
+  for service in "$UNIT_DIR/${UNIT_PREFIX}-"*.service; do
+    if grep -qxF "WorkingDirectory=${escaped}" "$service" 2>/dev/null ||
+      grep -qxF "WorkingDirectory=${project}" "$service" 2>/dev/null ||
+      grep -qxF "WorkingDirectory=\"${project}\"" "$service" 2>/dev/null; then
+      printf '%s\n' "${service%.service}"
+    fi
+  done
+  shopt -u nullglob
+}
+
+
+# *** Import Functions ***
+import_file() {
+  local file="$1"
+  local relative="$2"
+  local pass_name="$3"
+
+  echo "vm-pass-project: storing '$relative'..."
+  if ! pass insert -f -m -- "$pass_name" <"$file" >/dev/null 2>&1; then
+    echo "vm-pass-project: WARN: failed to import '$relative'." >&2
+    return 1
+  fi
+  echo "vm-pass-project:   imported '$relative'."
+}
+
+cmd_import() {
+  require_cmds find sort sha256sum stat
+  [[ "$DRY_RUN" == 'yes' ]] || require_cmds pass gpg
+  resolve_project
+  resolve_store
+  init_manifest
+  manifest_load
+
+  local file relative pass_name pass_file hash old_hash size source
+  local imported=0 unchanged=0 skipped=0 excluded=0 failures=0 pruned=0
+
+  echo "vm-pass-project: importing mode '$MODE' from '$PROJECT_DIR' into '$STORE_DIR'..."
+  if [[ "$DRY_RUN" == 'yes' ]]; then
+    echo "vm-pass-project: dry run; nothing will be written."
+  fi
+
+  while IFS= read -r -d '' file; do
+    relative="${file#"$PROJECT_DIR"/}"
+    relative="${relative#./}"
+
+    if ! file_matches_mode "$relative"; then
+      continue
+    fi
+
+    if path_is_excluded "$relative"; then
+      excluded=$((excluded + 1))
+      continue
+    fi
+
+    pass_name="$relative"
+    old_hash="${OLD_MANIFEST[$pass_name]:-}"
+
+    if [[ "$MAX_SIZE_BYTES" -gt 0 ]]; then
+      size=$(file_size "$file")
+      if [[ "$size" -gt "$MAX_SIZE_BYTES" ]]; then
+        echo "vm-pass-project: skipping '$relative' (${size} bytes > limit $MAX_SIZE)." >&2
+        skipped=$((skipped + 1))
+        [[ -n "$old_hash" ]] && NEW_MANIFEST["$pass_name"]="$old_hash"
+        continue
+      fi
+    fi
+
+    hash=$(sha256_file "$file") || hash=''
+    if [[ -z "$hash" ]]; then
+      echo "vm-pass-project: WARN: cannot hash '$relative'." >&2
+      failures=$((failures + 1))
+      [[ -n "$old_hash" ]] && NEW_MANIFEST["$pass_name"]="$old_hash"
+      continue
+    fi
+
+    pass_file="$STORE_DIR/$pass_name.gpg"
+    if [[ "$FORCE" != 'yes' && "$hash" == "$old_hash" && -f "$pass_file" ]]; then
+      NEW_MANIFEST["$pass_name"]="$hash"
+      unchanged=$((unchanged + 1))
+      continue
+    fi
+
+    if [[ "$DRY_RUN" == 'yes' ]]; then
+      echo "vm-pass-project: would import '$relative'."
+      NEW_MANIFEST["$pass_name"]="$hash"
+      imported=$((imported + 1))
+      continue
+    fi
+
+    if import_file "$file" "$relative" "$pass_name"; then
+      NEW_MANIFEST["$pass_name"]="$hash"
+      imported=$((imported + 1))
+    else
+      failures=$((failures + 1))
+      [[ -n "$old_hash" ]] && NEW_MANIFEST["$pass_name"]="$old_hash"
+    fi
+  done < <(list_files | sort -z)
+
+  # Keep entries for files that are unavailable now (for a later prune), or
+  # remove them when --prune-stale is enabled and the source is really gone.
+  for pass_name in "${!OLD_MANIFEST[@]}"; do
+    [[ -n "${NEW_MANIFEST[$pass_name]:-}" ]] && continue
+    source="$PROJECT_DIR/$pass_name"
+
+    if [[ "$PRUNE_STALE" == 'yes' && ! -e "$source" ]]; then
+      if [[ "$DRY_RUN" == 'yes' ]]; then
+        echo "vm-pass-project: would prune stale '$pass_name'."
+        pruned=$((pruned + 1))
+      elif pass rm -f -- "$pass_name" >/dev/null 2>&1; then
+        echo "vm-pass-project: pruned stale '$pass_name'."
+        pruned=$((pruned + 1))
+      else
+        echo "vm-pass-project: WARN: failed to prune '$pass_name'." >&2
+        failures=$((failures + 1))
+        NEW_MANIFEST["$pass_name"]="${OLD_MANIFEST[$pass_name]}"
+      fi
+    else
+      NEW_MANIFEST["$pass_name"]="${OLD_MANIFEST[$pass_name]}"
+    fi
+  done
+
+  if [[ "$DRY_RUN" != 'yes' ]]; then
+    if ! manifest_write; then
+      echo "vm-pass-project: WARN: failed to write manifest '$MANIFEST_FILE'." >&2
+      failures=$((failures + 1))
+    fi
+  fi
+
+  if [[ "$DRY_RUN" == 'yes' ]]; then
+    echo "vm-pass-project: summary: would-import=$imported unchanged=$unchanged skipped=$skipped excluded=$excluded would-prune=$pruned failed=$failures"
+  else
+    echo "vm-pass-project: summary: imported=$imported unchanged=$unchanged skipped=$skipped excluded=$excluded pruned=$pruned failed=$failures"
+  fi
+
+  if [[ "$failures" -gt 0 ]]; then
+    echo "vm-pass-project: import finished with $failures failure(s) into '$STORE_DIR'." >&2
+    return 1
+  fi
+  echo "vm-pass-project: import complete into '$STORE_DIR'."
+}
+
+
+# *** Schedule Functions ***
+cmd_schedule() {
+  local slug hash unit_base timer service
+  local calendar_label confirm
+  local escaped_project escaped_script
+  local -a calendar_labels=(hourly 'every 6 hours' daily weekly custom)
+  local -a import_args=()
+  local -a escaped_args=()
+  local arg pattern
+
+  require_cmds systemctl
+  if [[ "$MODE_EXPLICIT" != 'yes' || -z "$CALENDAR" || "$ASSUME_YES" != 'yes' ]]; then
+    require_cmds fzf
+  fi
+  systemctl --user show-environment >/dev/null 2>&1 || exit_with_error "systemd user manager is not available. On headless hosts, enable lingering with 'sudo loginctl enable-linger \"$USER\"'."
+
+  resolve_project
+  resolve_store
+
+  if [[ "$MODE_EXPLICIT" != 'yes' ]]; then
+    MODE=$(printf 'docker\nmirror\n' |
+      fzf --height=~40% --prompt='Files to import: ' \
+        --header='docker = .env + secrets/*.txt | mirror = every file (default excludes)') || {
+      echo 'Cancelled.'
+      return 0
+    }
+  fi
+
+  if [[ -z "$CALENDAR" ]]; then
+    calendar_label=$(printf '%s\n' "${calendar_labels[@]}" |
+      fzf --height=~40% --prompt='Schedule: ') || {
+      echo 'Cancelled.'
+      return 0
+    }
+    case "$calendar_label" in
+      hourly) CALENDAR='hourly' ;;
+      'every 6 hours') CALENDAR='*-*-* 00/6:15:00' ;;
+      daily) CALENDAR='daily' ;;
+      weekly) CALENDAR='weekly' ;;
+      custom)
+        printf 'OnCalendar expression: '
+        read -r CALENDAR || CALENDAR=''
+        [[ -n "$CALENDAR" ]] || exit_with_error 'No OnCalendar expression given.'
+        validate_calendar "$CALENDAR" || exit 1
+        ;;
+    esac
+  fi
+
+  echo "Project : $PROJECT_DIR"
+  echo "Store   : $STORE_DIR"
+  echo "Mode    : $MODE"
+  echo "Schedule: $CALENDAR"
+  echo "Max size: $MAX_SIZE"
+  if [[ ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+    echo "Excludes: ${USER_EXCLUDES[*]}"
+  fi
+  [[ "$NO_DEFAULT_EXCLUDES" == 'yes' ]] && echo "Default excludes: disabled"
+  [[ "$PRUNE_STALE" == 'yes' ]] && echo "Prune stale: yes"
+  if [[ "$MODE" == 'mirror' ]]; then
+    echo "WARNING: mode 'mirror' imports every file under the project except excluded paths."
+  fi
+
+  if [[ "$ASSUME_YES" != 'yes' ]]; then
+    confirm=$(printf 'yes\nno\n' | fzf --height=~40% --prompt='Create or update this timer? ') || {
+      echo 'Cancelled.'
+      return 0
+    }
+    [[ "$confirm" == 'yes' ]] || return 0
+  fi
+
+  slug=$(basename -- "$PROJECT_DIR" | tr '[:upper:]' '[:lower:]' |
+    tr -c '[:alnum:]_-' '-' | sed -e 's/-\{2,\}/-/g' -e 's/^-//' -e 's/-$//')
+  [[ -n "$slug" ]] || slug='project'
+  hash=$(printf '%s' "$PROJECT_DIR" | sha256sum | cut -c1-8)
+  unit_base="${UNIT_PREFIX}-${slug}-${hash}"
+  timer="${unit_base}.timer"
+  service="${unit_base}.service"
+
+  escaped_project=$(systemd_escape_path "$PROJECT_DIR")
+  escaped_script=$(systemd_escape_path "$SCRIPT_PATH")
+
+  import_args=(import --mode "$MODE" --store "$STORE_DIR" --max-size "$MAX_SIZE")
+  [[ "$NO_DEFAULT_EXCLUDES" == 'yes' ]] && import_args+=(--no-default-excludes)
+  [[ "$PRUNE_STALE" == 'yes' ]] && import_args+=(--prune-stale)
+  for pattern in "${USER_EXCLUDES[@]}"; do
+    import_args+=(--exclude "$pattern")
+  done
+  import_args+=("$PROJECT_DIR")
+  for arg in "${import_args[@]}"; do
+    escaped_args+=("$(systemd_escape_path "$arg")")
+  done
+
+  mkdir -p "$UNIT_DIR"
+
+  cat >"$UNIT_DIR/$service" <<EOF
+[Unit]
+Description=Import project secrets into pass (${escaped_project})
+
+[Service]
+Type=oneshot
+WorkingDirectory=${escaped_project}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Nice=10
+IOSchedulingClass=idle
+ExecStart=${escaped_script} ${escaped_args[*]}
+EOF
+
+  cat >"$UNIT_DIR/$timer" <<EOF
+[Unit]
+Description=Periodic pass import for ${escaped_project}
+
+[Timer]
+OnCalendar=${CALENDAR}
+Persistent=true
+RandomizedDelaySec=5m
+Unit=${service}
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  systemctl --user daemon-reload || exit_with_error 'systemctl --user daemon-reload failed.'
+  systemctl --user enable "$timer" >/dev/null || exit_with_error "Failed to enable '$timer'."
+  systemctl --user restart "$timer" || exit_with_error "Failed to start '$timer'."
+
+  echo "Created or updated '$timer'."
+  systemctl --user list-timers --all --no-pager "$timer" 2>/dev/null || true
+}
+
+cmd_list() {
+  require_cmds systemctl
+
+  local service timer project mode calendar state
+  local found='no'
+
+  printf '%-50s %-8s %-22s %s\n' 'PROJECT' 'MODE' 'CALENDAR' 'STATE'
+  shopt -s nullglob
+  for service in "$UNIT_DIR/${UNIT_PREFIX}-"*.service; do
+    found='yes'
+    timer="${service%.service}.timer"
+    project=$(sed -n 's/^WorkingDirectory="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$service" | head -n1)
+    project=$(systemd_unescape_path "$project")
+    mode=$(sed -n 's/.*--mode \([^ ]*\).*/\1/p' "$service" | head -n1)
+    [[ "$mode" == 'all' ]] && mode='mirror'
+    calendar=$(sed -n 's/^OnCalendar=//p' "$timer" 2>/dev/null | head -n1)
+    state=$(systemctl --user is-active "$(basename -- "$timer")" 2>/dev/null || true)
+    printf '%-50s %-8s %-22s %s\n' "$project" "${mode:-?}" "${calendar:-?}" "${state:-inactive}"
+  done
+  shopt -u nullglob
+
+  if [[ "$found" == 'yes' ]]; then
+    echo
+    systemctl --user list-timers --all --no-pager "${UNIT_PREFIX}-*.timer" 2>/dev/null || true
+  else
+    echo 'No project pass timers configured.'
+  fi
+}
+
+cmd_remove() {
+  require_cmds systemctl
+
+  local timer unit_base confirm
+  local -a units=()
+
+  if [[ "$REMOVE_ALL" == 'yes' ]]; then
+    shopt -s nullglob
+    for timer in "$UNIT_DIR/${UNIT_PREFIX}-"*.timer; do
+      units+=("${timer%.timer}")
+    done
+    shopt -u nullglob
+    [[ ${#units[@]} -gt 0 ]] || {
+      echo 'No project pass timers configured.'
+      return 0
+    }
+  elif [[ -n "$UNIT_NAME" ]]; then
+    UNIT_NAME="${UNIT_NAME%.timer}"
+    UNIT_NAME="${UNIT_NAME%.service}"
+    [[ -f "$UNIT_DIR/${UNIT_NAME}.timer" ]] || exit_with_error "Timer '${UNIT_NAME}.timer' not found in '$UNIT_DIR'."
+    units=("$UNIT_DIR/${UNIT_NAME}")
+  else
+    resolve_project
+    mapfile -t units < <(find_project_units "$PROJECT_DIR")
+    [[ ${#units[@]} -gt 0 ]] || exit_with_error "No timer found for '$PROJECT_DIR'."
+  fi
+
+  if [[ "$ASSUME_YES" != 'yes' ]]; then
+    require_cmds fzf
+    confirm=$(printf 'yes\nno\n' | fzf --height=~40% --prompt="Remove ${#units[@]} timer(s)? ") || {
+      echo 'Cancelled.'
+      return 0
+    }
+    [[ "$confirm" == 'yes' ]] || return 0
+  fi
+
+  for unit_base in "${units[@]}"; do
+    unit_base=$(basename -- "$unit_base")
+    systemctl --user disable --now "${unit_base}.timer" >/dev/null 2>&1 || true
+    rm -f "$UNIT_DIR/${unit_base}.timer" "$UNIT_DIR/${unit_base}.service"
+    echo "Removed '${unit_base}.timer'."
+  done
+
+  systemctl --user daemon-reload || exit_with_error 'systemctl --user daemon-reload failed.'
+}
+
+cmd_run() {
+  require_cmds systemctl journalctl
+
+  local unit_base journal_pid rc
+  local -a units=()
+
+  resolve_project
+  mapfile -t units < <(find_project_units "$PROJECT_DIR")
+  [[ ${#units[@]} -gt 0 ]] || exit_with_error "No timer found for '$PROJECT_DIR'. Create one with 'vm-pass-project schedule'."
+
+  for unit_base in "${units[@]}"; do
+    unit_base=$(basename -- "$unit_base")
+    echo "vm-pass-project: running '${unit_base}.service' for '$PROJECT_DIR'..."
+    echo "vm-pass-project: following the journal; Ctrl+C stops watching, not the import."
+    journalctl --user -u "${unit_base}.service" -f -n 0 --no-pager &
+    journal_pid=$!
+
+    rc=0
+    systemctl --user start "${unit_base}.service" || rc=$?
+
+    kill "$journal_pid" 2>/dev/null || true
+    wait "$journal_pid" 2>/dev/null || true
+
+    if [[ "$rc" -ne 0 ]]; then
+      echo "vm-pass-project: ERROR: '${unit_base}.service' failed (status $rc). Recent log:" >&2
+      journalctl --user -u "${unit_base}.service" -n 20 --no-pager >&2 2>/dev/null || true
+      return 1
+    fi
+    echo "vm-pass-project: finished '${unit_base}.service'."
+  done
+}
+
+
+# *** Usage and Argument Parsing ***
+usage() {
+  cat <<'EOF'
+Usage: vm-pass-project <command> [options] [project-dir]
+
+Import project secrets into a pass store and schedule recurring imports with
+systemd user timers.
+
+Commands:
+  import      Import secrets once (used by the timer)
+  schedule    Create or update a timer for a project
+  list        List configured project timers
+  remove      Remove a project timer (or --unit / --all)
+  run         Run the project import now through systemd
+
+Modes:
+  docker      .env files and secrets/*.txt (default)
+  mirror      Every file except VCS, build, dependency, and cache paths
+              (alias: all, kept for existing units)
+
+Options:
+  --mode MODE           docker or mirror (alias: all)
+  --store DIR           Pass store (default: $PASSWORD_STORE_DIR or
+                        <project>/.password-store)
+  --calendar EXPR       OnCalendar expression for schedule (default: prompt)
+  --max-size SIZE       Skip files larger than SIZE (default: 10M, 0 disables)
+  --exclude PATTERN     Exclude a shell glob; repeatable
+  --no-default-excludes Keep build/dependency/cache directories in mirror mode
+  --prune-stale         Remove manifest entries whose source file is gone
+  --force               Re-import even when the manifest says unchanged
+  --dry-run             Show what would be imported without writing anything
+  --unit UNIT           Unit to remove (for remove)
+  --all                 Remove every project timer (for remove)
+  -y, --yes             Do not confirm schedule/remove
+  -h, --help            Show this help
+
+Per-project ignore file:
+  .pass-import-ignore in the project root, one shell glob per line.
+  Blank lines and lines starting with '#' are ignored. A pattern without a
+  slash also matches that name anywhere in the tree.
+
+Examples:
+  vm-pass-project schedule              # schedule the project containing cwd
+  vm-pass-project import --dry-run .    # preview a docker-mode import
+  vm-pass-project import --mode mirror --exclude '*.md' --max-size 5M .
+  vm-pass-project import --prune-stale --mode mirror .
+  vm-pass-project run                   # trigger the scheduled import now
+EOF
+}
+
+parse_args() {
+  [[ $# -gt 0 ]] || {
+    usage
+    exit 1
+  }
+
+  case "$1" in
+    import | schedule | list | remove | run)
+      COMMAND="$1"
+      shift
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *) exit_with_error "Unknown command '$1'. Run --help." ;;
+  esac
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      --mode)
+        [[ $# -ge 2 ]] || exit_with_error '--mode needs a value.'
+        MODE="$2"
+        MODE_EXPLICIT='yes'
+        shift 2
+        ;;
+      --store)
+        [[ $# -ge 2 ]] || exit_with_error '--store needs a value.'
+        STORE_DIR="$2"
+        shift 2
+        ;;
+      --calendar)
+        [[ $# -ge 2 ]] || exit_with_error '--calendar needs a value.'
+        CALENDAR="$2"
+        shift 2
+        ;;
+      --max-size)
+        [[ $# -ge 2 ]] || exit_with_error '--max-size needs a value.'
+        MAX_SIZE="$2"
+        MAX_SIZE_EXPLICIT='yes'
+        shift 2
+        ;;
+      --exclude)
+        [[ $# -ge 2 ]] || exit_with_error '--exclude needs a value.'
+        USER_EXCLUDES+=("$2")
+        shift 2
+        ;;
+      --unit)
+        [[ $# -ge 2 ]] || exit_with_error '--unit needs a value.'
+        UNIT_NAME="$2"
+        shift 2
+        ;;
+      --no-default-excludes)
+        NO_DEFAULT_EXCLUDES='yes'
+        shift
+        ;;
+      --prune-stale)
+        PRUNE_STALE='yes'
+        shift
+        ;;
+      --force)
+        FORCE='yes'
+        shift
+        ;;
+      --dry-run)
+        DRY_RUN='yes'
+        shift
+        ;;
+      --all)
+        REMOVE_ALL='yes'
+        shift
+        ;;
+      -y | --yes)
+        ASSUME_YES='yes'
+        shift
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        exit_with_error "Unknown option '$1'. Run --help."
+        ;;
+      *)
+        [[ -z "$PROJECT_DIR" ]] || exit_with_error 'Only one project directory is allowed.'
+        PROJECT_DIR="$1"
+        shift
+        ;;
+    esac
+  done
+
+  [[ $# -eq 0 ]] || exit_with_error "Unexpected argument '$1'."
+
+  case "$MODE" in
+    all) MODE='mirror' ;;
+    docker | mirror) ;;
+    *) exit_with_error "Invalid mode '$MODE' (use docker or mirror; 'all' is an alias)." ;;
+  esac
+
+  parse_size "$MAX_SIZE"
+
+  if [[ "$COMMAND" == 'schedule' ]]; then
+    [[ "$FORCE" != 'yes' ]] || exit_with_error '--force is not valid for schedule.'
+    [[ "$DRY_RUN" != 'yes' ]] || exit_with_error '--dry-run is not valid for schedule.'
+  elif [[ "$COMMAND" != 'import' ]]; then
+    if [[ "$FORCE" == 'yes' || "$DRY_RUN" == 'yes' || "$PRUNE_STALE" == 'yes' ||
+      "$NO_DEFAULT_EXCLUDES" == 'yes' || "$MAX_SIZE_EXPLICIT" == 'yes' ||
+      ${#USER_EXCLUDES[@]} -gt 0 ]]; then
+      exit_with_error "Import options are only valid for 'import' and 'schedule'."
+    fi
+  fi
+}
+
+
+# *** Entrypoint ***
+main() {
+  case "$COMMAND" in
+    import) cmd_import ;;
+    schedule) cmd_schedule ;;
+    list) cmd_list ;;
+    remove) cmd_remove ;;
+    run) cmd_run ;;
+  esac
+}
+
+parse_args "$@"
+main

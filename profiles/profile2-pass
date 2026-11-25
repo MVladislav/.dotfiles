@@ -7,7 +7,8 @@ if check_command_q pass; then
 
   vm_pass_setup() {
     # apt install gnupg pass
-    local use_current_folder gpg_id_file use_gpg all_keys existing_gpg_ids combined_keys selected_key use_uid
+    local use_current_folder gpg_id_file use_gpg all_keys existing_gpg_ids combined_keys selected_key key_id existing_uid
+    local -a use_uids
 
     use_current_folder=$(echo -e "yes\nno" | fzf --height=~40% --prompt="Initialize pass for current folder? ")
     if [[ "$use_current_folder" == "yes" ]]; then
@@ -38,7 +39,6 @@ if check_command_q pass; then
     if [[ -f "$gpg_id_file" ]]; then
       while IFS= read -r key_id; do
         [[ -z "$key_id" ]] && continue
-        local existing_uid
         existing_uid=$(gpg --list-keys --with-colons "$key_id" 2>/dev/null |
           awk -F: '
             $1 == "pub" { key_id = $5 }
@@ -52,7 +52,7 @@ if check_command_q pass; then
       done < "$gpg_id_file"
     fi
 
-    combined_keys=$(echo -e "$existing_gpg_ids\n$all_keys" | awk '!seen[$0]++ && NF')
+    combined_keys=$(printf '%s\n%s\n' "$existing_gpg_ids" "$all_keys" | awk '!seen[$0]++ && NF')
     selected_key=$(echo "$combined_keys" |
       fzf --height=~40% --multi --cycle --border \
       --prompt="Select GPG keys for pass: " --footer="Available GPG keys (multi select with 'Tab')")
@@ -62,16 +62,21 @@ if check_command_q pass; then
       return 1
     fi
 
-    use_uid=$(echo "$selected_key" | awk '{print $1}')
-    pass init "$use_uid"
-    pass git init >/dev/null 2>&1
-    pass git config --local core.hooksPath /dev/null 1>/dev/null
+    use_uids=()
+    while IFS= read -r key_id; do
+      [[ -z "$key_id" ]] && continue
+      use_uids+=("$key_id")
+    done < <(printf '%s\n' "$selected_key" | awk '{print $1}')
+
+    pass init "${use_uids[@]}" || { echo "Error: 'pass init' failed."; return 1; }
+    pass git init >/dev/null 2>&1 || { echo "Error: 'pass git init' failed."; return 1; }
+    pass git config --local core.hooksPath /dev/null 1>/dev/null || { echo "Error: 'pass git config' failed."; return 1; }
     echo "Pass repository initialized at: '${PASSWORD_STORE_DIR:-$HOME/.password-store}'"
   }
 
   vm_pass_import_file() {
     if [ "$#" -ne 1 ]; then
-      echo "Usage: $0 <file to upload>"
+      echo "Usage: vm_pass_import_file <file to upload>"
       return 1
     fi
 
@@ -80,17 +85,42 @@ if check_command_q pass; then
       echo "Error: File '$file_path' does not exist."
       return 1
     fi
+    if [[ "$file_path" = /* ]]; then
+      echo "Error: File '$file_path' must be a relative path."
+      return 1
+    fi
 
     local dirname new_basename pass_name
-    dirname=$(dirname "$file_path")
-    new_basename=$(basename "$file_path")
+    dirname=$(dirname -- "$file_path")
+    new_basename=$(basename -- "$file_path")
     # Remove leading dot from filename (e.g., .env -> env)
     # new_basename=${new_basename#.}
     pass_name="$dirname/$new_basename"
+    # Keep pass names clean and relative (./foo/.env -> foo/.env). The GPG file
+    # is the same, so existing entries keep resolving.
+    pass_name="${pass_name#./}"
 
-    pass insert -m "$pass_name" < "$file_path" >/dev/null 2>&1 || { echo "Error: Failed to import file '$file_path' to pass."; return 1; }
+    pass insert -f -m -- "$pass_name" < "$file_path" >/dev/null 2>&1 || { echo "Error: Failed to import file '$file_path' to pass."; return 1; }
     echo "File '$file_path' imported to pass as '$pass_name'."
   }
+
+  if check_command_q vm-pass-project; then
+    vm_pass_schedule() {
+      vm-pass-project schedule "$@"
+    }
+
+    vm_pass_schedule_list() {
+      vm-pass-project list "$@"
+    }
+
+    vm_pass_schedule_run() {
+      vm-pass-project run "$@"
+    }
+
+    vm_pass_schedule_remove() {
+      vm-pass-project remove "$@"
+    }
+  fi
 
   vm_pass_export_file() {
     local pass_name
@@ -122,13 +152,7 @@ if check_command_q pass; then
   }
 
   vm_pass_import_secrets_recursive() {
-    local search_path="${1:-.}"
-    find "$search_path" \
-      -type d \( -name ".password-store" -o -name ".git" \) -prune \
-      -o -type f -print |
-    while read -r file; do
-      vm_pass_import_file "$file"
-    done
+    vm-pass-project import --mode mirror "${1:-.}"
   }
 
   if check_command_q git && check_command_q scp-r; then
@@ -148,24 +172,17 @@ if check_command_q pass; then
 
   if check_command_q docker; then
     vm_pass_import_docker_secrets() {
-      # Find all .env files
-      find . -type f -name ".env" | while read -r file; do
-        vm_pass_import_file "$file"
-      done
-
-      # Find all .txt files inside any 'secrets' folder
-      find . -type d -name "secrets" -exec find {} -type f -name "*.txt" \; | while read -r file; do
-        vm_pass_import_file "$file"
-      done
+      vm-pass-project import --mode docker "${1:-.}"
     }
 
     vm_pass_export_docker_as_secret() {
       if [ "$#" -lt 1 ]; then
-        echo "Usage: $0 <docker-secret-name>"
+        echo "Usage: vm_pass_export_docker_as_secret <docker-secret-name>"
         return 1
       fi
       local pass_name
       local docker_secret="$1"
+      local prefix="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
 
       pass_name=$(
         find -L "$prefix" -name "*.gpg" -type f |
@@ -224,7 +241,7 @@ if check_command_q pass; then
       echo "GPG public-key import skipped. No public-key file selected."
     fi
 
-    private_file=$(find . -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select private-key file: ")
+    private_file=$(find "$path_to_search" -maxdepth 1 -name "*.key" -type f | fzf --height=~40% --prompt="Select private-key file: ")
     if [[ -n "$private_file" ]]; then
       gpg --pinentry-mode loopback --import "$private_file" >/dev/null 2>&1 || { echo "Error: Failed to import private-key."; return 1; }
       echo "GPG private-key imported successfully."
