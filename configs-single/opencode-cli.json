@@ -1,0 +1,13 @@
+{
+  "plugins": ["./herdr-opencode"],
+  "theme": {
+    "mode": "system",
+    "name": "catppuccin-macchiato"
+  },
+  "animations": true,
+  "session": {
+    "sidebar": "auto",
+    "scrollbar": false,
+    "markdown": "rendered"
+  }
+}

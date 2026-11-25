@@ -19,10 +19,12 @@
 !setup
 !setup-install
 !setup-config
+!setup-upc
 !setup-sec
 !setup-ai
 !setup-ai-install
 !setup-ai-config
+!setup-ai-upc
 
 !git/
 git/**
@@ -133,6 +135,7 @@ configs-single/**
 !configs-single/llamacpp.service
 !configs-single/70-worklouder.rules
 !configs-single/openlogi.toml
+!configs-single/opencode-cli.json
 
 !ai/
 ai/**
@@ -140,6 +143,8 @@ ai/**
 !ai/setup-ai-llamacpp.conf
 !ai/LLAMACPP.md
 !ai/GITHUB.md
+!ai/REA.md
+!ai/WEB-RESEARCH.md
 !ai/SKILL-bash-script-style.md
 !ai/SKILL-docker-stack-ops.md
 !ai/SKILL-git-commit.md

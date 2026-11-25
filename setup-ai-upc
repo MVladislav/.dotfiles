@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# CONFIG/UPDATE :: sourced by setup-ai
+# Update-check functions for the `-upc` flag. Functions only - this file is
+# never executed on its own.
+
+# ********************************************************************************
+
+# UPDATE :: check newer tags ---------------------------------------------------
+run_update_check() {
+  print_section "🔄 UPDATE :: checking versions"
+  print_notes "   🌐 upstream"
+  # opencode v2 is tagged but not released, so read tags or the check always
+  # offers a v1 downgrade.
+  check_for_newer_tag "$VERSION_OPENCODE_REPO" "$VERSION_OPENCODE" "^v[0-9]" "tags"
+  check_for_newer_tag "$VERSION_HERDR_REPO" "$VERSION_HERDR" "" "releases"
+  check_for_newer_tag "$VERSION_GH_REPO" "$VERSION_GH" "^v[0-9]" "releases"
+  check_for_newer_tag "$VERSION_FILEBROWSER_REPO" "$VERSION_FILEBROWSER" "stable$" "releases"
+  check_for_newer_tag "$VERSION_LLAMACPP_REPO" "$VERSION_LLAMACPP" '^v[0-9]+\.[0-9]+\.[0-9]+$'
+  check_for_newer_npm "rea-agents" "$OPENCODE_CONFIG_MCP_REA_VERSION"
+
+  print_notes ""
+  print_notes "   🧩 REA"
+  report_rea_state
+  report_installed_versions
+}
+
+# UPDATE :: installed vs pinned ------------------------------------------------
+# Answers "is the installed copy older than the pin, so rerunning the -i flag
+# would update it?". Version output differs per tool, so each line names its
+# own command or precomputed version string.
+report_installed_versions() {
+  print_notes ""
+  print_notes "   📦 installed"
+  report_pinned_version opencode "$VERSION_OPENCODE" "-ioc" "$USER_LOCAL_PREFIX_BIN/opencode" --version
+  report_pinned_version herdr "$VERSION_HERDR" "-ihrd" "$USER_LOCAL_PREFIX_BIN/herdr" --version
+  report_version_state filebrowser "$VERSION_FILEBROWSER" "-ifb" "$(filebrowser_version)"
+  report_version_state llama.cpp "$VERSION_LLAMACPP" "-ill" "$(llamacpp_binary_version)"
+  report_pinned_version gh "$VERSION_GH" "-igh" "$USER_LOCAL_PREFIX_BIN/gh" --version
+}
+
+# UPDATE :: REA installed state ------------------------------------------------
+report_rea_state() {
+  local cli_version skill_version
+  cli_version=$(installed_version "$USER_LOCAL_PREFIX_BIN/rea" --version)
+  skill_version=$(sed -n 's/^  version: "\([^"]*\)"$/\1/p' \
+    "$LN_OPENCODE/skills/reverse-engineer-anything/SKILL.md" 2>/dev/null | head -n1)
+  print_notes "   💡 CLI ${cli_version}, skill metadata ${skill_version:-not installed} (pin ${OPENCODE_CONFIG_MCP_REA_VERSION})"
+  check_rea_jadx
+}
+
+# UPDATE :: REA JADX bridge pin ------------------------------------------------
+# REA pins a specific jadx-headless-mcp release, so checking upstream "latest"
+# would suggest 1.x, which REA does not use. Verify the local bridge instead.
+check_rea_jadx() {
+  local version="${OPENCODE_CONFIG_MCP_REA_JADX_VERSION:?JADX version is not configured}"
+  local expected="${OPENCODE_CONFIG_MCP_REA_JADX_SHA256:?JADX checksum is not configured}"
+  local jar actual
+
+  require_cmds sha256sum || return 1
+  jar=$(rea_jadx_jar_path)
+  if [[ ! -f "$jar" ]]; then
+    print_notes "   ○ JADX :: pinned ${version} bridge not installed (run 'setup-ai -irea')"
+    return 0
+  fi
+
+  actual=$(sha256sum "$jar" 2>/dev/null | awk '{print $1}')
+  if [[ "$actual" == "$expected" ]]; then
+    print_notes "   ✅ JADX :: ${version} bridge installed at ${jar}"
+  else
+    print_notes "   ⚠️  JADX :: ${jar} does not match pinned ${version} SHA-256 (run 'setup-ai -irea')"
+  fi
+}

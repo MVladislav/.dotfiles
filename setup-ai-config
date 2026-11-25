@@ -8,189 +8,185 @@ set -euo pipefail
 
 # ********************************************************************************
 
-# HELPERS :: is there a real GPU backend in this build? --------------------------
-# 'llama-server --list-devices' lists only what was compiled in. A CPU-only
-# build shows just "BLAS: ..." and warns on every start that --gpu-layers and
-# --split-mode are ignored, so only emit those when a GPU is actually present.
-llamacpp_gpu_available() {
-  local bin="$USER_LOCAL_PREFIX_BIN/llama-server"
-  [[ -x "$bin" ]] || return 1
-  local devs name
-  devs=$("$bin" --list-devices 2>/dev/null | sed -n 's/^[[:space:]]*\([A-Za-z0-9_]*\):.*/\1/p')
-  [[ -z "$devs" ]] && return 1
-  while IFS= read -r name; do
-    [[ -z "$name" ]] && continue
-    case "$name" in
-    BLAS | CPU) ;;
-    *) return 0 ;;
-    esac
-  done <<<"$devs"
-  return 1
-}
-
-# SETUP :: bind address picker ---------------------------------------------------
-# Who may reach the API. Static config is easy to get wrong (binding 0.0.0.0 by
-# accident, or exposing a public IP), so offer loopback, the wildcard and each
-# address this host actually owns, labelled with its scope.
-llamacpp_select_bind() {
-  local current
-  current=$(llamacpp_bind_host)
-
-  if ! command -v fzf >/dev/null 2>&1; then
-    echo "$current"
+# HELPERS :: web search provider -------------------------------------------------
+# Pin an environment-provided websearch key when unambiguous; otherwise leave
+# the key unset so Console hosted search (/connect) or the first-search picker
+# keeps working. OPENCODE_CONFIG_WEBSEARCH overrides detection with an ID.
+opencode_websearch_provider() {
+  if [[ -n "${OPENCODE_CONFIG_WEBSEARCH:-}" ]]; then
+    printf '%s' "$OPENCODE_CONFIG_WEBSEARCH"
     return 0
   fi
-
-  # addr -> "interface | scope description" (empty interface for built-ins)
-  local preview_dir addr iface fzf_list sel sorted defaults
-  preview_dir=$(mktemp -d)
-  declare -A rows=()
-
-  while IFS='|' read -r addr iface; do
-    [[ -z "$addr" ]] && continue
-    rows["$addr"]="$iface | $(llamacpp_ip_scope "$addr") address"
-  done < <(llamacpp_detect_ips)
-  rows["$LLAMACPP_HOST"]="loopback | this machine"
-  rows["0.0.0.0"]="all interfaces | anything routable to this host"
-
-  defaults=""
-  fzf_list=""
-  for addr in "${!rows[@]}"; do
-    [[ "$addr" == "$current" ]] && defaults="$addr"
-    {
-      echo "bind address : $addr"
-      echo "scope        : $(llamacpp_ip_scope "$addr")"
-      echo ""
-      echo "loopback (127.0.0.1)  reachable only from this machine."
-      echo "wildcard (0.0.0.0)    reachable from every host that can route here."
-      echo "a specific address    reachable from its own subnet only."
-      echo ""
-      echo "The first request for a model downloads its GGUF, so an"
-      echo "exposed host can be made to fetch tens of GB."
-    } >"$preview_dir/$addr.info"
-    fzf_list+="$addr | ${rows[$addr]}"$'\n'
-  done
-  sorted=$(printf '%s\n' "$fzf_list" | sort -t'|' -k1,1)
-
-  local rc=0
-  sel=$(fzf_pick "$sorted" "$defaults" \
-    'PUBLIC = routable from the internet; the API key is the only thing in front of it' \
-    'Which addresses may reach the API? ' \
-    "cat '$preview_dir'/\$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null") || rc=$?
-  rm -rf "$preview_dir"
-  if [[ $rc -eq 130 ]]; then
-    print_notes "   ⛔ Cancelled by user, aborting setup"
-    exit 130
-  fi
-  [[ -z "$sel" ]] && {
-    echo "$current"
-    return 0
-  }
-  echo "$sel" | cut -d'|' -f1 | tr -d ' '
-}
-
-# HELPERS :: API key file ---------------------------------------------------------
-# Generated once, never stored in the repo. Printed only as a location, never
-# echoed in full, so it does not end up in scrollback or logs.
-llamacpp_ensure_api_key() {
-  local file="$LLAMACPP_API_KEY_FILE"
-  if [[ ! -s "$file" ]]; then
-    mkdir -p "$(dirname "$file")"
-    local key
-    if command -v openssl >/dev/null 2>&1; then
-      key=$(openssl rand -hex 24)
-    else
-      key=$(head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n')
+  local -a found=()
+  local pair var id
+  for pair in exa:EXA_API_KEY firecrawl:FIRECRAWL_API_KEY \
+    parallel:PARALLEL_API_KEY tavily:TAVILY_API_KEY tinyfish:TINYFISH_API_KEY; do
+    id=${pair%%:*}
+    var=${pair#*:}
+    if [[ -n "${!var:-}" ]]; then
+      found+=("$id")
     fi
-    printf '# llama.cpp API key - generated %s\n# Send as: Authorization: Bearer <key below>\n%s\n' \
-      "$(date '+%Y-%m-%d')" "$key" >"$file"
-    chmod 600 "$file"
-    print_notes "   🔑 generated a new API key -> $file (chmod 600, not in git)"
-  fi
-  grep -vE '^[[:space:]]*(#|$)' "$file" | head -n1
-}
-
-# HELPERS :: effective bind address ----------------------------------------------
-llamacpp_bind_host() {
-  printf '%s' "${LLAMACPP_BIND:-$LLAMACPP_HOST}"
-}
-
-# HELPERS :: address a client on THIS machine should connect to --------------------
-# A wildcard bind (0.0.0.0 / ::) includes loopback, so a local client should use
-# 127.0.0.1. A specific-address bind (192.168.x.x) is the only thing listening,
-# so the client has to use that same address.
-llamacpp_client_host() {
-  case "$(llamacpp_bind_host)" in
-  0.0.0.0 | :: | '[::]') printf '127.0.0.1' ;;
-  *) llamacpp_bind_host ;;
+  done
+  case ${#found[@]} in
+  0) return 0 ;;
+  1) printf '%s' "${found[0]}" ;;
+  *) printf 'random' ;;
   esac
 }
 
-# HELPERS :: CORS allow-list -------------------------------------------------------
-# Only browsers enforce CORS. llama.cpp treats the value as a single origin:
-# "*" reflects any Origin, "localhost" reflects localhost origins, anything else
-# is sent verbatim. A comma-joined list therefore blocks every browser, so emit
-# exactly one value.
-llamacpp_cors_origins() {
-  if [[ -n "$LLAMACPP_CORS_ORIGINS" ]]; then
-    printf '%s' "$LLAMACPP_CORS_ORIGINS"
+# HELPERS :: REA runtime --------------------------------------------------------
+# REA is a Node package launched by opencode. Warn before writing the MCP entry
+# when Node is missing or outside the range published for the pinned release.
+check_rea_node_version() {
+  local node_version major supported=0
+  node_version=$(node --version 2>/dev/null | sed 's/^v//')
+  if [[ -z "$node_version" ]]; then
+    print_notes "   ⚠️  Node.js not found; the rea MCP server cannot start"
+    return 1
+  fi
+
+  major=${node_version%%.*}
+  case "$major" in
+  22) if version_ge "$node_version" "22.23.4"; then supported=1; fi ;;
+  24) if version_ge "$node_version" "24.22.1"; then supported=1; fi ;;
+  *)
+    if [[ "$major" =~ ^[0-9]+$ ]] && ((major >= 26)); then
+      if version_ge "$node_version" "26.12.1"; then supported=1; fi
+    fi
+    ;;
+  esac
+
+  if [[ "$supported" != 1 ]]; then
+    print_notes "   ⚠️  Node ${node_version} is outside REA's supported range (${OPENCODE_CONFIG_MCP_REA_NODE_RANGE})"
+    return 1
+  fi
+  return 0
+}
+
+# Resolve a Node executable path that REA treats as its own launcher. Snap
+# installs put /snap/bin/node on PATH, but that is a symlink to the snap
+# wrapper and `rea doctor` reports it as foreign. Use process.execPath as the
+# fallback and normalize the snap versioned path back to `current`.
+resolve_node_bin() {
+  local p exec_path
+  p=$(command -v node 2>/dev/null || true)
+  if [[ -n "$p" && -x "$p" && "$(basename "$(readlink -f "$p")")" == "node" ]]; then
+    printf '%s\n' "$p"
     return 0
   fi
-  case "$(llamacpp_bind_host)" in
-  # loopback and wildcard both serve pages on this machine
-  127.* | localhost | 0.0.0.0 | :: | '[::]') printf 'localhost' ;;
-  # a specific address: allow only that exact origin. A browser page served
-  # from some other host needs its origin set explicitly in the conf.
-  *) printf 'http://%s:%s' "$(llamacpp_bind_host)" "$LLAMACPP_PORT" ;;
-  esac
-}
-
-# HELPERS :: classify an address for the picker ----------------------------------
-llamacpp_ip_scope() {
-  case "$1" in
-  0.0.0.0 | :: | '[::]') echo "wildcard" ;;
-  127.* | localhost) echo "private" ;;
-  10.* | 192.168.*) echo "private" ;;
-  172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) echo "private" ;;
-  169.254.*) echo "link-local" ;;
-  *) echo "PUBLIC" ;;
-  esac
-}
-
-# HELPERS :: non-loopback IPv4 addresses with their interface ---------------------
-# One "addr|iface" line per global-scope address; empty when none is found.
-llamacpp_detect_ips() {
-  local addr iface
-  if command -v ip >/dev/null 2>&1; then
-    while read -r addr iface; do
-      [[ -z "$addr" || "$addr" == 127.* || "$addr" == 169.254.* ]] && continue
-      printf '%s|%s\n' "$addr" "$iface"
-    done < <(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1], $2}')
-    return 0
+  exec_path=$(node -p 'process.execPath' 2>/dev/null || true)
+  if [[ -n "$exec_path" && -x "$exec_path" ]]; then
+    if [[ "$exec_path" =~ ^(/snap/node)/[0-9]+(/bin/node)$ && -x "${BASH_REMATCH[1]}/current${BASH_REMATCH[2]}" ]]; then
+      printf '%s\n' "${BASH_REMATCH[1]}/current${BASH_REMATCH[2]}"
+      return 0
+    fi
+    printf '%s\n' "$exec_path"
   fi
-  # fallbacks when iproute2 is unavailable
-  for addr in $(hostname -I 2>/dev/null); do
-    [[ "$addr" == 127.* ]] && continue
-    printf '%s|%s\n' "$addr" "?"
+}
+
+# Resolve a Java runtime that includes jdk.compiler, which the JADX bridge
+# requires. Prefer JAVA_HOME, then the system default JDK; a JRE-only JAVA_HOME
+# is skipped so the MCP process does not inherit a runtime JADX cannot use.
+rea_java_home() {
+  local candidate java_bin modules
+  local -a candidates=("${JAVA_HOME:-}" /usr/lib/jvm/default-java)
+
+  java_bin=$(readlink -f "$(command -v java 2>/dev/null)" 2>/dev/null || true)
+  if [[ -n "$java_bin" ]]; then
+    candidates+=("$(dirname "$(dirname "$java_bin")")")
+  fi
+
+  for candidate in "${candidates[@]}"; do
+    [[ -n "$candidate" && -x "$candidate/bin/java" ]] || continue
+    modules=$("$candidate/bin/java" --list-modules 2>/dev/null) || continue
+    if grep -q '^jdk.compiler@' <<<"$modules"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
   done
 }
 
-# HELPERS :: CPU SIMD capabilities -----------------------------------------------
-# ggml compiles the kernels it is allowed to use, and without AVX/FMA it falls
-# back to scalar paths that are several times slower. Worth saying out loud,
-# because otherwise a low tokens/second reads as a misconfiguration.
-llamacpp_cpu_simd() {
-  local flags out=""
-  flags=$(awk -F: '/^flags/{print $2; exit}' /proc/cpuinfo 2>/dev/null) || true
-  [[ -z "$flags" ]] && {
-    echo "unknown"
-    return 0
-  }
-  local feature
-  for feature in avx512f avx2 avx fma sse4_2; do
-    [[ " $flags " == *" $feature "* ]] && out+="${feature} "
-  done
-  echo "${out:-none}"
+# Resolve the JADX bridge path. REA_JADX_MCP_JAR overrides the default location
+# used by `setup-ai -irea`.
+rea_jadx_jar_path() {
+  local version="${OPENCODE_CONFIG_MCP_REA_JADX_VERSION:?JADX version is not configured}"
+  local default="$HOME/.local/share/rea/jadx/jadx-headless-mcp-${version}-all.jar"
+  printf '%s\n' "${REA_JADX_MCP_JAR:-$default}"
+}
+
+# Resolve the command opencode should launch for REA. Prefer the pinned CLI in
+# ~/.local/bin so startup is offline and `rea doctor` sees the same release;
+# fall back to the npx pin from the conf. Prints a JSON command array.
+rea_mcp_command_json() {
+  local installed="$USER_LOCAL_PREFIX_BIN/rea" node_bin version
+  node_bin=$(resolve_node_bin || true)
+  if [[ -x "$installed" && -n "$node_bin" ]]; then
+    version=$("$installed" --version 2>/dev/null | sed -n 's/^v\{0,1\}\([0-9][0-9.]*\).*/\1/p' | head -n1) || true
+    if [[ "$version" == "$OPENCODE_CONFIG_MCP_REA_VERSION" ]]; then
+      jq -cn --arg node "$node_bin" --arg bin "$installed" '[$node, $bin, "mcp"]'
+      return 0
+    fi
+  fi
+  jq -cn --arg version "$OPENCODE_CONFIG_MCP_REA_VERSION" '["npx", "-y", ("rea-agents@" + $version), "mcp"]'
+}
+
+# Report analysis engines that are still missing after setup. The free engines
+# are installed by `setup-ai -irea`; commercial and caller-supplied ones are
+# listed in ai/REA.md. Only relevant when the CLI is installed.
+report_rea_readiness() {
+  local rea_bin="$USER_LOCAL_PREFIX_BIN/rea" missing
+  [[ -x "$rea_bin" ]] || return 0
+
+  missing=$("$rea_bin" doctor --client opencode --json 2>/dev/null |
+    jq -r '.checks[]? | select(.ok == false and .classification == "missing_analysis_engine") | .name' |
+    tr '\n' ' ') || true
+  missing=${missing% }
+
+  if [[ -n "$missing" ]]; then
+    print_notes "   🔍 REA :: analysis engines not installed: ${missing} (see ai/REA.md)"
+  else
+    print_notes "   ✅ REA :: analysis engine checks passed"
+  fi
+}
+
+# SETUP :: REA MCP -------------------------------------------------------------
+# Customize the selected REA MCP entry with the resolved launcher and provider
+# environment. Returns 0 when REA is selected, 1 otherwise.
+setup_opencode_rea() {
+  [[ -n "${OPENCODE_CONFIG_MCP_COMBINED:-}" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]] || return 1
+  jq -e '.servers.rea' <<<"$OPENCODE_CONFIG_MCP_COMBINED" >/dev/null 2>&1 || return 1
+
+  check_rea_node_version || true
+
+  local rea_command
+  rea_command=$(rea_mcp_command_json)
+  if [[ "$rea_command" == '["npx"'* ]] && ! command -v npx >/dev/null 2>&1; then
+    print_notes "   ⚠️  npx not found; install npm or run 'setup-ai -irea' before starting opencode"
+  fi
+
+  # Pass the detected JDK and (optionally) the Hopper launcher through to the
+  # MCP process: JADX needs a JDK with jdk.compiler, and Hopper needs
+  # HOPPER_LAUNCHER_PATH. A desktop-launched opencode does not inherit a
+  # shell-exported value.
+  local rea_java
+  rea_java=$(rea_java_home)
+  local hopper_launcher="${HOPPER_LAUNCHER_PATH:-}"
+  if [[ -z "$hopper_launcher" ]]; then
+    hopper_launcher=$(command -v hopper 2>/dev/null || true)
+  fi
+  local jadx_jar
+  jadx_jar=$(rea_jadx_jar_path)
+  [[ -f "$jadx_jar" ]] || jadx_jar=""
+  [[ -n "$hopper_launcher" ]] && export HOPPER_LAUNCHER_PATH="$hopper_launcher"
+  [[ -n "$jadx_jar" ]] && export REA_JADX_MCP_JAR="$jadx_jar"
+
+  OPENCODE_CONFIG_MCP_COMBINED=$(jq --argjson c "$rea_command" \
+    --arg j "$rea_java" --arg h "$hopper_launcher" --arg x "$jadx_jar" \
+    '.servers.rea.command = $c
+    | if $j != "" then .servers.rea.environment.JAVA_HOME = $j else . end
+    | if $h != "" then .servers.rea.environment.HOPPER_LAUNCHER_PATH = $h else . end
+    | if $x != "" then .servers.rea.environment.REA_JADX_MCP_JAR = $x else . end' \
+    <<<"$OPENCODE_CONFIG_MCP_COMBINED")
 }
 
 # SETUP :: opencode ------------------------------------------------------------
@@ -198,12 +194,17 @@ setup_opencode() {
   print_section "⚙️ OPENCODE :: configuring opencode"
   print_info2 "🔗 OPENCODE :: config directory at $LN_OPENCODE"
   mkdir -p "$LN_OPENCODE"
+  link_config "OPENCODE" "${PWD}/configs-single/opencode-cli.json" "$LN_OPENCODE/cli.json"
   command -v jq >/dev/null 2>&1 || { print_notes "   ⚠️  jq not found, cannot configure opencode"; return; }
 
   echo ""
   select_opencode_section "PROVIDER" "providers"
   echo ""
   select_opencode_section "MCP" "MCP configs"
+  local rea_selected=0
+  if setup_opencode_rea; then
+    rea_selected=1
+  fi
   echo ""
   select_opencode_section "AGENTS" "agents"
   echo ""
@@ -216,6 +217,12 @@ setup_opencode() {
   opencode_config=$(echo "$opencode_config" | jq '.update = "notify"')
   opencode_config=$(echo "$opencode_config" | jq '.experimental.background_compaction = true')
   opencode_config=$(echo "$opencode_config" | jq --argjson p "$OPENCODE_CONFIG_PERMISSIONS" '.permissions = $p')
+
+  local websearch_provider
+  websearch_provider=$(opencode_websearch_provider)
+  if [[ -n "$websearch_provider" ]]; then
+    opencode_config=$(echo "$opencode_config" | jq --arg p "$websearch_provider" '.websearch = {provider: $p}')
+  fi
 
   echo ""
   if [[ -n "$OPENCODE_CONFIG_MCP_COMBINED" && "$OPENCODE_CONFIG_MCP_COMBINED" != "CLEANUP" ]]; then
@@ -251,15 +258,29 @@ setup_opencode() {
       mv "${config_file}.tmp" "$config_file" &&
       print_notes "   🧹 Removed all provider configs"
 
-    local merge_del=""
-    [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_del=".lsp"
+    local merge_del=".websearch"
+    [[ -n "$OPENCODE_CONFIG_LSP_COMBINED" ]] && merge_del="${merge_del:+$merge_del,}.lsp"
     [[ -n "$OPENCODE_CONFIG_PROVIDER_COMBINED" && "$OPENCODE_CONFIG_PROVIDER_COMBINED" != "CLEANUP" ]] &&
       merge_del="${merge_del:+$merge_del,}.providers,.provider"
+    # jq's `*` keeps existing values, so a selected entry would never move to a
+    # new version unless the old one is dropped first. The rea snippets are
+    # generated from the conf, so replace them while leaving unselected entries
+    # and unrelated user keys alone.
+    if [[ $rea_selected -eq 1 ]]; then
+      merge_del="${merge_del},.mcp.servers.rea"
+    fi
+    if [[ -n "$OPENCODE_CONFIG_AGENTS_COMBINED" && "$OPENCODE_CONFIG_AGENTS_COMBINED" != "CLEANUP" ]] &&
+      jq -e '."rea-investigator"' <<<"$OPENCODE_CONFIG_AGENTS_COMBINED" >/dev/null 2>&1; then
+      merge_del="${merge_del},.agents.\"rea-investigator\""
+    fi
     local existing_filter='.'
     [[ -n "$merge_del" ]] && existing_filter="del($merge_del)"
     local merge_filter
     merge_filter=".[0] as \$managed | .[1] as \$existing | (\$managed * (\$existing | $existing_filter))"
-    merge_filter+=" | .permissions = (((\$existing.permissions // []) | map(select(. as \$rule | ((\$managed.permissions // []) | index(\$rule)) == null))) + (\$managed.permissions // []))"
+    # Permissions are fully repository-managed, so replace them rather than
+    # keeping retired rules ahead of the new baseline (last match wins). This
+    # also removes stale approvals after a policy rewrite.
+    merge_filter+=" | .permissions = (\$managed.permissions // [])"
     merge_filter+=" | .policies = ((.policies // []) | map(select(.resource | startswith(\"shell:git\") | not)))"
     merge_filter+=" | if ((.policies // []) | length) == 0 then del(.policies) else . end"
 
@@ -288,6 +309,10 @@ setup_opencode() {
     while IFS= read -r var; do
       print_info2 "      - $var"
     done <<< "$env_vars"
+  fi
+
+  if [[ $rea_selected -eq 1 ]]; then
+    report_rea_readiness
   fi
 
   print_section_end "✅ OPENCODE :: config ready."
@@ -770,6 +795,191 @@ setup_filebrowser() {
   print_notes "   🔒 per-user access control: manage users/sources in the UI, or 'filebrowser set rule'"
   print_notes "   ℹ️  no systemd unit / firewall rules created - run it manually or set up your own service"
   print_section_end "✅ FILEBROWSER :: config ready."
+}
+
+# HELPERS :: is there a real GPU backend in this build? --------------------------
+# 'llama-server --list-devices' lists only what was compiled in. A CPU-only
+# build shows just "BLAS: ..." and warns on every start that --gpu-layers and
+# --split-mode are ignored, so only emit those when a GPU is actually present.
+llamacpp_gpu_available() {
+  local bin="$USER_LOCAL_PREFIX_BIN/llama-server"
+  [[ -x "$bin" ]] || return 1
+  local devs name
+  devs=$("$bin" --list-devices 2>/dev/null | sed -n 's/^[[:space:]]*\([A-Za-z0-9_]*\):.*/\1/p')
+  [[ -z "$devs" ]] && return 1
+  while IFS= read -r name; do
+    [[ -z "$name" ]] && continue
+    case "$name" in
+    BLAS | CPU) ;;
+    *) return 0 ;;
+    esac
+  done <<<"$devs"
+  return 1
+}
+
+# SETUP :: bind address picker ---------------------------------------------------
+# Who may reach the API. Static config is easy to get wrong (binding 0.0.0.0 by
+# accident, or exposing a public IP), so offer loopback, the wildcard and each
+# address this host actually owns, labelled with its scope.
+llamacpp_select_bind() {
+  local current
+  current=$(llamacpp_bind_host)
+
+  if ! command -v fzf >/dev/null 2>&1; then
+    echo "$current"
+    return 0
+  fi
+
+  # addr -> "interface | scope description" (empty interface for built-ins)
+  local preview_dir addr iface fzf_list sel sorted defaults
+  preview_dir=$(mktemp -d)
+  declare -A rows=()
+
+  while IFS='|' read -r addr iface; do
+    [[ -z "$addr" ]] && continue
+    rows["$addr"]="$iface | $(llamacpp_ip_scope "$addr") address"
+  done < <(llamacpp_detect_ips)
+  rows["$LLAMACPP_HOST"]="loopback | this machine"
+  rows["0.0.0.0"]="all interfaces | anything routable to this host"
+
+  defaults=""
+  fzf_list=""
+  for addr in "${!rows[@]}"; do
+    [[ "$addr" == "$current" ]] && defaults="$addr"
+    {
+      echo "bind address : $addr"
+      echo "scope        : $(llamacpp_ip_scope "$addr")"
+      echo ""
+      echo "loopback (127.0.0.1)  reachable only from this machine."
+      echo "wildcard (0.0.0.0)    reachable from every host that can route here."
+      echo "a specific address    reachable from its own subnet only."
+      echo ""
+      echo "The first request for a model downloads its GGUF, so an"
+      echo "exposed host can be made to fetch tens of GB."
+    } >"$preview_dir/$addr.info"
+    fzf_list+="$addr | ${rows[$addr]}"$'\n'
+  done
+  sorted=$(printf '%s\n' "$fzf_list" | sort -t'|' -k1,1)
+
+  local rc=0
+  sel=$(fzf_pick "$sorted" "$defaults" \
+    'PUBLIC = routable from the internet; the API key is the only thing in front of it' \
+    'Which addresses may reach the API? ' \
+    "cat '$preview_dir'/\$(echo {} | cut -d'|' -f1 | tr -d ' ').info 2>/dev/null") || rc=$?
+  rm -rf "$preview_dir"
+  if [[ $rc -eq 130 ]]; then
+    print_notes "   ⛔ Cancelled by user, aborting setup"
+    exit 130
+  fi
+  [[ -z "$sel" ]] && {
+    echo "$current"
+    return 0
+  }
+  echo "$sel" | cut -d'|' -f1 | tr -d ' '
+}
+
+# HELPERS :: API key file ---------------------------------------------------------
+# Generated once, never stored in the repo. Printed only as a location, never
+# echoed in full, so it does not end up in scrollback or logs.
+llamacpp_ensure_api_key() {
+  local file="$LLAMACPP_API_KEY_FILE"
+  if [[ ! -s "$file" ]]; then
+    mkdir -p "$(dirname "$file")"
+    local key
+    if command -v openssl >/dev/null 2>&1; then
+      key=$(openssl rand -hex 24)
+    else
+      key=$(head -c 48 /dev/urandom | od -An -tx1 | tr -d ' \n')
+    fi
+    printf '# llama.cpp API key - generated %s\n# Send as: Authorization: Bearer <key below>\n%s\n' \
+      "$(date '+%Y-%m-%d')" "$key" >"$file"
+    chmod 600 "$file"
+    print_notes "   🔑 generated a new API key -> $file (chmod 600, not in git)"
+  fi
+  grep -vE '^[[:space:]]*(#|$)' "$file" | head -n1
+}
+
+# HELPERS :: effective bind address ----------------------------------------------
+llamacpp_bind_host() {
+  printf '%s' "${LLAMACPP_BIND:-$LLAMACPP_HOST}"
+}
+
+# HELPERS :: address a client on THIS machine should connect to --------------------
+# A wildcard bind (0.0.0.0 / ::) includes loopback, so a local client should use
+# 127.0.0.1. A specific-address bind (192.168.x.x) is the only thing listening,
+# so the client has to use that same address.
+llamacpp_client_host() {
+  case "$(llamacpp_bind_host)" in
+  0.0.0.0 | :: | '[::]') printf '127.0.0.1' ;;
+  *) llamacpp_bind_host ;;
+  esac
+}
+
+# HELPERS :: CORS allow-list -------------------------------------------------------
+# Only browsers enforce CORS. llama.cpp treats the value as a single origin:
+# "*" reflects any Origin, "localhost" reflects localhost origins, anything else
+# is sent verbatim. A comma-joined list therefore blocks every browser, so emit
+# exactly one value.
+llamacpp_cors_origins() {
+  if [[ -n "$LLAMACPP_CORS_ORIGINS" ]]; then
+    printf '%s' "$LLAMACPP_CORS_ORIGINS"
+    return 0
+  fi
+  case "$(llamacpp_bind_host)" in
+  # loopback and wildcard both serve pages on this machine
+  127.* | localhost | 0.0.0.0 | :: | '[::]') printf 'localhost' ;;
+  # a specific address: allow only that exact origin. A browser page served
+  # from some other host needs its origin set explicitly in the conf.
+  *) printf 'http://%s:%s' "$(llamacpp_bind_host)" "$LLAMACPP_PORT" ;;
+  esac
+}
+
+# HELPERS :: classify an address for the picker ----------------------------------
+llamacpp_ip_scope() {
+  case "$1" in
+  0.0.0.0 | :: | '[::]') echo "wildcard" ;;
+  127.* | localhost) echo "private" ;;
+  10.* | 192.168.*) echo "private" ;;
+  172.1[6-9].* | 172.2[0-9].* | 172.3[01].*) echo "private" ;;
+  169.254.*) echo "link-local" ;;
+  *) echo "PUBLIC" ;;
+  esac
+}
+
+# HELPERS :: non-loopback IPv4 addresses with their interface ---------------------
+# One "addr|iface" line per global-scope address; empty when none is found.
+llamacpp_detect_ips() {
+  local addr iface
+  if command -v ip >/dev/null 2>&1; then
+    while read -r addr iface; do
+      [[ -z "$addr" || "$addr" == 127.* || "$addr" == 169.254.* ]] && continue
+      printf '%s|%s\n' "$addr" "$iface"
+    done < <(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4,a,"/"); print a[1], $2}')
+    return 0
+  fi
+  # fallbacks when iproute2 is unavailable
+  for addr in $(hostname -I 2>/dev/null); do
+    [[ "$addr" == 127.* ]] && continue
+    printf '%s|%s\n' "$addr" "?"
+  done
+}
+
+# HELPERS :: CPU SIMD capabilities -----------------------------------------------
+# ggml compiles the kernels it is allowed to use, and without AVX/FMA it falls
+# back to scalar paths that are several times slower. Worth saying out loud,
+# because otherwise a low tokens/second reads as a misconfiguration.
+llamacpp_cpu_simd() {
+  local flags out=""
+  flags=$(awk -F: '/^flags/{print $2; exit}' /proc/cpuinfo 2>/dev/null) || true
+  [[ -z "$flags" ]] && {
+    echo "unknown"
+    return 0
+  }
+  local feature
+  for feature in avx512f avx2 avx fma sse4_2; do
+    [[ " $flags " == *" $feature "* ]] && out+="${feature} "
+  done
+  echo "${out:-none}"
 }
 
 # HELPERS :: split a model catalog line into the LLAMACPP_M_* globals ------------

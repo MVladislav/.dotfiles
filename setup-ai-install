@@ -9,9 +9,6 @@ set -euo pipefail
 # ********************************************************************************
 
 # SERVICE :: install opencode --------------------------------------------------
-# v2 ships on npm (@opencode/cli-linux-x64), not as a GitHub release asset: the
-# repo TAGS v2.x but only RELEASES v1.18.x, so download_github_binary can never
-# reach it. Stream the binary out of the pinned npm tarball instead.
 install_opencode() {
   print_info2 "\n🚀 OPENCODE :: install opencode..."
   print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/opencode" --version)'"
@@ -87,9 +84,231 @@ filebrowser_version() {
   "$bin" version 2>/dev/null | grep -m1 'Version' | sed 's/.*: *//' || true
 }
 
+# SERVICE :: install rea ------------------------------------------------------
+install_rea() {
+  print_info2 "\n🚀 REA :: install rea..."
+  local version="${OPENCODE_CONFIG_MCP_REA_VERSION:?REA version is not configured}"
+  print_notes "   💡 current installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/rea" --version)'"
+
+  require_cmds node npm || return 1
+  mkdir -p "$USER_LOCAL_PREFIX"
+
+  if ! run_quiet_hint "   ⏳ installing rea-agents@${version} into ${USER_LOCAL_PREFIX}..." \
+    npm install --global --prefix "$USER_LOCAL_PREFIX" --no-fund --no-audit "rea-agents@${version}"; then
+    print_error "❌ REA :: npm install failed."
+    return 1
+  fi
+  print_notes "   💡 new installed version :: '$(installed_version "$USER_LOCAL_PREFIX_BIN/rea" --version)'"
+
+  install_rea_engines || print_notes "   ⚠️  some free REA engines could not be installed; see ai/REA.md"
+  install_jadx || print_notes "   ⚠️  JADX bridge not installed; see ai/REA.md"
+  install_rea_optional_hopper
+
+  print_notes "   💡 verify with: rea doctor --json (see ai/REA.md)"
+  print_info2 "✅ REA :: rea installed!"
+}
+
+# HELPERS :: install free REA CLI engines --------------------------------------
+install_rea_engines() {
+  local packages_tools=(adb binwalk wabt gdb sigrok-cli tshark procps)
+  local packages_build=()
+  print_notes "   ⏳ installing free REA analysis engines (adb, binwalk, wabt, gdb, sigrok-cli, tshark)..."
+  install_dependencies_needs packages_tools[@] packages_build[@]
+}
+
+# SERVICE :: install jadx -----------------------------------------------------
+install_jadx() {
+  print_info2 "\n🚀 JADX :: install jadx-headless-mcp bridge..."
+  local version="${OPENCODE_CONFIG_MCP_REA_JADX_VERSION:?JADX version is not configured}"
+  local jar_sha="${OPENCODE_CONFIG_MCP_REA_JADX_SHA256:?JADX checksum is not configured}"
+  local jar_name="jadx-headless-mcp-${version}-all.jar"
+  local jar_url="https://github.com/1013503897/jadx-headless-mcp/releases/download/v${version}/${jar_name}"
+  local jar_path jar_dir
+  # Same resolution the REA MCP entry uses, including a REA_JADX_MCP_JAR override.
+  jar_path=$(rea_jadx_jar_path)
+  jar_dir=$(dirname "$jar_path")
+
+  require_cmds curl sha256sum || return 1
+
+  local packages_tools=(default-jdk-headless)
+  local packages_build=()
+  print_notes "   ⏳ installing a full JDK for JADX (default-jdk-headless)..."
+  install_dependencies_needs packages_tools[@] packages_build[@] || return 1
+
+  mkdir -p "$jar_dir"
+  if [[ ! -f "$jar_path" ]] || [[ "$(sha256sum "$jar_path" 2>/dev/null | awk '{print $1}')" != "$jar_sha" ]]; then
+    run_quiet_hint "   ⏳ downloading jadx-headless-mcp ${version}..." \
+      curl -fsSL -o "$jar_path" "$jar_url" || {
+        print_error "❌ JADX :: download failed"
+        rm -f "$jar_path"
+        return 1
+      }
+    local actual
+    actual=$(sha256sum "$jar_path" | awk '{print $1}')
+    if [[ "$actual" != "$jar_sha" ]]; then
+      print_error "❌ JADX :: checksum mismatch (expected $jar_sha, got $actual)"
+      rm -f "$jar_path"
+      return 1
+    fi
+  fi
+
+  persist_env_setting REA_JADX_MCP_JAR "$jar_path"
+  print_notes "   💡 JADX bridge: $jar_path"
+  print_info2 "✅ JADX :: jadx-headless-mcp installed!"
+}
+
+# SERVICE :: install hopper ----------------------------------------------------
+install_hopper() {
+  print_info2 "\n🚀 HOPPER :: install Hopper demo..."
+  require_cmds curl jq sha1sum dpkg base64 || return 1
+
+  # Official Linux packages are x86_64-only; this installer handles apt hosts.
+  if [[ "$(uname -m)" != "x86_64" ]]; then
+    print_notes "   ⏭️  Hopper Linux packages are x86_64-only; skipping on $(uname -m)"
+    return 0
+  fi
+  command -v apt-get >/dev/null 2>&1 || {
+    print_notes "   ⏭️  Hopper auto-install supports apt hosts only; set HOPPER_LAUNCHER_PATH manually"
+    return 0
+  }
+
+  # Runtime deps (from rea's Hopper plan) plus gnupg for signature verification.
+  local packages_tools=(xvfb xauth python3 libx11-6 libxtst6 gnupg)
+  local packages_build=()
+  print_notes "   ⏳ installing Hopper runtime deps (xvfb, xauth, python3, X11, gnupg)..."
+  install_dependencies_needs packages_tools[@] packages_build[@] || return 1
+  require_cmds gpg || return 1
+
+  # Fetch release metadata (needs a browser-like User-Agent).
+  local api_url="https://www.hopperapp.com/include/files-api.php?request=releases&public=true"
+  local meta deb_url deb_sha1 deb_sig deb_name
+  meta=$(curl -fsSL -A "Mozilla/5.0" "$api_url" 2>/dev/null) || {
+    print_error "❌ HOPPER :: could not fetch release metadata"
+    return 1
+  }
+  deb_url=$(echo "$meta" | jq -r '."Ubuntu / Mint".filename // empty')
+  deb_sha1=$(echo "$meta" | jq -r '."Ubuntu / Mint".file_hash // empty')
+  deb_sig=$(echo "$meta" | jq -r '."Ubuntu / Mint".signature // empty')
+  [[ -n "$deb_url" && -n "$deb_sha1" && -n "$deb_sig" ]] || {
+    print_error "❌ HOPPER :: no signed Ubuntu release in metadata"
+    return 1
+  }
+  deb_name=$(basename "$deb_url")
+
+  local cache_dir="$HOME/.cache/rea/hopper-releases/$deb_sha1"
+  mkdir -p "$cache_dir"
+  local deb_path="$cache_dir/$deb_name"
+
+  if [[ ! -f "$deb_path" ]] || [[ "$(sha1sum "$deb_path" 2>/dev/null | awk '{print $1}')" != "$deb_sha1" ]]; then
+    run_quiet_hint "   ⏳ downloading Hopper demo ($deb_name, ~34MB)..." \
+      curl -fsSL -A "Mozilla/5.0" -o "$deb_path" "$deb_url" || {
+        print_error "❌ HOPPER :: download failed"
+        rm -f "$deb_path"
+        return 1
+      }
+    local actual
+    actual=$(sha1sum "$deb_path" | awk '{print $1}')
+    if [[ "$actual" != "$deb_sha1" ]]; then
+      print_error "❌ HOPPER :: checksum mismatch (expected $deb_sha1, got $actual)"
+      rm -f "$deb_path"
+      return 1
+    fi
+  fi
+
+  # Verify the detached signature from Hopper's published key. The package
+  # hash above is SHA-1; the signature binds the exact package bytes.
+  local key_url="https://www.hopperapp.com/hopper-public-key.asc"
+  local key_path="$cache_dir/hopper-public-key.asc"
+  local sig_path="$cache_dir/release.sig"
+  local gpg_home="$cache_dir/gnupg"
+  if [[ ! -s "$key_path" ]]; then
+    run_quiet_hint "   ⏳ downloading Hopper signing key..." \
+      curl -fsSL -A "Mozilla/5.0" -o "$key_path" "$key_url" || {
+        print_error "❌ HOPPER :: could not download signing key"
+        rm -f "$key_path"
+        return 1
+      }
+  fi
+  if ! printf '%s' "$deb_sig" | base64 -d > "$sig_path" 2>/dev/null; then
+    print_error "❌ HOPPER :: invalid signature metadata"
+    return 1
+  fi
+
+  mkdir -p "$gpg_home"
+  chmod 700 "$gpg_home"
+  if ! gpg --homedir "$gpg_home" --batch --import "$key_path" >/dev/null 2>&1; then
+    print_error "❌ HOPPER :: could not import signing key"
+    return 1
+  fi
+  local gpg_status
+  if ! gpg_status=$(gpg --homedir "$gpg_home" --batch --status-fd 1 \
+    --verify "$sig_path" "$deb_path" 2>/dev/null); then
+    print_error "❌ HOPPER :: package signature verification failed"
+    return 1
+  fi
+  if ! grep -q '7C2D73BAFAF5B9A710A69DA1A26DF815099B1BCD' <<<"$gpg_status"; then # pragma: allowlist secret
+    print_error "❌ HOPPER :: package was not signed by Hopper's release key"
+    return 1
+  fi
+
+  # Install the verified package. RUN_WITH_SUDO is either empty or "sudo".
+  # shellcheck disable=SC2086
+  if ! run_quiet_hint "   ⏳ installing Hopper package..." \
+    $RUN_WITH_SUDO dpkg -i "$deb_path"; then
+    print_notes "   ⚠️  dpkg reported errors; fixing dependencies..."
+    # shellcheck disable=SC2086
+    run_quiet $RUN_WITH_SUDO "${APT_ENV[@]}" apt-get -f install -y || true
+  fi
+
+  # Install the matching libpython if the one Hopper needs is not loadable.
+  local pyver
+  pyver=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)
+  if [[ -n "$pyver" ]] && ! python3 -c "import ctypes; ctypes.CDLL('libpython${pyver}.so.1.0')" 2>/dev/null; then
+    # install_dependencies_needs reads these arrays by nameref.
+    # shellcheck disable=SC2034
+    local lp_tools=("libpython${pyver}")
+    # shellcheck disable=SC2034
+    local lp_build=()
+    install_dependencies_needs lp_tools[@] lp_build[@] 2>/dev/null || true
+  fi
+
+  local launcher
+  launcher=$(command -v hopper 2>/dev/null || true)
+  if [[ -z "$launcher" ]]; then
+    launcher=$(find /usr/bin /opt /usr/local -type f -name 'hopper' 2>/dev/null | head -n1)
+  fi
+  if [[ -n "$launcher" ]]; then
+    print_notes "   💡 Hopper launcher: $launcher"
+    persist_env_setting HOPPER_LAUNCHER_PATH "$launcher"
+  else
+    print_notes "   ⚠️  Hopper installed but launcher not found on PATH"
+  fi
+
+  print_info2 "✅ HOPPER :: Hopper demo installed!"
+}
+
+# HELPERS :: optional Hopper install -------------------------------------------
+# Hopper is large and optional; prompt only on a TTY. Non-interactive runs skip
+# it so `setup-ai -irea` stays automation-friendly.
+install_rea_optional_hopper() {
+  if [[ ! -t 0 ]]; then
+    print_notes "   ⏭️  non-interactive: skipping Hopper (run 'bash setup-ai -irea' interactively)"
+    return 0
+  fi
+
+  local answer=""
+  read -r -p "   Install Hopper (free demo) for deep binary analysis? [y/N] " answer || true
+  case "$answer" in
+  [Yy]*)
+    install_hopper || print_notes "   ⚠️  Hopper install failed; see ai/REA.md"
+    ;;
+  *)
+    print_notes "   ⏭️  skipping Hopper (rerun 'bash setup-ai -irea' to install it)"
+    ;;
+  esac
+}
+
 # SERVICE :: install llama.cpp -------------------------------------------------
-# Install-only: builds llama.cpp and drops the binaries in ~/.local/bin.
-# Runtime configuration lives in setup_llamacpp() ('-sll').
 install_llamacpp() {
   print_info2 "\n🚀 LLAMACPP :: install llama.cpp..."
   print_notes "   💡 current installed version :: '$(llamacpp_binary_version)'"
@@ -243,8 +462,6 @@ llamacpp_detect_cuda_archs() {
 }
 
 # HELPERS :: llama-server version, never blank ----------------------------------
-# llama.cpp prints its banner on stderr, so capture both streams and tell a
-# version apart from a loader error.
 llamacpp_binary_version() {
   local bin="$USER_LOCAL_PREFIX_BIN/llama-server"
   if [[ ! -x "$bin" ]]; then
