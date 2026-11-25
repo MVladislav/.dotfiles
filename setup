@@ -26,6 +26,10 @@ source "./setup-install"
 # shellcheck source=setup-config
 source "./setup-config"
 
+[[ -f "./setup-upc" ]] || { echo 'ERROR: "./setup-upc" not found.'; exit 1; }
+# shellcheck source=setup-upc
+source "./setup-upc"
+
 # ******************************************************************************
 
 # CONFIG :: toggle flags -------------------------------------------------------
@@ -209,24 +213,6 @@ main() {
   run_if $RUN_INSTALL_GH && install_gh
 
   print_info2 "\n✅ All finished!"
-}
-
-# ******************************************************************************
-
-# UPDATE :: check newer tags ---------------------------------------------------
-run_update_check() {
-  echo
-  check_for_newer_tag "$VERSION_GHOSTTY_REPO" "$VERSION_GHOSTTY" "^v[0-9]"
-  check_for_newer_tag "$VERSION_NVIM_REPO" "$VERSION_NVIM"
-  check_for_newer_tag "$VERSION_ZSH_REPO" "$VERSION_ZSH" "-test"
-  check_for_newer_tag "$VERSION_TMUX_REPO" "$VERSION_TMUX"
-  check_for_newer_tag "$VERSION_BTOP_REPO" "$VERSION_BTOP"
-  check_for_newer_tag "$VERSION_RSMI_REPO" "$VERSION_RSMI" "rocm"
-  check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK" "" "releases"
-  check_for_newer_tag "$VERSION_OPENLOGI_REPO" "$VERSION_OPENLOGI" "" "releases"
-  check_for_newer_tag "$VERSION_INPUT_LINUX_REPO" "$VERSION_INPUT_LINUX" "Community" "releases"
-  check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
-  check_for_newer_zig "$VERSION_ZIG_V"
 }
 
 # ******************************************************************************

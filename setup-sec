@@ -435,7 +435,8 @@ load_ext_browser() {
 
 # UPDATE :: check newer tags ---------------------------------------------------
 run_update_check() {
-  echo
+  print_section "🔄 UPDATE :: checking versions"
+  print_notes "   🌐 upstream"
   check_for_newer_tag "$VERSION_HASHCAT_G" "$VERSION_HASHCAT"
   check_for_newer_tag "$VERSION_TIO_G" "$VERSION_TIO"
   check_for_newer_tag "$VERSION_JTR_G" "$VERSION_JTR"

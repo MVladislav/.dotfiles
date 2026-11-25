@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+set -euo pipefail
+
+# CONFIG/UPDATE :: sourced by setup
+# Update-check functions for the `-upc` flag. Functions only - this file is
+# never executed on its own.
+
+# ********************************************************************************
+
+# UPDATE :: Zig release --------------------------------------------------------
+# Zig does not tag releases on GitHub (the newest tag there is 0.15.2), so its
+# version is read from the official download index instead. Zig is the only
+# source checked this way, so the check lives with the other update checks.
+check_for_newer_zig() {
+  local current_version="$1"
+
+  require_cmds curl jq || return 1
+
+  local index_json
+  index_json=$(curl -sL "https://ziglang.org/download/index.json") || {
+    print_error "   ⚠️  Could not fetch https://ziglang.org/download/index.json."
+    return 0
+  }
+
+  local latest_version
+  latest_version=$(echo "$index_json" | jq -r 'keys[] | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' | sort -V | tail -n1)
+
+  if [[ -z "$latest_version" ]]; then
+    print_error "   ⚠️  No Zig release version found on ziglang.org."
+    return 0
+  fi
+
+  if [[ "$current_version" != "$latest_version" ]]; then
+    print_notes "   ⬆️  zig :: ${latest_version} available (current: ${current_version})"
+    print_notes "      https://ziglang.org/download/#release-${latest_version}"
+  else
+    print_notes "   ✅ zig :: ${current_version} (latest)"
+  fi
+}
+
+# UPDATE :: installed vs pinned ------------------------------------------------
+# Answers "is the installed copy older than the pin, so rerunning the -i flag
+# would update it?". Version output differs per tool, so each line names its
+# own command or precomputed version string.
+report_installed_versions() {
+  print_notes ""
+  print_notes "   📦 installed"
+  report_pinned_version ghostty "$VERSION_GHOSTTY" "-ighost" "$USER_LOCAL_PREFIX_BIN/ghostty" --version
+  report_pinned_version nvim "$VERSION_NVIM" "-invim" "$USER_LOCAL_PREFIX_BIN/nvim" -v
+  report_pinned_version tmux "$VERSION_TMUX" "-itmux" "$USER_LOCAL_PREFIX_BIN/tmux" -V
+  report_pinned_version btop "$VERSION_BTOP" "-ibtop" "$USER_LOCAL_PREFIX_BIN/btop" -v
+  report_pinned_version hunk "$VERSION_HUNK" "-ihunk" "$USER_LOCAL_PREFIX_BIN/hunk" --version
+  report_pinned_version openlogi "$VERSION_OPENLOGI" "-iolog" "$USER_LOCAL_PREFIX_BIN/openlogi" --version
+  report_version_state input-linux "$VERSION_INPUT_LINUX" "-iin" \
+    "$([[ -x "$USER_LOCAL_PREFIX_BIN/input-linux.AppImage" ]] && echo present || echo 'not installed')"
+  report_version_state gh "" "-igh" "$(installed_version "$USER_LOCAL_PREFIX_BIN/gh" --version)"
+  if [[ $INSTALL_SOURCE_FROM == source ]]; then
+    report_pinned_version zsh "$VERSION_ZSH" "-izsh" zsh --version
+  else
+    # Release mode installs the distro zsh, so there is no pin to compare with.
+    report_version_state zsh "" "" "$(installed_version zsh --version)"
+  fi
+}
+
+# UPDATE :: check newer tags ---------------------------------------------------
+run_update_check() {
+  print_section "🔄 UPDATE :: checking versions"
+  print_notes "   🌐 upstream"
+  check_for_newer_tag "$VERSION_GHOSTTY_REPO" "$VERSION_GHOSTTY" "^v[0-9]"
+  check_for_newer_tag "$VERSION_NVIM_REPO" "$VERSION_NVIM"
+  check_for_newer_tag "$VERSION_ZSH_REPO" "$VERSION_ZSH" "-test"
+  check_for_newer_tag "$VERSION_TMUX_REPO" "$VERSION_TMUX"
+  check_for_newer_tag "$VERSION_BTOP_REPO" "$VERSION_BTOP"
+  check_for_newer_tag "$VERSION_RSMI_REPO" "$VERSION_RSMI" "rocm"
+  check_for_newer_tag "$VERSION_HUNK_REPO" "$VERSION_HUNK" "" "releases"
+  check_for_newer_tag "$VERSION_OPENLOGI_REPO" "$VERSION_OPENLOGI" "" "releases"
+  check_for_newer_tag "$VERSION_INPUT_LINUX_REPO" "$VERSION_INPUT_LINUX" "Community" "releases"
+  check_for_newer_tag "$VERSION_FONTS_REPO" "$VERSION_FONTS_RELEASE" "" "releases"
+  check_for_newer_zig "$VERSION_ZIG_V"
+  report_installed_versions
+}

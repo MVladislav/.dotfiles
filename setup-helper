@@ -468,7 +468,7 @@ check_for_newer_tag() {
     repo_name="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
     repo_name="${repo_name%.git}"
   else
-    print_error "❌ Could not parse GitHub repository path from URL: $repo_url"
+    print_error "   ❌ Could not parse GitHub repository path from URL: $repo_url"
     return 1
   fi
 
@@ -481,7 +481,7 @@ check_for_newer_tag() {
   fi
 
   if [[ -z $tags_json ]]; then
-    print_error "⚠️ No response from GitHub API for $repo_name."
+    print_error "   ⚠️  No response from GitHub API for $repo_name."
     return 0
   fi
 
@@ -489,7 +489,7 @@ check_for_newer_tag() {
   if ! echo "$tags_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
     local api_error
     api_error=$(echo "$tags_json" | jq -r '.message // "unknown error"' 2>/dev/null)
-    print_error "⚠️ GitHub API error for $repo_name: $api_error"
+    print_error "   ⚠️  GitHub API error for $repo_name: $api_error"
     return 0
   fi
 
@@ -526,28 +526,28 @@ check_for_newer_tag() {
     latest_tag=$(echo "$release_json" | jq -r '.tag_name' 2>/dev/null)
     # Ensure the release tag matches the filter (if it's an inclusion filter)
     if [[ -n $tag_filter && $tag_filter != -* && ! $latest_tag =~ $tag_filter ]]; then
-      print_info2 "⚠️ No releases matching filter '$tag_filter' for $repo_name."
+      print_notes "   ⚠️  no releases matching filter '$tag_filter' for $repo_name"
       return 0
     fi
     # If exclusion filter, skip if it matches the exclusion
     if [[ -n $tag_filter && $tag_filter == -* && $latest_tag =~ ${tag_filter:1} ]]; then
-      print_info2 "⚠️ Latest release '$latest_tag' excluded by filter '$tag_filter'."
+      print_notes "   ⚠️  latest release '$latest_tag' excluded by filter '$tag_filter'"
       return 0
     fi
   fi
 
   # Final validation
   if [[ -z $latest_tag || $latest_tag == "null" ]]; then
-    print_error "⚠️ No tags or releases found for $repo_name."
+    print_error "   ⚠️  No tags or releases found for $repo_name."
     return 0
   fi
 
   # Compare and report
   if [[ $current_tag != "$latest_tag" ]]; then
-    print_info2 "⬆️ A newer version for '$repo_name' is available: $latest_tag (current: $current_tag)"
-    print_info2 "    https://github.com/$repo_name/releases/tag/$latest_tag"
+    print_notes "   ⬆️  ${repo_name} :: ${latest_tag} available (current: ${current_tag})"
+    print_notes "      https://github.com/${repo_name}/releases/tag/${latest_tag}"
   else
-    print_info2 "✅ You already have the latest version for '$repo_name': $current_tag"
+    print_notes "   ✅ ${repo_name} :: ${current_tag} (latest)"
   fi
 }
 
@@ -557,33 +557,85 @@ version_ge() {
   [[ "$(printf '%s\n%s\n' "$have" "$need" | sort -V | head -n1)" == "$need" ]]
 }
 
-# Zig does not tag releases on GitHub (the newest tag there is 0.15.2), so its
-# version is read from the official download index instead.
-check_for_newer_zig() {
-  local current_version="$1"
+# HELPERS :: check npm package version ------------------------------------------
+# npm packages are not tagged on GitHub the same way as release binaries, so
+# read the published version from the registry instead.
+# Args: <package> <current version>
+check_for_newer_npm() {
+  local package="$1"
+  local current_version="$2"
 
   require_cmds curl jq || return 1
 
-  local index_json
-  index_json=$(curl -sL "https://ziglang.org/download/index.json") || {
-    print_error "⚠️ Could not fetch https://ziglang.org/download/index.json."
+  local registry_json
+  registry_json=$(curl -fsSL "https://registry.npmjs.org/${package}/latest") || {
+    print_error "   ⚠️  Could not read the latest '${package}' version from npm."
     return 0
   }
 
   local latest_version
-  latest_version=$(echo "$index_json" | jq -r 'keys[] | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' | sort -V | tail -n1)
+  latest_version=$(echo "$registry_json" | jq -r '.version // empty') || {
+    print_error "   ⚠️  Could not parse the latest '${package}' version from npm."
+    return 0
+  }
 
   if [[ -z "$latest_version" ]]; then
-    print_error "⚠️ No Zig release version found on ziglang.org."
+    print_error "   ⚠️  No published version found for npm package '${package}'."
     return 0
   fi
 
   if [[ "$current_version" != "$latest_version" ]]; then
-    print_info2 "⬆️ A newer Zig version is available: $latest_version (current: $current_version)"
-    print_info2 "    https://ziglang.org/download/#release-${latest_version}"
+    print_notes "   ⬆️  ${package} :: ${latest_version} available (current: ${current_version})"
+    print_notes "      https://www.npmjs.com/package/${package}/v/${latest_version}"
   else
-    print_info2 "✅ You already have the latest Zig version: $current_version"
+    print_notes "   ✅ ${package} :: ${current_version} (latest)"
   fi
+}
+
+# HELPERS :: report installed vs pinned version ---------------------------------
+# Compares the first dotted number in the installed version string with the pin.
+# Empty pin means "unpinned": report the installed version only.
+# Args: <label> <pin> <update-flag-or-empty> <installed output>
+report_version_state() {
+  local label="$1" pin="$2" hint="$3" installed="$4"
+  local current pinned hint_text="" hint_paren=""
+
+  if [[ -n "$hint" ]]; then
+    hint_text=", run '$0 $hint'"
+    hint_paren=" (run '$0 $hint')"
+  fi
+
+  if [[ "$installed" == "not installed" || -z "$installed" ]]; then
+    print_notes "   ○ ${label} :: not installed (pin ${pin:-unpinned}${hint_text})"
+    return 0
+  fi
+
+  current=$(grep -Eo '[0-9]+(\.[0-9]+)+' <<<"$installed" | head -n1 || true)
+  pinned=$(grep -Eo '[0-9]+(\.[0-9]+)+' <<<"$pin" | head -n1 || true)
+
+  if [[ -z "$pin" || -z "$pinned" ]]; then
+    print_notes "   ℹ️  ${label} :: ${current:-installed}"
+    return 0
+  fi
+  if [[ -z "$current" ]]; then
+    print_notes "   ℹ️  ${label} :: installed (pin ${pin})"
+    return 0
+  fi
+
+  if [[ "$current" == "$pinned" ]]; then
+    print_notes "   ✅ ${label} :: ${current} (pin ${pin})"
+  elif version_ge "$current" "$pinned"; then
+    print_notes "   ℹ️  ${label} :: ${current} (pin ${pin}, newer)"
+  else
+    print_notes "   ⚠️  ${label} :: ${current} installed, pin ${pin}${hint_paren}"
+  fi
+}
+
+# Args: <label> <pin> <update-flag-or-empty> <command> [version args...]
+report_pinned_version() {
+  local label="$1" pin="$2" hint="$3"
+  shift 3
+  report_version_state "$label" "$pin" "$hint" "$(installed_version "$@")"
 }
 
 # ******************************************************************************
@@ -622,6 +674,35 @@ run_if() {
 # HELPERS :: sudo drop ---------------------------------------------------------
 sudo_drop() {
   [[ $IS_SUDO_INSTALL -eq 1 ]] && sudo -k
+}
+
+# HELPERS :: persist an exported setting ---------------------------------------
+# Upsert `export NAME="VALUE"` in a mode-600 env file and export it in the
+# current shell. Args: <name> <value> [file] (default ~/.profile-secrets).
+persist_env_setting() {
+  local name="$1"
+  local value="$2"
+  local file="${3:-"$HOME/.profile-secrets"}"
+  local line escaped
+
+  mkdir -p "$(dirname "$file")"
+  [[ -f "$file" ]] || : >"$file"
+  chmod 600 "$file"
+
+  line="export ${name}=\"${value}\""
+  if grep -qxF "$line" "$file"; then
+    export "${name}=${value}"
+    return 0
+  fi
+
+  if grep -q "^export ${name}=" "$file"; then
+    # Escape the replacement text so sed treats &, | and \ literally.
+    escaped=$(printf '%s' "$value" | sed 's/[\\&|]/\\&/g')
+    sed -i "s|^export ${name}=.*$|export ${name}=\"${escaped}\"|" "$file"
+  else
+    printf '%s\n' "$line" >>"$file"
+  fi
+  export "${name}=${value}"
 }
 
 # HELPERS :: clone at pinned version -------------------------------------------
